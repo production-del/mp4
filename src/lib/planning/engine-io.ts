@@ -200,6 +200,66 @@ export interface WeeklyDemand {
   sources: Array<'rate' | 'event'>;
 }
 
+// ─── Phase 3: capacity, stations, changeover ────────────────
+
+/** Packaging stations enumerated from the spreadsheet's `Packaging Line Capacity` sheet. */
+export type Station = 'hand-packing' | 'elephant' | 'dust' | 'bottlo';
+
+/** Six extended-family values from the `family` sheet. Closed enum — null = unmapped (decision #1). */
+export type ExtendedFamily =
+  | 'FAM Fungi'
+  | 'FAM MF - Clusters'
+  | 'FAM MF - Granola'
+  | 'FAM MF - Munchies'
+  | 'FAM MF - Nuts'
+  | 'FAM MF - Tea';
+
+/** Package size classes appearing in product codes (suffix SM/ME/LG, etc.). */
+export type PackageSize = 'SML' | 'MED' | 'LRG' | 'BULK' | 'OTHER';
+
+/**
+ * Per-product metadata used by the optimiser to price changeovers and
+ * resource use. Sourced jointly from the `family`, `Kitchen processes`, and
+ * `Packaging Line Capacity` sheets via `lib/planning/capacity-data.ts`.
+ */
+export interface ProductMeta {
+  productCode: string;
+  productName: string;
+  /** Intermediate code (e.g. `XHBC`). Same family ≈ same recipe, same intermediate. */
+  family: string | null;
+  /** Broad equipment-affinity grouping. `null` for the 108 unmapped SKUs (decision #1). */
+  extendedFamily: ExtendedFamily | null;
+  packageSize: PackageSize;
+  /** Primary packing station from `Kitchen processes` (or `family`-implied). */
+  station: Station;
+  /** Station's default rate, with optional per-product override applied. */
+  rateUnitsPerHour: number;
+}
+
+/**
+ * Per-product, per-station rate override. Lookup-then-fallback from station
+ * defaults (decision #4). Worked example in the spreadsheet:
+ * "hand packing beetroot powder" runs 75 u/hr instead of 200.
+ */
+export interface RateOverride {
+  productCode: string;
+  station: Station;
+  unitsPerHour: number;
+  reason?: string;
+}
+
+/**
+ * Per-station changeover-cost matrix. Costs in MINUTES.
+ * Direct from the `Packaging Line Capacity` sheet (rows 4–7 in the spreadsheet).
+ */
+export interface ChangeoverCostRow {
+  sizeSwitch: number;
+  familySameSize: number;
+  extendedFamily: number;
+  fullClean: number;
+}
+export type ChangeoverCostMatrix = Record<Station, ChangeoverCostRow>;
+
 // ─── Advanced/auxiliary ──────────────────────────────────────
 
 /** Intermediate component dependency for two-level production chaining. */
