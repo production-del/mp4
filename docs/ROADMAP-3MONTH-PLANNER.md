@@ -166,11 +166,16 @@ Wire confirmed POs and assemblies through the existing adapter.
 - Recipe versioning over time (current BOM is treated as constant within the horizon)
 - Mobile UI (desktop-first; calendar is dense)
 
-## Open questions
+## Resolved decisions
 
-1. **Re-plan trigger**: explicit button only, or auto on every Unleashed sync?
-2. **Demand source over horizon**: extend `data/demand.csv` to weekly granularity, or accept monthly + interpolate?
-3. **PO commitment semantics**: once "pushed", does the planner ever propose modifying it, or treat it as immutable?
-4. **Capacity model**: weekly aggregate, or daily? Daily is more accurate but UI gets noisy.
+1. **Re-plan trigger** → **manual only.** Re-plan button on the calendar header. Engine never auto-runs on Unleashed sync. `dismissed` and `edited` flags persist across runs; calendar shows a "stale: source data updated <when>" banner when Unleashed has synced since the last plan.
 
-Resolve these before Phase 3 starts.
+2. **Demand granularity** → **weekly rows in `demand.csv`, covering the full horizon.** Single-month / monthly-aggregate demand isn't enough resolution for the optimiser to make sensible batch-combination decisions. The CSV gets a `weekStart` (ISO Monday) column and one row per (productCode, weekStart). One-shot migration in Phase 1 reads any legacy monthly rows and splits them evenly across the weeks of that month, then writes the new shape and stops accepting the old.
+
+3. **PO modifiability** → **pushed POs are mutable.** The engine can propose changes to existing POs. New `PlanItem` variant `po-modification` carrying `{ originalPOId, proposedDelta }`. Calendar surfaces these as a distinct chip style (e.g. dashed border on the existing PO). Confirming a modification pushes an update to Unleashed; cancelling drops the proposal. Phase 5 must produce these; Phase 6 must push them.
+
+4. **Capacity model** → **daily buckets.** Optimiser constraints are per-day per-resource (vessel, oven, packaging line). Calendar drawer shows daily load; the bottom-strip heatmap rolls up to weekly for at-a-glance scanning. `BatchOptimiserInput` gains `capacityByDate: Record<string, ResourceCapacity>` instead of a single weekly cap.
+
+## Still open
+
+- **Horizon length** — confirmed 12 weeks (3 months), but user noted longer planning is preferable. Worth revisiting after Phase 3 lands: does the optimiser stay tractable at 26 weeks? If yes, extend default. If not, surface as a per-run setting.
