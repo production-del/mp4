@@ -82,10 +82,17 @@ type ExtendedFamily =
 interface ProductMeta {
   productCode: string;
   family: string;                            // intermediate code, e.g. 'XHBC'
-  extendedFamily: ExtendedFamily | null;     // null for the 108 unmapped SKUs
+  extendedFamily: ExtendedFamily | null;     // null = unmapped → full-clean against everything (decision #1)
   packageSize: 'SML' | 'MED' | 'LRG' | string;
   station: Station;
-  rateUnitsPerHour: number;                  // station default, or per-product override
+  rateUnitsPerHour: number;                  // station default, overridable per product (decision #4)
+}
+
+interface RateOverride {
+  productCode: string;
+  station: Station;
+  unitsPerHour: number;
+  reason?: string;
 }
 
 interface ChangeoverCostMatrix {
@@ -132,6 +139,30 @@ interface BatchOptimiserOutput {
 **Tuning the "don't repeat for 3 months" behaviour.** Same as before — emerges from the cost function via per-station changeover costs, not a hard rule. Long-shelf-life SKUs land at one run/quarter because the changeover cost dominates storage. Short-shelf-life SKUs stay frequent because shelf-life caps coverage.
 
 **Family clustering as a free win.** Once `costToSwitch` is wired through, scheduling Bottlo runs by extended family (and within that, by family same-size) emerges automatically — the optimiser sees that switching XHBC → XHBC (same family) costs 10 min, while XHBC → ICW (different extended family) costs 120 min, and prefers the cheap sequence wherever it can without breaking demand-by-date constraints.
+
+**`costToSwitch` rule (decision #2: non-cumulative max).** The cost of a single changeover equals the **maximum** of the applicable changeover-cost terms, never the sum. A size switch is considered to include the cleaning required for an extended-family switch.
+
+```typescript
+function costToSwitch(prev: ProductMeta, curr: ProductMeta, station: Station): number {
+  if (prev.productCode === curr.productCode) return 0;
+  const m = changeoverMatrix[station];
+  // Decision #1: missing extended family → full clean
+  if (!prev.extendedFamily || !curr.extendedFamily ||
+      prev.extendedFamily !== curr.extendedFamily) return m.fullClean;
+  const candidates: number[] = [];
+  if (prev.family !== curr.family) candidates.push(m.extendedFamily);
+  if (prev.packageSize !== curr.packageSize) candidates.push(m.sizeSwitch);
+  if (prev.family === curr.family && prev.packageSize === curr.packageSize)
+    candidates.push(m.familySameSize);
+  return candidates.length === 0 ? 0 : Math.max(...candidates);
+}
+```
+
+**Wastage handling (decision #3).** The BOM exploder splits each component's quantity into `quantityClean` and `wastage`. The optimiser plans against `quantityClean + wastage`; reports use `wastage` separately for visibility. Phase 2 owns the split.
+
+**IBC capacity (decision #5).** Working constant: `IBC_CAPACITY_KG = 300` until the unit semantics on `Kitchen processes.max /soak ibc` are pinned down.
+
+**Loader behaviour for bad data (decision #6).** When the spreadsheet has `dehydrate` in the packing-equipment column, emit a load-time warning naming the product code and drop just that value (don't fail the load).
 
 **Algorithm**: dynamic programming over the daily grid. State = `(day, inventory, lastBatchMetaOnStation)`. The third dimension is what makes changeover cost path-dependent. Start with a greedy seed (largest demand first, family-clustered), then local-search swaps.
 
