@@ -136,6 +136,8 @@ This is the BOM Phase 2's recursive exploder will consume. Two concerns:
 
 1. **108 SKUs without extended family** → switching into or out of them costs **`fullClean`**. No partial-credit treatment. The optimiser will avoid mixing these into family-clustered runs unless demand forces it.
 
+   **`fullClean` is NEVER triggered by switches *within* a family or extended family.** Same-family-same-size uses `familySameSize`; same-extended-family-different-family uses `extendedFamily`; same-extended-family-different-size uses `sizeSwitch`. `fullClean` applies only to (a) different extended families, or (b) one or both products being unmapped per this decision.
+
 2. **Combined product + size switch is non-cumulative.** The cost of a switch is the **maximum of the applicable individual costs**, never the sum. A size switch is considered to *include* the cleaning needed for an extended-family switch — so changing both family *and* size on Bottlo costs `max(40, 15) = 40` minutes, not `55`.
 
    Implementation rule (`changeover.ts`):
