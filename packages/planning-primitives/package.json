@@ -1,0 +1,46 @@
+{
+  "name": "@byron/planning-primitives",
+  "version": "0.0.1",
+  "description": "Shared planning domain primitives for Byron Co-op apps (planner + tracker + future).",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src", "README.md"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./working-day": {
+      "types": "./dist/working-day.d.ts",
+      "import": "./dist/working-day.js"
+    },
+    "./versioned-store": {
+      "types": "./dist/versioned-store.d.ts",
+      "import": "./dist/versioned-store.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
+    },
+    "./wire": {
+      "types": "./dist/wire/index.d.ts",
+      "import": "./dist/wire/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
