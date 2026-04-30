@@ -59,33 +59,38 @@ The keystone module. Pure, pluggable cost function.
 ```typescript
 export interface BatchOptimiserInput {
   productCode: string;
-  demand: WeeklyDemand[];           // 12 weeks
-  vesselCapacity: number;           // kg/L per run
+  demand: WeeklyDemand[];                      // full horizon, weekly
+  vesselCapacity: number;                      // kg/L per run
   minBatchSize: number;
   maxBatchSize: number;
   shelfLifeDays: number;
-  changeoverHours: number;          // cost of switching to this product
-  storageCapPerWeek: number;
+  changeoverHours: number;
+  capacityByDate: Record<string, ResourceCapacity>;   // daily
+  warehouseCapByDate: Record<string, number>;          // daily storage cap
 }
 export interface BatchOptimiserOutput {
   batches: ScheduledBatch[];
-  rationale: string[];              // human-readable: "combined wks 2+3 to save 1 changeover"
+  rationale: string[];                         // "1 run covers 11 weeks; shelf-life 90d permits"
   unmetDemand: { week: string; qty: number }[];
+  interRunDays: number[];                      // gaps between consecutive runs, for telemetry
 }
 ```
 
-**Cost function (start simple, add terms)**
-- `+ changeoverHours × num_batches`
-- `+ storage_overflow_penalty`
-- `+ shelf_life_violation_penalty` (large)
-- `– price_break_savings` (negative cost = reward)
+**Objective (in priority order)**
+1. **Minimise number of runs over the horizon** — primary goal. Equivalently, maximise minimum inter-run gap. This is what "don't repeat for 3 months" means.
+2. Subject to hard constraints: shelf-life, vessel capacity, per-day storage cap, demand coverage by required date.
+3. Among feasible plans with equal run count, prefer:
+   - Larger price-break captures on driven POs (negative cost)
+   - Lower changeover cost (fewer adjacent kitchen-production switches)
+   - Lower peak storage occupancy
 
-**Algorithm**: dynamic programming over the 12-week grid. Start with a greedy seed, then local-search swaps.
+**Algorithm**: dynamic programming over the daily grid. State = `(day, inventory, days_since_last_run)`. Start with greedy "make max batch every shelf-life days," then local-search to compress runs further where storage permits.
 
 **Acceptance**
-- Two adjacent small demands collapse into one batch when changeover savings > storage cost
-- Output batches never violate shelf life or vessel capacity
-- Property test: total batch volume ≥ total demand (no shortfall unless `unmetDemand` reports it)
+- A long-shelf-life SKU (e.g. `shelfLifeDays: 90`, low storage footprint) plans **one** run covering the full 12 weeks
+- A short-shelf-life SKU (e.g. `shelfLifeDays: 14`) plans the minimum runs that respect the shelf-life ceiling
+- A storage-constrained SKU plans more runs than shelf-life would require, with `rationale` citing storage cap
+- `interRunDays` reported for every SKU so the UI can flag SKUs touched more often than expected
 
 ## Phase 4 — Calendar UI (week 3–4)
 
@@ -170,9 +175,40 @@ Wire confirmed POs and assemblies through the existing adapter.
 
 1. **Re-plan trigger** → **manual only.** Re-plan button on the calendar header. Engine never auto-runs on Unleashed sync. `dismissed` and `edited` flags persist across runs; calendar shows a "stale: source data updated <when>" banner when Unleashed has synced since the last plan.
 
-2. **Demand granularity** → **weekly rows in `demand.csv`, covering the full horizon.** Single-month / monthly-aggregate demand isn't enough resolution for the optimiser to make sensible batch-combination decisions. The CSV gets a `weekStart` (ISO Monday) column and one row per (productCode, weekStart). One-shot migration in Phase 1 reads any legacy monthly rows and splits them evenly across the weeks of that month, then writes the new shape and stops accepting the old.
+2. **Demand input + optimiser goal** → **weekly demand rows across the full horizon, optimiser maximises inter-run interval.**
 
-3. **PO modifiability** → **pushed POs are mutable.** The engine can propose changes to existing POs. New `PlanItem` variant `po-modification` carrying `{ originalPOId, proposedDelta }`. Calendar surfaces these as a distinct chip style (e.g. dashed border on the existing PO). Confirming a modification pushes an update to Unleashed; cancelling drops the proposal. Phase 5 must produce these; Phase 6 must push them.
+   *Today:* weekly production tasks cover roughly monthly demand. Each SKU is touched ~monthly.
+
+   *Target:* a single packaging/production run covers ≈3 months of demand wherever shelf-life and storage permit. Same SKU shouldn't reappear for 3+ months unless constraints force it.
+
+   This is two changes:
+   - **Input:** `demand.csv` gains a `weekStart` (ISO Monday) column with one row per `(productCode, weekStart)` covering the full horizon. One-shot migration in Phase 1 splits any legacy monthly rows evenly across their weeks.
+   - **Optimiser objective (Phase 3):** primary cost-function term is **number of runs over the horizon** (minimise) — equivalently, **inter-run interval** (maximise). Constraints that override this:
+     - Shelf-life: can't make more than `shelfLifeDays` of demand in one run
+     - Storage capacity: per-warehouse, per-day cap on inventory
+     - Vessel/line capacity: physical max per single run
+     - Demand timing: can't run *after* the demand week it's meant to cover
+
+   Emergent behaviour: long-shelf-life, low-storage-footprint SKUs collapse to 1 run per 3 months. Short-shelf-life SKUs (e.g. fresh items, if any) stay weekly. The optimiser surfaces *why* in its `rationale[]` output ("3 runs needed: shelf-life 30d caps coverage").
+
+3. **PO modifiability** → **pushed POs are fully mutable.** The engine can propose any of: quantity change, date change, line split, or merge. New `PlanItem` variant `po-modification`:
+
+   ```typescript
+   type ProposedDelta =
+     | { kind: 'qty-change';   newQty: number }
+     | { kind: 'date-change';  newArrivalDate: string }   // ISO local
+     | { kind: 'qty-and-date'; newQty: number; newArrivalDate: string }
+     | { kind: 'split';        into: { qty: number; arrivalDate: string }[] }
+     | { kind: 'cancel'; }
+   interface POModification {
+     kind: 'po-modification';
+     originalPOId: string;
+     delta: ProposedDelta;
+     rationale: string;          // e.g. "+200kg hits 500kg price break ($-340)"
+   }
+   ```
+
+   Calendar renders modifications with a distinct chip style (dashed border on the existing PO chip). Confirming pushes the update to Unleashed via the existing adapter; cancelling drops the proposal and the engine is free to re-propose on the next manual re-plan. Phase 5 produces them; Phase 6 pushes them.
 
 4. **Capacity model** → **daily buckets.** Optimiser constraints are per-day per-resource (vessel, oven, packaging line). Calendar drawer shows daily load; the bottom-strip heatmap rolls up to weekly for at-a-glance scanning. `BatchOptimiserInput` gains `capacityByDate: Record<string, ResourceCapacity>` instead of a single weekly cap.
 
