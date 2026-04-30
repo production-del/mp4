@@ -166,12 +166,27 @@ function costToSwitch(prev: ProductMeta, curr: ProductMeta, station: Station): n
 
 **Algorithm**: dynamic programming over the daily grid. State = `(day, inventory, lastBatchMetaOnStation)`. The third dimension is what makes changeover cost path-dependent. Start with a greedy seed (largest demand first, family-clustered), then local-search swaps.
 
+**Sub-phasing.** Phase 3 is delivered in four passes:
+
+- **3a — Changeover cost function** *(landed)*. `src/lib/engine/changeover.ts` with the locked spec. 20 tests.
+- **3b — Capacity-data loader** *(landed)*. `src/lib/planning/capacity-data.ts` parses the spreadsheet into typed records. 24 tests.
+- **3c — Single-product optimiser** *(landed)*. `src/lib/engine/batch-optimiser.ts` with `optimiseSingleProduct(input)` — weekly DP over `(week, inventory)`, shelf-life-window cap, storage cap, demand-coverage hard constraint. 17 tests covering long-shelf-life-collapses-to-one-run, short-shelf-life-forces-frequent-runs, storage-bound-forces-extra-runs, infeasibility, cost-minimisation tuning. **Single-product**: changeover cost is folded into a per-product `setupCost` parameter that the orchestrator (3d) provides; this module doesn't know about other products.
+- **3d — Multi-product orchestration** *(pending)*. New `src/lib/engine/optimiser-orchestrator.ts` that:
+  1. Takes the per-product feeds (from forecaster + BOM exploder).
+  2. Computes an initial schedule per product via `optimiseSingleProduct` with default setupCosts.
+  3. Resolves station-level interleaving: for each station, walks the merged timeline and computes actual `costToSwitch` between adjacent batches.
+  4. Re-optimises iteratively — adjust per-product setupCosts to reflect actual cross-product changeover costs and re-run, until the schedule stabilises (or a max iteration count).
+  5. Outputs the unified schedule + rationale that surfaces "Bottlo run sequence: XHBC → XHCP saved 105 min vs alternative ordering."
+  
+  This is a fixed-point iteration / Lagrangian-style coupling, not a fresh full-DP. The single-product DP does the heavy lifting; the orchestrator only mediates the shared-station coupling.
+
 **Acceptance**
 - Two adjacent small demands collapse into one batch when changeover savings > storage cost
 - Output batches never violate shelf life or vessel capacity
 - A long-shelf-life SKU with realistic changeover cost plans 1–2 runs across 12 weeks (rather than weekly)
 - Property test: total batch volume ≥ total demand (no shortfall unless `unmetDemand` reports it)
 - `interRunDays` reported for every SKU so the UI can flag SKUs touched more often than expected
+- (3d) Bottlo runs of the same extended family land adjacent to each other in the schedule when shelf-life and storage permit, demonstrably reducing total Bottlo minutes vs. the baseline single-product output.
 
 ## Phase 4 — Calendar UI (week 3–4)
 
