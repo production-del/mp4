@@ -193,6 +193,67 @@ describe('loadCapacityDataFromPath — real spreadsheet', () => {
       expect(IBC_CAPACITY_KG).toBe(300);
     });
   });
+
+  describe('wastage rates tab (decision #3)', () => {
+    test('BOM rows with a known wastage entry carry both clean and wastage', () => {
+      // From the spreadsheet: MFBLCUMSM/BLCUM has clean 0.12, wastage 0.02.
+      const row = loaded.bom.find(
+        (r) => r.parentProductCode === 'MFBLCUMSM' && r.productCode === 'BLCUM',
+      );
+      expect(row).toBeDefined();
+      expect(row!.cleanQuantityPerParent).toBeCloseTo(0.12, 6);
+      expect(row!.wastageQuantityPerParent).toBeCloseTo(0.02, 6);
+      // Combined matches the BOMS sheet's "Quantity + Wastage" column
+      expect(row!.quantityPerParent).toBeCloseTo(0.14, 6);
+    });
+
+    test('BOMS/wastage-tab disagreement on combined value emits a warning and rescales the split', () => {
+      // Real data: BOMS says FCHAGALG/XHBC = 0.45; wastage tab says
+      // 0.6 + 0 = 0.6. Loader keeps BOMS as authoritative (0.45) and
+      // rescales the wastage proportion to anchor to it.
+      const row = loaded.bom.find(
+        (r) => r.parentProductCode === 'FCHAGALG' && r.productCode === 'XHBC',
+      );
+      expect(row).toBeDefined();
+      expect(row!.quantityPerParent).toBeCloseTo(0.45, 6);
+      // Wastage tab proportion: clean 100% / wastage 0% → rescaled to 0.45 + 0
+      expect(row!.cleanQuantityPerParent).toBeCloseTo(0.45, 6);
+      expect(row!.wastageQuantityPerParent).toBeCloseTo(0, 6);
+      const mismatch = loaded.warnings.find(
+        (w) =>
+          w.kind === 'wastage_combined_mismatch' &&
+          'parentProductCode' in w &&
+          w.parentProductCode === 'FCHAGALG' &&
+          w.componentProductCode === 'XHBC',
+      );
+      expect(mismatch).toBeDefined();
+    });
+
+    test('BOM rows with no wastage tab entry leave split fields undefined', () => {
+      // Find a BOM row not in the wastage map. We don't know which ones in
+      // advance, so scan for the first one with no split.
+      const row = loaded.bom.find(
+        (r) => r.cleanQuantityPerParent === undefined,
+      );
+      // It's plausible all rows have entries (the wastage tab is large), but
+      // when one exists, both fields should be undefined together.
+      if (row) {
+        expect(row.wastageQuantityPerParent).toBeUndefined();
+      }
+    });
+
+    test('zero-wastage entries still attach the split (clean known, wastage = 0)', () => {
+      // Pick any row that's in the wastage map with wastage 0; need to scan
+      // since the data is sparse. ABCSG/CORIANDERSEEDS appears in the dump.
+      const row = loaded.bom.find(
+        (r) => r.parentProductCode === 'ABCSG' && r.productCode === 'CORIANDERSEEDS',
+      );
+      if (row) {
+        expect(row.cleanQuantityPerParent).toBe(1);
+        expect(row.wastageQuantityPerParent).toBe(0);
+      }
+    });
+  });
 });
 
 describe('inferPackageSize', () => {

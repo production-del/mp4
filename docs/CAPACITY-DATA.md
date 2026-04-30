@@ -15,6 +15,7 @@ This file replaces several pieces of magic numbers and mock data scattered acros
 | `Packaging Line Capacity` | 986 (1 active block) | 4 packaging stations × throughput + changeover cost matrix |
 | `BOMS` | 3,055 (2,730 lines) | Master BOM. `Family` column populated (= intermediate code); `Extended Family` empty (lives in `family` sheet) |
 | `family` | 207 (206 SKUs, 131 families, 6 extended families) | SKU → family → extended family mapping |
+| `wastage rates` | 2,569 (2,568 entries, 607 parents) | Per-edge clean + wastage absolute values. Sparse: only ~17 entries have non-zero wastage; the rest record clean = combined and wastage = 0. **Data drift:** 55 entries disagree with BOMS on the combined value, and 214 reference parent-component pairs the BOMS sheet doesn't list. The loader rescales the split to anchor to the BOMS combined value when both exist, and emits a `wastage_combined_mismatch` warning for each disagreement. |
 
 ---
 

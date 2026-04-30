@@ -188,6 +188,71 @@ function costToSwitch(prev: ProductMeta, curr: ProductMeta, station: Station): n
 - `interRunDays` reported for every SKU so the UI can flag SKUs touched more often than expected
 - (3d) Bottlo runs of the same extended family land adjacent to each other in the schedule when shelf-life and storage permit, demonstrably reducing total Bottlo minutes vs. the baseline single-product output.
 
+## Phase 3e — Daily resource scheduling (post-checkpoint)
+
+The orchestrator (Phase 3d) places batches into weekly buckets and orders them within the week to minimise changeovers. It does NOT assign each batch to a specific working day, and it does NOT enforce per-day station-time or kitchen-resource capacity. Phase 3e closes that gap.
+
+**Why two passes (not redo the DP)** — the per-product weekly DP is about *when to make a batch and how big*. Daily assignment is about *which day of that week the batch slots into*. Different concerns, cleanly separable. Redoing the DP at daily granularity would explode the state space (84 days × inventory × prev-batch ≫ 12 weeks × inventory) without changing the batch decisions in any meaningful way.
+
+**New module: `src/lib/engine/day-assigner.ts`**
+
+```typescript
+type WorkingDay = string; // YYYY-MM-DD
+
+interface ResourceCapacity {
+  /** Working minutes available per day; e.g. station hours/day × 60. */
+  minutesPerDay: number;
+  /** Optional override per specific day (holidays, half-days, …). */
+  perDayOverride?: Record<WorkingDay, number>;
+}
+
+interface DayAssignerInput {
+  /** Output of the orchestrator: per-station, per-week ordered batches. */
+  perStation: Map<Station, StationTimeline>;
+  /** Per-station daily capacity (default: 8h/day = 480 min). */
+  stationCapacity: Record<Station, ResourceCapacity>;
+  /** Working calendar — skip weekends and holidays. */
+  workingDays: (weekStart: string) => WorkingDay[]; // returns the Mon-Fri of that week
+  /** Per-product duration calculator: returns minutes given quantity + station. */
+  durationOf: (batch: ScheduledBatchWithMeta, station: Station) => number;
+}
+
+interface DayAssignerOutput {
+  /** Each batch annotated with the specific day it runs and its duration. */
+  perStation: Map<Station, DailyStationTimeline>;
+  /** Per-day capacity overruns surfaced as warnings; not auto-resolved. */
+  warnings: DayAssignerWarning[];
+}
+
+interface DailyStationTimeline {
+  station: Station;
+  /** Per-day load: which batches (in order) and total minutes used. */
+  byDay: Map<WorkingDay, { batches: AssignedBatch[]; usedMinutes: number; capacityMinutes: number }>;
+}
+
+interface AssignedBatch extends ScheduledBatchWithMeta {
+  scheduledDate: WorkingDay;
+  durationMinutes: number;
+  /** Changeover minutes from the previous batch on this station this day. */
+  changeoverMinutes: number;
+}
+```
+
+**Algorithm.** For each station, walk weeks chronologically. Within a week, take the orchestrator-ordered batches and greedily pack into Mon–Fri:
+1. Start day = Monday of week, capacity = `minutesPerDay`.
+2. For each batch in orchestrator order: compute duration + carry-over changeover. If it fits today, assign; else move to next day, reset capacity, retry. If even a fresh day can't hold it (huge batch on a low-capacity day), emit `oversize_batch` warning and assign anyway with overrun reported.
+3. If the week's Friday gets filled and there are remaining batches, emit `week_overflow` warning naming the batches that didn't fit.
+
+Greedy-by-orchestrator-order preserves family-clustering benefits across day boundaries.
+
+**Kitchen-resource caps (mixing bowls, IBCs, dehydrator trays).** Defer to Phase 3f. They're per-batch resource holds with durations measured in days (a soak runs 1+ days) — different shape from station-time-per-day. Not blocking for the calendar UI: the calendar can show station-day assignments first, kitchen-resource overlay can come later.
+
+**Acceptance**
+- Every batch in orchestrator output gets a specific `scheduledDate` (working day).
+- No day's `usedMinutes` exceeds `capacityMinutes` without a warning.
+- Family-clustering preserved: when same-family batches are adjacent in orchestrator order, they remain adjacent after day-assignment (grouped on the same day or contiguous days).
+- A week with too much demand emits `week_overflow` warnings naming the batches that didn't fit, rather than silently dropping or compressing.
+
 ## Phase 4 — Calendar UI (week 3–4)
 
 New route. Reads engine output, no new business logic in the component.
@@ -304,6 +369,8 @@ Wire confirmed POs and assemblies through the existing adapter.
 
 4. **Capacity model** → **daily buckets.** Optimiser constraints are per-day per-resource (vessel, oven, packaging line). Calendar drawer shows daily load; the bottom-strip heatmap rolls up to weekly for at-a-glance scanning. `BatchOptimiserInput` gains `capacityByDate: Record<string, ResourceCapacity>` instead of a single weekly cap.
 
-## Still open
+## Resolved (post-checkpoint)
 
-- **Horizon length** — confirmed 12 weeks (3 months), but user noted longer planning is preferable. Worth revisiting after Phase 3 lands: does the optimiser stay tractable at 26 weeks? If yes, extend default. If not, surface as a per-run setting.
+- **Horizon length** — staying at **12 weeks** for now. User confirmed: "lets start with 12 weeks and expand horizon once comfortable." Phase 4 UI surfaces the horizon as a setting; we'll bump the default once the system is in use.
+- **Daily resource granularity** — confirmed. **Phase 3e** added below to extend the orchestrator with per-day station-time scheduling and daily resource-cap enforcement. Per-product DP stays weekly (it's about batch sizing, not within-week assignment); the day-assigner is a post-pass.
+- **Wastage rates source** — resolved. Spreadsheet now carries a `wastage rates` tab with per-edge clean + wastage absolute values. Loader parses it (Phase 3b extension, landed) and attaches split to each `BOMComponent`. Exploder (Phase 2) uses the split when present, falls back to legacy `wastageRates` parameter otherwise.
