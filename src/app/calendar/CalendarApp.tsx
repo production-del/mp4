@@ -220,7 +220,18 @@ export function CalendarApp(props: CalendarAppProps) {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: 'calc(100vh - 130px)' }}>
+    // align-items: flex-start lets the sticky children opt out of being
+    // stretched to the parent's full height (default `stretch` would defeat
+    // sticky). The rails then anchor at top of viewport (offset by the
+    // page's sticky header) and scroll internally if their content exceeds
+    // the viewport.
+    <div
+      style={{
+        display: 'flex',
+        minHeight: 'calc(100vh - 130px)',
+        alignItems: 'flex-start',
+      }}
+    >
       {/* ─── Left rail ─────────────────────────────────── */}
       <aside
         style={{
@@ -229,6 +240,11 @@ export function CalendarApp(props: CalendarAppProps) {
           borderRight: '0.5px solid var(--border)',
           background: 'var(--bg-surface)',
           flexShrink: 0,
+          position: 'sticky',
+          top: 60, // sits below the layout's sticky nav header
+          maxHeight: 'calc(100vh - 60px)',
+          overflowY: 'auto',
+          alignSelf: 'flex-start',
         }}
       >
         <Section title="Plan summary">
@@ -648,6 +664,11 @@ function ActivityDrawer({
         borderLeft: '0.5px solid var(--border)',
         background: 'var(--bg-surface)',
         flexShrink: 0,
+        position: 'sticky',
+        top: 60, // matches the left rail's sticky offset
+        maxHeight: 'calc(100vh - 60px)',
+        overflowY: 'auto',
+        alignSelf: 'flex-start',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
