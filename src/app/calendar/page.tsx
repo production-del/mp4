@@ -31,8 +31,18 @@ export const dynamic = 'force-dynamic'; // Always re-run; calendar reflects late
 const SPREADSHEET = join(process.cwd(), 'data', 'kitchen capacity and family plans.xlsx');
 const DEFAULT_SHELF_LIFE_DAYS = 90; // Conservative default; per-product overrides come later
 const DEFAULT_MIN_BATCH = 50;
-const DEFAULT_MAX_BATCH = 5000;
 const STEP = 10;
+/**
+ * Hard cap on batch size = one day of the assigned station's throughput.
+ * Without this, the optimiser can collapse a long-shelf-life product's full
+ * 12-week demand into a single batch that takes 25+ hours on the station —
+ * which the day-assigner then has to absorb as an oversize_batch warning.
+ * Capping per-product to one working day's output keeps the optimiser
+ * producing batches that physically fit in a day.
+ */
+function dailyStationOutput(unitsPerHour: number, hoursPerDay: number): number {
+  return Math.floor(unitsPerHour * hoursPerDay);
+}
 
 export default function CalendarPage() {
   let pageError: string | null = null;
@@ -95,13 +105,17 @@ function buildPayload() {
     const weeklyDemand = forecast
       .filter((r) => r.productCode === code)
       .map((r) => ({ weekStart: r.weekStart, quantity: r.quantity }));
+    const station = capacity.stations[meta.station];
+    const maxBatch = station
+      ? dailyStationOutput(station.unitsPerHour, station.hoursPerDay)
+      : 1500; // safe fallback if station defaults missing
     return {
       meta,
       weeklyDemand,
       initialInventory: 0,
       shelfLifeDays: DEFAULT_SHELF_LIFE_DAYS,
       minBatchSize: DEFAULT_MIN_BATCH,
-      maxBatchSize: DEFAULT_MAX_BATCH,
+      maxBatchSize: maxBatch,
       step: STEP,
     };
   });
@@ -117,12 +131,32 @@ function buildPayload() {
 
   const projection = projectToCalendar(dayOutput);
 
+  // Build infeasible products list (with per-product unmet demand totals)
+  // for surfacing in the UI's left rail.
+  const infeasibleProducts: Array<{
+    productCode: string;
+    productName: string;
+    station: string;
+    unmetUnits: number;
+    reason: string;
+  }> = [];
+  for (const plan of products) {
+    const r = orchestratorOutput.perProduct.get(plan.meta.productCode);
+    if (!r || r.feasible) continue;
+    const unmet = r.unmetDemand.reduce((s, u) => s + u.quantity, 0);
+    infeasibleProducts.push({
+      productCode: plan.meta.productCode,
+      productName: plan.meta.productName || plan.meta.productCode,
+      station: plan.meta.station,
+      unmetUnits: Math.round(unmet),
+      reason: r.rationale[0] ?? 'No feasible plan.',
+    });
+  }
+  infeasibleProducts.sort((a, b) => b.unmetUnits - a.unmetUnits);
+
   // Build summary banner data.
   const productCount = products.length;
-  const feasibleCount = Array.from(orchestratorOutput.perProduct.values()).filter(
-    (r) => r.feasible,
-  ).length;
-  const infeasibleCount = productCount - feasibleCount;
+  const feasibleCount = productCount - infeasibleProducts.length;
   const totalChangeoverMin = orchestratorOutput.totalChangeoverMinutes;
   const dataAge = demandData?.sourceMtime ?? null;
 
@@ -130,10 +164,11 @@ function buildPayload() {
     horizon,
     activities: projection.activities,
     dayLoads: projection.dayLoads,
+    infeasibleProducts,
     summary: {
       productCount,
       feasibleCount,
-      infeasibleCount,
+      infeasibleCount: infeasibleProducts.length,
       totalChangeoverMinutes: totalChangeoverMin,
       orchestratorWarningCount: orchestratorOutput.warnings.length,
       dayAssignerWarningCount: dayOutput.warnings.length,
