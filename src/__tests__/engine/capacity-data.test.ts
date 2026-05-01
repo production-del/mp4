@@ -2,6 +2,7 @@ import { join } from 'path';
 import {
   loadCapacityDataFromPath,
   inferPackageSize,
+  cleanProductName,
   IBC_CAPACITY_KG,
 } from '@/lib/planning/capacity-data';
 
@@ -187,10 +188,13 @@ describe('loadCapacityDataFromPath — real spreadsheet', () => {
       expect(meta.extendedFamily).toBe('FAM Fungi');
     });
 
-    test('productName is populated from the family sheet description (not empty)', () => {
+    test('productName is populated from the family sheet description and cleaned', () => {
       const meta = loaded.productMetaBySku.FCHAGALG;
       expect(meta.productName).toBeTruthy();
       expect(meta.productName).toMatch(/Chaga/i);
+      // No "Label - " prefix, no "(600g)" volume tag
+      expect(meta.productName).not.toMatch(/^Label/i);
+      expect(meta.productName).not.toMatch(/\(\d+\s*g\)/i);
     });
 
     test('rateUnitsPerHour is sourced from the assigned station defaults', () => {
@@ -277,5 +281,32 @@ describe('inferPackageSize', () => {
     ['SOMETHING', 'OTHER'],
   ])('inferPackageSize(%s) → %s', (code, expected) => {
     expect(inferPackageSize(code)).toBe(expected);
+  });
+});
+
+describe('cleanProductName', () => {
+  test.each([
+    ['Label - Chaga (600g)', 'Chaga'],
+    ['Label - Almonds LRG (500g)', 'Almonds LRG'],
+    ['Label - Beetroot Powder MED (340g)', 'Beetroot Powder MED'],
+    ['Label - Ginger Ground MED (240g) DISCONTINUED', 'Ginger Ground MED'],
+    ['Label - Yummy Beans Intermediate', 'Yummy Beans Intermediate'],
+    ['Label - Big Bag (1.5kg)', 'Big Bag'],
+    ['Label - Tiny (50 ml)', 'Tiny'],
+    // Trailing non-parenthesised volume
+    ['Label - Garlic Powder - Organic 100g', 'Garlic Powder - Organic'],
+    ['Label - Cacao Powder LRG - Organic 440g', 'Cacao Powder LRG - Organic'],
+    ['Label - Blue Lotus Flowers MED - Organic 20g', 'Blue Lotus Flowers MED - Organic'],
+    // Volume + trailing DISCONTINUED — order matters in the cleaning pass
+    ['Label - Blue Butterfly Pea Flowers MED - Organic 50g DISCONTINUED', 'Blue Butterfly Pea Flowers MED - Organic'],
+    ['Label - Raw Macadamias SML - Organic 125g DISCONTINUED', 'Raw Macadamias SML - Organic'],
+    ['Already clean name', 'Already clean name'],
+    ['', ''],
+  ])('cleanProductName(%j) → %j', (input, expected) => {
+    expect(cleanProductName(input)).toBe(expected);
+  });
+
+  test('handles multiple volume markers (defensive, real data is single)', () => {
+    expect(cleanProductName('Label - Foo (100g) Bar (200g)')).toBe('Foo Bar');
   });
 });
