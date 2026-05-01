@@ -17,7 +17,8 @@
  * them entirely.
  */
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import type {
   CalendarActivity,
   DayLoadSummary,
@@ -155,6 +156,18 @@ function fmtDate(iso: string): string {
 export function CalendarApp(props: CalendarAppProps) {
   const { horizon, activities, dayLoads, stationDailyMinutes, infeasibleProducts, routingDecisions, summary } = props;
   const [infeasibleOpen, setInfeasibleOpen] = useState(false);
+
+  // Re-plan: triggers Next.js to re-fetch the server component, which re-runs
+  // the full pipeline against whatever's in the spreadsheet + demand.csv right
+  // now. useTransition gives us isPending so we can show a loading indicator
+  // while the server re-renders without blocking the UI.
+  const router = useRouter();
+  const [isReplanning, startReplan] = useTransition();
+  function replan() {
+    startReplan(() => {
+      router.refresh();
+    });
+  }
 
   // Layer-toggle state: which stations are visible. Default all on.
   const [visibleStations, setVisibleStations] = useState<Set<Station>>(
@@ -564,11 +577,32 @@ export function CalendarApp(props: CalendarAppProps) {
 
       {/* ─── Main calendar ─────────────────────────────── */}
       <main style={{ flex: 1, padding: 24, overflowX: 'auto' }}>
-        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <h1 style={{ fontSize: 20, fontWeight: 600 }}>Production Calendar</h1>
-          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            {horizon.weeks}-week horizon from {fmtDate(horizon.startWeek)}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              {horizon.weeks}-week horizon from {fmtDate(horizon.startWeek)}
+            </span>
+            <button
+              type="button"
+              onClick={replan}
+              disabled={isReplanning}
+              style={{
+                padding: '6px 14px',
+                fontSize: 13,
+                background: isReplanning ? 'var(--bg-page)' : 'var(--accent, #1e40af)',
+                color: isReplanning ? 'var(--text-muted)' : 'white',
+                border: '0.5px solid var(--border)',
+                borderRadius: 4,
+                cursor: isReplanning ? 'wait' : 'pointer',
+                fontFamily: 'inherit',
+                fontWeight: 500,
+              }}
+              title="Re-run the pipeline with the latest spreadsheet + demand.csv"
+            >
+              {isReplanning ? 'Re-planning…' : 'Re-plan'}
+            </button>
+          </div>
         </div>
 
         {staleIds.length > 0 && (
