@@ -80,6 +80,12 @@ interface CalendarAppProps {
   productOverrides: Record<string, ProductOverrideShape>;
   /** Per-product station daily output (units), used as default for max-batch override. */
   productStationDailyOutput: Record<string, number>;
+  /** SOH per product code; empty when no cache file exists. */
+  sohByProductCode: Record<string, number>;
+  /** ISO timestamp of the last SOH refresh, or null when cache is missing. */
+  sohFetchedAt: string | null;
+  /** Warehouse filter the SOH cache was fetched against (informational). */
+  sohWarehouse: string | null;
   /** Global defaults the user can override per product. */
   globalDefaults: { shelfLifeDays: number };
   summary: SummaryProps;
@@ -174,6 +180,9 @@ export function CalendarApp(props: CalendarAppProps) {
     routingDecisions,
     productOverrides,
     productStationDailyOutput,
+    sohByProductCode,
+    sohFetchedAt,
+    sohWarehouse,
     globalDefaults,
     summary,
   } = props;
@@ -189,6 +198,28 @@ export function CalendarApp(props: CalendarAppProps) {
     startReplan(() => {
       router.refresh();
     });
+  }
+
+  // SOH refresh: hit /api/refresh-soh to pull from Unleashed and write the
+  // cache, then trigger a page re-render so the new initialInventory flows
+  // through the optimiser.
+  const [refreshingSoh, setRefreshingSoh] = useState(false);
+  const [sohRefreshError, setSohRefreshError] = useState<string | null>(null);
+  async function refreshSoh() {
+    setRefreshingSoh(true);
+    setSohRefreshError(null);
+    try {
+      const res = await fetch('/api/refresh-soh', { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail ?? data.error ?? `HTTP ${res.status}`);
+      }
+      router.refresh();
+    } catch (e) {
+      setSohRefreshError(e instanceof Error ? e.message : 'Refresh failed');
+    } finally {
+      setRefreshingSoh(false);
+    }
   }
 
   // Layer-toggle state: which stations are visible. Default all on.
@@ -587,6 +618,20 @@ export function CalendarApp(props: CalendarAppProps) {
             label="Demand source"
             value={summary.demandSourceMtime ? new Date(summary.demandSourceMtime).toLocaleDateString('en-AU') : '—'}
           />
+          <KPIRow
+            label="SOH"
+            value={
+              sohFetchedAt
+                ? `${new Date(sohFetchedAt).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })}`
+                : 'never'
+            }
+            tone={sohFetchedAt ? undefined : 'amber'}
+          />
+          {sohWarehouse && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: -4, marginBottom: 4 }}>
+              warehouse: {sohWarehouse}
+            </div>
+          )}
           {(summary.orchestratorWarningCount + summary.dayAssignerWarningCount + summary.capacityWarningCount) > 0 && (
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
               Warnings: {summary.capacityWarningCount} loader,{' '}
@@ -607,8 +652,26 @@ export function CalendarApp(props: CalendarAppProps) {
             </span>
             <button
               type="button"
+              onClick={refreshSoh}
+              disabled={refreshingSoh || isReplanning}
+              style={{
+                padding: '6px 12px',
+                fontSize: 13,
+                background: 'var(--bg-page)',
+                color: 'inherit',
+                border: '0.5px solid var(--border)',
+                borderRadius: 4,
+                cursor: refreshingSoh ? 'wait' : 'pointer',
+                fontFamily: 'inherit',
+              }}
+              title="Pull current stock-on-hand from Unleashed and re-plan"
+            >
+              {refreshingSoh ? 'Refreshing SOH…' : 'Refresh SOH'}
+            </button>
+            <button
+              type="button"
               onClick={replan}
-              disabled={isReplanning}
+              disabled={isReplanning || refreshingSoh}
               style={{
                 padding: '6px 14px',
                 fontSize: 13,
@@ -626,6 +689,22 @@ export function CalendarApp(props: CalendarAppProps) {
             </button>
           </div>
         </div>
+
+        {sohRefreshError && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '8px 12px',
+              background: '#fef2f2',
+              border: '0.5px solid #fecaca',
+              borderRadius: 4,
+              fontSize: 12,
+              color: '#991b1b',
+            }}
+          >
+            ⚠ SOH refresh failed: {sohRefreshError}
+          </div>
+        )}
 
         {staleIds.length > 0 && (
           <div
@@ -726,6 +805,7 @@ export function CalendarApp(props: CalendarAppProps) {
           productOverride={productOverrides[selected.productCode]}
           stationDailyOutput={productStationDailyOutput[selected.productCode] ?? 0}
           globalShelfLifeDays={globalDefaults.shelfLifeDays}
+          sohOnHand={sohByProductCode[selected.productCode] ?? null}
           onDismiss={() => dismiss(selected.stableId)}
           onUndismiss={() => undismiss(selected.stableId)}
           onReschedule={(date) => reschedule(selected.stableId, date)}
@@ -1003,6 +1083,7 @@ function ActivityDrawer({
   productOverride,
   stationDailyOutput,
   globalShelfLifeDays,
+  sohOnHand,
   onDismiss,
   onUndismiss,
   onReschedule,
@@ -1022,6 +1103,8 @@ function ActivityDrawer({
   productOverride: ProductOverrideShape | undefined;
   stationDailyOutput: number;
   globalShelfLifeDays: number;
+  /** Current stock-on-hand for the product, null when SOH cache is empty. */
+  sohOnHand: number | null;
   onDismiss: () => void;
   onUndismiss: () => void;
   onReschedule: (newDate: string) => void;
@@ -1142,6 +1225,10 @@ function ActivityDrawer({
         />
         <Field label="Family" value={activity.family ?? '—'} />
         <Field label="Extended family" value={activity.extendedFamily ?? '—'} />
+        <Field
+          label="Stock on hand"
+          value={sohOnHand === null ? '— (no SOH cache)' : `${sohOnHand.toLocaleString()} units`}
+        />
       </div>
 
       {/* ─── Reschedule picker ─────────────────────────── */}

@@ -33,6 +33,7 @@ import {
   readProductOverrides,
   resolveOverride,
 } from '@/lib/planning/product-overrides';
+import { readSohCache, sohOf } from '@/lib/planning/soh-cache';
 import { CalendarApp } from './CalendarApp';
 
 export const dynamic = 'force-dynamic'; // Always re-run; calendar reflects latest data
@@ -182,6 +183,11 @@ function buildPayload() {
   // (Phase 4f); the next Re-plan picks them up.
   const productOverrides = readProductOverrides();
 
+  // Stock-on-hand cache — produced by /api/refresh-soh from Unleashed.
+  // Read on each render; null when the cache file is missing (planner falls
+  // back to 0 for every product, matching pre-4g behaviour).
+  const sohCache = readSohCache();
+
   // Build the ProductPlan list using the balanced routing decisions.
   const products: ProductPlan[] = balanced.routings.map((r) => {
     const baseMeta = capacity.productMetaBySku[r.productCode];
@@ -203,7 +209,7 @@ function buildPayload() {
     return {
       meta: chosenMeta,
       weeklyDemand,
-      initialInventory: 0,
+      initialInventory: sohOf(sohCache, r.productCode),
       shelfLifeDays: resolved.shelfLifeDays,
       minBatchSize: DEFAULT_MIN_BATCH,
       maxBatchSize: resolved.maxBatchSize,
@@ -274,6 +280,14 @@ function buildPayload() {
     if (s) productStationDailyOutput[r.productCode] = dailyStationOutput(s.unitsPerHour, s.hoursPerDay);
   }
 
+  // Pass minimal SOH info to the client: per-SKU lookup the drawer needs,
+  // plus the cache's freshness timestamp for the header indicator.
+  const sohByProductCode: Record<string, number> = sohCache
+    ? sohCache.byProductCode
+    : {};
+  const sohFetchedAt: string | null = sohCache?.fetchedAt ?? null;
+  const sohWarehouse: string | null = sohCache?.warehouseFilter || null;
+
   return {
     horizon,
     activities: projection.activities,
@@ -283,6 +297,9 @@ function buildPayload() {
     routingDecisions,
     productOverrides,
     productStationDailyOutput,
+    sohByProductCode,
+    sohFetchedAt,
+    sohWarehouse,
     globalDefaults: {
       shelfLifeDays: DEFAULT_SHELF_LIFE_DAYS,
     },
