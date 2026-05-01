@@ -88,6 +88,8 @@ interface CalendarAppProps {
   sohWarehouse: string | null;
   /** Global defaults the user can override per product. */
   globalDefaults: { shelfLifeDays: number };
+  /** Horizon-week options surfaced in the picker (e.g. 12 / 16 / 20 / 26). */
+  horizonOptions: number[];
   summary: SummaryProps;
 }
 
@@ -184,6 +186,7 @@ export function CalendarApp(props: CalendarAppProps) {
     sohFetchedAt,
     sohWarehouse,
     globalDefaults,
+    horizonOptions,
     summary,
   } = props;
   const [infeasibleOpen, setInfeasibleOpen] = useState(false);
@@ -647,8 +650,36 @@ export function CalendarApp(props: CalendarAppProps) {
         <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <h1 style={{ fontSize: 20, fontWeight: 600 }}>Production Calendar</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)' }}>
+              <span>Horizon:</span>
+              <select
+                value={horizon.weeks}
+                onChange={(e) => {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('horizonWeeks', e.target.value);
+                  window.location.assign(url.toString());
+                }}
+                disabled={isReplanning || refreshingSoh}
+                style={{
+                  padding: '4px 6px',
+                  fontSize: 12,
+                  border: '0.5px solid var(--border)',
+                  borderRadius: 3,
+                  background: 'var(--bg-page)',
+                  color: 'inherit',
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                }}
+              >
+                {horizonOptions.map((weeks) => (
+                  <option key={weeks} value={weeks}>
+                    {weeks} weeks {weeks === 26 ? '(6 mo)' : weeks === 12 ? '(3 mo)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
             <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              {horizon.weeks}-week horizon from {fmtDate(horizon.startWeek)}
+              from {fmtDate(horizon.startWeek)}
             </span>
             <button
               type="button"
