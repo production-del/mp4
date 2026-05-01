@@ -6,6 +6,13 @@ import {
   applyDismiss,
   applyUndismiss,
   isDismissed,
+  applyReschedule,
+  applyClearReschedule,
+  rescheduledTo,
+  applyEditQuantity,
+  applyClearEdit,
+  editedQuantityOf,
+  clearStale,
   readMutationsFromStorage,
   writeMutationsToStorage,
   staleStableIds,
@@ -66,6 +73,83 @@ describe('calendar-mutations: pure operations', () => {
       const m1 = applyDismiss({}, 'X');
       const m2 = applyUndismiss(m1, 'X');
       expect(isDismissed(m2, 'X')).toBe(false);
+    });
+  });
+
+  describe('reschedule', () => {
+    test('applyReschedule sets the field', () => {
+      const out = applyReschedule({}, 'A|2026-05-04|0', '2026-05-06');
+      expect(rescheduledTo(out, 'A|2026-05-04|0')).toBe('2026-05-06');
+    });
+
+    test('rescheduledTo returns null for absent entries', () => {
+      expect(rescheduledTo({}, 'X')).toBeNull();
+    });
+
+    test('applyClearReschedule drops the entry when no other fields remain', () => {
+      const sched = applyReschedule({}, 'A', '2026-05-06');
+      const cleared = applyClearReschedule(sched, 'A');
+      expect(cleared['A']).toBeUndefined();
+    });
+
+    test('applyClearReschedule preserves dismiss when both are set', () => {
+      let m = applyReschedule({}, 'A', '2026-05-06');
+      m = applyDismiss(m, 'A');
+      const cleared = applyClearReschedule(m, 'A');
+      expect(rescheduledTo(cleared, 'A')).toBeNull();
+      expect(isDismissed(cleared, 'A')).toBe(true);
+    });
+
+    test('coexists with dismiss on the same stableId', () => {
+      let m = applyDismiss({}, 'A');
+      m = applyReschedule(m, 'A', '2026-05-06');
+      expect(isDismissed(m, 'A')).toBe(true);
+      expect(rescheduledTo(m, 'A')).toBe('2026-05-06');
+    });
+  });
+
+  describe('edit quantity', () => {
+    test('applyEditQuantity sets the field', () => {
+      const out = applyEditQuantity({}, 'A', 250);
+      expect(editedQuantityOf(out, 'A')).toBe(250);
+    });
+
+    test('rejects zero / negative / NaN quantities', () => {
+      expect(applyEditQuantity({}, 'A', 0)).toEqual({});
+      expect(applyEditQuantity({}, 'A', -10)).toEqual({});
+      expect(applyEditQuantity({}, 'A', NaN)).toEqual({});
+    });
+
+    test('applyClearEdit drops the entry when no other fields remain', () => {
+      const edited = applyEditQuantity({}, 'A', 250);
+      const cleared = applyClearEdit(edited, 'A');
+      expect(cleared['A']).toBeUndefined();
+    });
+
+    test('coexists with reschedule + dismiss on the same stableId', () => {
+      let m = applyDismiss({}, 'A');
+      m = applyReschedule(m, 'A', '2026-05-06');
+      m = applyEditQuantity(m, 'A', 333);
+      expect(isDismissed(m, 'A')).toBe(true);
+      expect(rescheduledTo(m, 'A')).toBe('2026-05-06');
+      expect(editedQuantityOf(m, 'A')).toBe(333);
+    });
+  });
+
+  describe('clearStale', () => {
+    test('drops entries whose stableId is not in the valid set', () => {
+      let m: MutationsMap = {};
+      m = applyDismiss(m, 'KEEP');
+      m = applyReschedule(m, 'GONE', '2026-05-06');
+      const cleaned = clearStale(m, new Set(['KEEP']));
+      expect(cleaned['KEEP']).toBeDefined();
+      expect(cleaned['GONE']).toBeUndefined();
+    });
+
+    test('returns a fresh map (no mutation of input)', () => {
+      const m: MutationsMap = applyDismiss({}, 'X');
+      const cleaned = clearStale(m, new Set(['X']));
+      expect(cleaned).not.toBe(m);
     });
   });
 
