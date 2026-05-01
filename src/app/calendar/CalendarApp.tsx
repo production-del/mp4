@@ -1,27 +1,35 @@
 'use client';
 
 /**
- * CalendarApp — Phase 4a client component.
+ * CalendarApp — Phase 4a/b/c/d client component.
  *
  * Reads pre-computed projection data from the server component and renders:
  *   - A 12-week month-by-month calendar grid with activity chips per day
- *   - Per-station layer toggles (left rail)
+ *   - Per-station layer toggles (left rail) with peak-load badges
  *   - Coverage / changeover summary KPIs (left rail)
- *   - Read-only activity drawer (right rail) when a chip is clicked
+ *   - Activity drawer (right rail) with Dismiss/Undismiss
+ *   - Persistent dismissals overlaid on the engine output
  *
- * No state mutation yet — edit / reschedule / dismiss / re-plan all come
- * in Phase 4b. This phase proves the rendering pipeline against real data.
- *
- * Layout: 3-column flex (left rail / main calendar / right drawer). The
- * drawer collapses to nothing when no activity is selected so the calendar
- * can use the full width.
+ * Mutation model: the server runs the engine, the client applies a
+ * localStorage-backed mutations layer on top (`calendar-mutations.ts`).
+ * Dismissed activities render with reduced opacity and don't count
+ * toward day-load. A "Show dismissed" toggle in the left rail hides
+ * them entirely.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   CalendarActivity,
   DayLoadSummary,
 } from '@/lib/planning/calendar-projection';
+import {
+  applyDismiss,
+  applyUndismiss,
+  isDismissed,
+  readMutationsFromStorage,
+  writeMutationsToStorage,
+  type MutationsMap,
+} from '@/lib/planning/calendar-mutations';
 import type { PlanningHorizon, Station } from '@/lib/planning/engine-io';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -49,6 +57,8 @@ interface CalendarAppProps {
   horizon: PlanningHorizon;
   activities: CalendarActivity[];
   dayLoads: DayLoadSummary[];
+  /** Per-station daily capacity in minutes. Used for client-side load recompute. */
+  stationDailyMinutes: Record<string, number>;
   infeasibleProducts: InfeasibleProduct[];
   /** productCode → cost-router rationale string (why this station was chosen). */
   routingDecisions: Record<string, string>;
@@ -135,7 +145,7 @@ function fmtDate(iso: string): string {
 // ─── Component ───────────────────────────────────────────────
 
 export function CalendarApp(props: CalendarAppProps) {
-  const { horizon, activities, dayLoads, infeasibleProducts, routingDecisions, summary } = props;
+  const { horizon, activities, dayLoads, stationDailyMinutes, infeasibleProducts, routingDecisions, summary } = props;
   const [infeasibleOpen, setInfeasibleOpen] = useState(false);
 
   // Layer-toggle state: which stations are visible. Default all on.
@@ -146,34 +156,85 @@ export function CalendarApp(props: CalendarAppProps) {
   // Selected activity for the drawer.
   const [selected, setSelected] = useState<CalendarActivity | null>(null);
 
-  // Filter activities through the layer toggles.
-  const visibleActivities = useMemo(
-    () => activities.filter((a) => visibleStations.has(a.station)),
-    [activities, visibleStations],
+  // ─── Mutations (dismiss) ─────────────────────────────────
+  // Hydrated from localStorage on mount; written on every mutation.
+  const [mutations, setMutations] = useState<MutationsMap>({});
+  const [showDismissed, setShowDismissed] = useState(true);
+
+  useEffect(() => {
+    setMutations(readMutationsFromStorage());
+  }, []);
+
+  function dismiss(stableId: string) {
+    setMutations((curr) => {
+      const next = applyDismiss(curr, stableId);
+      writeMutationsToStorage(next);
+      return next;
+    });
+  }
+  function undismiss(stableId: string) {
+    setMutations((curr) => {
+      const next = applyUndismiss(curr, stableId);
+      writeMutationsToStorage(next);
+      return next;
+    });
+  }
+
+  // Number of dismissed activities present in the current plan.
+  const dismissedCount = useMemo(
+    () => activities.filter((a) => isDismissed(mutations, a.stableId)).length,
+    [activities, mutations],
   );
+
+  // Filter activities through layer toggles + dismissal visibility.
+  const visibleActivities = useMemo(() => {
+    return activities.filter((a) => {
+      if (!visibleStations.has(a.station)) return false;
+      if (!showDismissed && isDismissed(mutations, a.stableId)) return false;
+      return true;
+    });
+  }, [activities, visibleStations, mutations, showDismissed]);
   const activitiesByDate = useMemo(
     () => groupByDate(visibleActivities),
     [visibleActivities],
   );
 
-  // Aggregate per-day load across visible stations: peak utilisation per day.
-  // Used to render the per-cell load indicator.
+  // Aggregate per-day load across visible stations, EXCLUDING dismissed
+  // activities (since the user has opted out of running them, they shouldn't
+  // contribute to capacity load). Recomputed client-side from activities +
+  // station capacity defaults — the server's pre-rendered dayLoads no longer
+  // match once mutations are applied.
   const peakLoadByDate = useMemo(() => {
-    const out = new Map<string, { utilisation: number; usedMinutes: number; capacityMinutes: number; station: Station }>();
-    for (const dl of dayLoads) {
-      if (!visibleStations.has(dl.station)) continue;
-      const existing = out.get(dl.date);
-      if (!existing || dl.utilisation > existing.utilisation) {
-        out.set(dl.date, {
-          utilisation: dl.utilisation,
-          usedMinutes: dl.usedMinutes,
-          capacityMinutes: dl.capacityMinutes,
-          station: dl.station,
-        });
+    type Bucket = { usedMinutes: number; capacityMinutes: number; station: Station };
+    const perDayPerStation = new Map<string, Map<Station, number>>();
+    for (const a of activities) {
+      if (!visibleStations.has(a.station)) continue;
+      if (isDismissed(mutations, a.stableId)) continue;
+      let stationMap = perDayPerStation.get(a.date);
+      if (!stationMap) {
+        stationMap = new Map();
+        perDayPerStation.set(a.date, stationMap);
       }
+      stationMap.set(
+        a.station,
+        (stationMap.get(a.station) ?? 0) + a.durationMinutes + a.changeoverMinutes,
+      );
+    }
+    const out = new Map<string, Bucket & { utilisation: number }>();
+    for (const [date, stationMap] of perDayPerStation.entries()) {
+      let peak: (Bucket & { utilisation: number }) | null = null;
+      for (const [station, used] of stationMap.entries()) {
+        const cap = stationDailyMinutes[station] ?? 480;
+        const util = cap > 0 ? used / cap : 0;
+        if (!peak || util > peak.utilisation) {
+          peak = { usedMinutes: used, capacityMinutes: cap, station, utilisation: util };
+        }
+      }
+      if (peak) out.set(date, peak);
     }
     return out;
-  }, [dayLoads, visibleStations]);
+    // dayLoads is intentionally NOT a dep — client recomputes from activities.
+  }, [activities, visibleStations, mutations, stationDailyMinutes]);
 
   // Per-station counts (for the chip labels in the rail) — count BEFORE
   // filtering so the user can see what they'd un-hide.
@@ -303,6 +364,32 @@ export function CalendarApp(props: CalendarAppProps) {
               </label>
             );
           })}
+          {dismissedCount > 0 && (
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 0',
+                fontSize: 13,
+                cursor: 'pointer',
+                userSelect: 'none',
+                marginTop: 4,
+                paddingTop: 8,
+                borderTop: '0.5px solid var(--border)',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={showDismissed}
+                onChange={() => setShowDismissed((v) => !v)}
+              />
+              <span style={{ flex: 1, color: 'var(--text-muted)' }}>Show dismissed</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                {dismissedCount}
+              </span>
+            </label>
+          )}
         </Section>
 
         {infeasibleProducts.length > 0 && (
@@ -390,6 +477,7 @@ export function CalendarApp(props: CalendarAppProps) {
             peakLoadByDate={peakLoadByDate}
             onSelect={setSelected}
             selectedId={selected?.id ?? null}
+            mutations={mutations}
           />
         ))}
 
@@ -414,6 +502,9 @@ export function CalendarApp(props: CalendarAppProps) {
         <ActivityDrawer
           activity={selected}
           routingRationale={routingDecisions[selected.productCode] ?? null}
+          dismissed={isDismissed(mutations, selected.stableId)}
+          onDismiss={() => dismiss(selected.stableId)}
+          onUndismiss={() => undismiss(selected.stableId)}
           onClose={() => setSelected(null)}
         />
       )}
@@ -468,6 +559,7 @@ function MonthBlock({
   peakLoadByDate,
   onSelect,
   selectedId,
+  mutations,
 }: {
   label: string;
   dates: string[];
@@ -475,6 +567,7 @@ function MonthBlock({
   peakLoadByDate: Map<string, { utilisation: number; usedMinutes: number; capacityMinutes: number; station: Station }>;
   onSelect: (a: CalendarActivity) => void;
   selectedId: string | null;
+  mutations: MutationsMap;
 }) {
   // Pad the front of the first week so calendar columns align with day-of-week.
   const first = fromISO(dates[0]);
@@ -571,6 +664,7 @@ function MonthBlock({
                   key={a.id}
                   activity={a}
                   selected={a.id === selectedId}
+                  dismissed={isDismissed(mutations, a.stableId)}
                   onClick={() => onSelect(a)}
                 />
               ))}
@@ -609,10 +703,12 @@ function MonthBlock({
 function ActivityChip({
   activity,
   selected,
+  dismissed,
   onClick,
 }: {
   activity: CalendarActivity;
   selected: boolean;
+  dismissed: boolean;
   onClick: () => void;
 }) {
   const colors = STATION_COLORS[activity.station];
@@ -638,8 +734,14 @@ function ActivityChip({
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
+        opacity: dismissed ? 0.35 : 1,
+        textDecoration: dismissed ? 'line-through' : 'none',
       }}
-      title={`${activity.productCode} — ${activity.quantity} units (${Math.round(activity.durationMinutes)} min)`}
+      title={
+        dismissed
+          ? `${activity.productCode} — DISMISSED (${activity.quantity} units, ${Math.round(activity.durationMinutes)} min)`
+          : `${activity.productCode} — ${activity.quantity} units (${Math.round(activity.durationMinutes)} min)`
+      }
     >
       {activity.productCode} <span style={{ opacity: 0.7 }}>×{activity.quantity}</span>
     </button>
@@ -649,10 +751,16 @@ function ActivityChip({
 function ActivityDrawer({
   activity,
   routingRationale,
+  dismissed,
+  onDismiss,
+  onUndismiss,
   onClose,
 }: {
   activity: CalendarActivity;
   routingRationale: string | null;
+  dismissed: boolean;
+  onDismiss: () => void;
+  onUndismiss: () => void;
   onClose: () => void;
 }) {
   const colors = STATION_COLORS[activity.station];
@@ -744,9 +852,66 @@ function ActivityDrawer({
         </div>
       )}
 
+      {/* Action buttons. Dismiss/Undismiss is the only action wired in 4d.1;
+          edit + reschedule come in 4d.2. */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+        {dismissed ? (
+          <button
+            type="button"
+            onClick={onUndismiss}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              fontSize: 13,
+              border: '0.5px solid var(--border)',
+              borderRadius: 4,
+              background: 'var(--bg-page)',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Restore
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onDismiss}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              fontSize: 13,
+              border: '0.5px solid #fecaca',
+              borderRadius: 4,
+              background: '#fef2f2',
+              color: '#991b1b',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Dismiss
+          </button>
+        )}
+      </div>
+
+      {dismissed && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 8,
+            background: '#fef2f2',
+            border: '0.5px solid #fecaca',
+            borderRadius: 4,
+            fontSize: 11,
+            color: '#991b1b',
+          }}
+        >
+          Dismissed — won't count toward day load. Click Restore to re-include.
+        </div>
+      )}
+
       <div
         style={{
-          marginTop: 4,
+          marginTop: 12,
           padding: 10,
           background: 'var(--bg-page)',
           borderRadius: 4,
@@ -754,7 +919,7 @@ function ActivityDrawer({
           color: 'var(--text-muted)',
         }}
       >
-        Edit / reschedule / dismiss come in the next iteration.
+        Edit / reschedule come in 4d.2.
       </div>
     </aside>
   );

@@ -202,10 +202,18 @@ function buildPayload() {
     routingDecisions[code] = dec.rationale;
   }
 
+  // Per-station daily capacity in minutes. Client uses this to recompute
+  // load when activities are mutated (dismissed, eventually rescheduled).
+  const stationDailyMinutes: Record<string, number> = {};
+  for (const [station, defaults] of Object.entries(capacity.stations)) {
+    stationDailyMinutes[station] = defaults.hoursPerDay * 60;
+  }
+
   return {
     horizon,
     activities: projection.activities,
     dayLoads: projection.dayLoads,
+    stationDailyMinutes,
     infeasibleProducts,
     routingDecisions,
     summary: {
