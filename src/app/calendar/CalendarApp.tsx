@@ -50,6 +50,8 @@ interface CalendarAppProps {
   activities: CalendarActivity[];
   dayLoads: DayLoadSummary[];
   infeasibleProducts: InfeasibleProduct[];
+  /** productCode → cost-router rationale string (why this station was chosen). */
+  routingDecisions: Record<string, string>;
   summary: SummaryProps;
 }
 
@@ -133,7 +135,7 @@ function fmtDate(iso: string): string {
 // ─── Component ───────────────────────────────────────────────
 
 export function CalendarApp(props: CalendarAppProps) {
-  const { horizon, activities, dayLoads, infeasibleProducts, summary } = props;
+  const { horizon, activities, dayLoads, infeasibleProducts, routingDecisions, summary } = props;
   const [infeasibleOpen, setInfeasibleOpen] = useState(false);
 
   // Layer-toggle state: which stations are visible. Default all on.
@@ -395,6 +397,7 @@ export function CalendarApp(props: CalendarAppProps) {
       {selected && (
         <ActivityDrawer
           activity={selected}
+          routingRationale={routingDecisions[selected.productCode] ?? null}
           onClose={() => setSelected(null)}
         />
       )}
@@ -629,9 +632,11 @@ function ActivityChip({
 
 function ActivityDrawer({
   activity,
+  routingRationale,
   onClose,
 }: {
   activity: CalendarActivity;
+  routingRationale: string | null;
   onClose: () => void;
 }) {
   const colors = STATION_COLORS[activity.station];
@@ -701,9 +706,26 @@ function ActivityDrawer({
         <Field label="Extended family" value={activity.extendedFamily ?? '—'} />
       </div>
 
+      {routingRationale && (
+        <div
+          style={{
+            padding: 10,
+            background: '#eff6ff',
+            border: '0.5px solid #bfdbfe',
+            borderRadius: 4,
+            fontSize: 11,
+            color: '#1e3a8a',
+            marginBottom: 12,
+          }}
+        >
+          <div style={{ fontWeight: 500, marginBottom: 2 }}>Why this station?</div>
+          {routingRationale}
+        </div>
+      )}
+
       <div
         style={{
-          marginTop: 16,
+          marginTop: 4,
           padding: 10,
           background: 'var(--bg-page)',
           borderRadius: 4,

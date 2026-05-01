@@ -114,25 +114,30 @@ describe('loadCapacityDataFromPath — real spreadsheet', () => {
       expect(loaded.intermediates.size).toBe(66);
     });
 
-    test('walnuts intermediate (IAW) has primary station elephant, alternate bottlo', () => {
+    // These tests lock the spreadsheet's CURRENT routing. Update when the
+    // spreadsheet changes intentionally. Failures here mean the data
+    // moved — investigate before silently re-baselining.
+    test('walnuts intermediate (IAW) has primary station bottlo, alternate elephant', () => {
       const iaw = loaded.intermediates.get('IAW');
       expect(iaw).toBeDefined();
-      expect(iaw!.packingStation).toBe('elephant');
-      expect(iaw!.alternateStation).toBe('bottlo');
+      expect(iaw!.packingStation).toBe('bottlo');
+      expect(iaw!.alternateStation).toBe('elephant');
       expect(iaw!.processSteps).toEqual(['soak', 'dehydrate']);
       expect(iaw!.maxSoakIbc).toBe(500);
       expect(iaw!.dehydHours).toBe(18.54);
     });
 
-    test('Star Dust intermediates have station dust + alternate bottlo', () => {
+    test('Star Dust intermediates (ISY) have station bottlo + alternate dust', () => {
       const isy = loaded.intermediates.get('ISY');
-      expect(isy!.packingStation).toBe('dust');
-      expect(isy!.alternateStation).toBe('bottlo');
+      expect(isy!.packingStation).toBe('bottlo');
+      expect(isy!.alternateStation).toBe('dust');
     });
 
-    test('"hand " station label normalises to hand-packing', () => {
-      const itt = loaded.intermediates.get('ITT'); // "hand " in spreadsheet
-      expect(itt!.packingStation).toBe('hand-packing');
+    test('"hand " station label normalises to hand-packing (in alternate column for ITT)', () => {
+      // ITT now has empty primary + "hand " in alternate.
+      const itt = loaded.intermediates.get('ITT');
+      expect(itt!.packingStation).toBeNull();
+      expect(itt!.alternateStation).toBe('hand-packing');
     });
 
     test('"BULK" packing equipment becomes null station (no warning)', () => {
