@@ -248,6 +248,7 @@ function parseFamilySheet(
     const row = rows[i];
     const productCode = asString(row[0]);
     if (!productCode) continue;
+    const description = asString(row[1]);
     const family = asString(row[2]);
     if (!family) {
       warnings.push({
@@ -268,7 +269,11 @@ function parseFamilySheet(
         message: `Unknown extended family "${ext.unknown}" for ${productCode}; treating as null (full-clean per decision #1).`,
       });
     }
-    out[productCode] = { family, extendedFamily: ext.value };
+    out[productCode] = {
+      family,
+      extendedFamily: ext.value,
+      description: description || undefined,
+    };
   }
   return out;
 }
@@ -497,7 +502,7 @@ export function loadCapacityDataFromBuffer(buffer: Buffer | ArrayBuffer): Capaci
     const stationDefaults = stations[station];
     productMetaBySku[productCode] = {
       productCode,
-      productName: '', // family sheet description is in row[1] but not threaded here; populated by caller if needed
+      productName: fam.description ?? '',
       family: fam.family,
       extendedFamily: fam.extendedFamily as ExtendedFamily | null,
       packageSize: inferPackageSize(productCode),

@@ -50,6 +50,8 @@ import type { BOMComponent } from '@/lib/planning/engine-io';
 export interface FamilyMeta {
   family: string;
   extendedFamily: string | null;
+  /** Human-readable description from column B of the `family` sheet. Optional for back-compat. */
+  description?: string;
 }
 
 /** A single component appearance in the explosion. One row per path. */
