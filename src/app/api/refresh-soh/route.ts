@@ -1,40 +1,29 @@
 /**
- * Refresh SOH cache — Phase 4g.
+ * Refresh SOH cache — Phase 4g (per-warehouse in 4h.2).
  *
  * POST  /api/refresh-soh
- *   body (optional): { warehouseFilter?: string }
+ *   body: ignored. Cache always preserves the full per-warehouse
+ *   breakdown; warehouse selection is a UI concern, not a fetch concern.
  *
- * Pulls fresh stock-on-hand from Unleashed via the existing
- * `fetchSOHWithFallback` helper, aggregates into the SohCache shape,
- * writes to `data/soh-cache.json`, and returns the new cache.
+ * Pulls fresh stock-on-hand from Unleashed via `fetchSOHWithFallback`,
+ * aggregates into the per-warehouse SohCache shape, writes to
+ * `data/soh-cache.json`, returns the new cache.
  *
  * `availableQty` (qty on hand minus committed-to-orders) is what the
  * planner cares about — those committed units already have a destination
  * and can't be re-planned. Falls back to `quantity` if availableQty is
- * undefined (older Unleashed responses).
+ * undefined.
  *
  * Errors:
- *   - Unleashed creds missing → 500 with a useful message; the operator
- *     should check `.env.local`.
- *   - API call fails → 502 with the upstream error.
+ *   - Unleashed creds missing → 500 with a hint to check .env.local
+ *   - API call fails           → 502 with the upstream error
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { fetchSOHWithFallback } from '@/lib/unleashed/fetch-soh';
 import { buildSohCache, writeSohCache } from '@/lib/planning/soh-cache';
 
-export async function POST(request: NextRequest) {
-  let warehouseFilter = '';
-  try {
-    const body = await request.json().catch(() => null);
-    if (body && typeof body === 'object' && !Array.isArray(body)) {
-      const wf = (body as { warehouseFilter?: unknown }).warehouseFilter;
-      if (typeof wf === 'string') warehouseFilter = wf;
-    }
-  } catch {
-    /* body is optional — ignore parse errors */
-  }
-
+export async function POST() {
   let result;
   try {
     result = await fetchSOHWithFallback();
@@ -53,17 +42,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Map Unleashed records to the buildSohCache shape. Use availableQty
-  // (post-allocation) so the planner sees what it can actually re-deploy.
   const records = result.sohItems.map((item) => ({
     productCode: item.productCode,
     warehouseName: item.warehouseName,
-    qtyOnHand: typeof item.availableQty === 'number'
-      ? item.availableQty
-      : item.quantity,
+    qtyOnHand:
+      typeof item.availableQty === 'number' ? item.availableQty : item.quantity,
   }));
 
-  const cache = buildSohCache(records, warehouseFilter);
+  const cache = buildSohCache(records);
   writeSohCache(cache);
 
   return NextResponse.json({
@@ -73,8 +59,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  // Convenience: lets the operator hit /api/refresh-soh in a browser.
-  return NextResponse.json({
-    error: 'Method not allowed — use POST to refresh.',
-  }, { status: 405 });
+  return NextResponse.json(
+    { error: 'Method not allowed — use POST to refresh.' },
+    { status: 405 },
+  );
 }

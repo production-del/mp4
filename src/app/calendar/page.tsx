@@ -33,7 +33,7 @@ import {
   readProductOverrides,
   resolveOverride,
 } from '@/lib/planning/product-overrides';
-import { readSohCache, sohOf } from '@/lib/planning/soh-cache';
+import { readSohCache, sohOf, sohBreakdownOf } from '@/lib/planning/soh-cache';
 import { CalendarApp } from './CalendarApp';
 
 export const dynamic = 'force-dynamic'; // Always re-run; calendar reflects latest data
@@ -41,6 +41,13 @@ export const dynamic = 'force-dynamic'; // Always re-run; calendar reflects late
 /** Horizon options surfaced in the UI picker. 26 weeks ≈ 6 months — the cap. */
 const HORIZON_WEEK_OPTIONS = [12, 16, 20, 26] as const;
 const DEFAULT_HORIZON_WEEKS = 12;
+/**
+ * Default warehouse the calendar treats as "where finished-good packaging
+ * stock lives." MF Packaging is where SKUs ship from; counting Lundberg or
+ * other warehouses' stock would inflate initialInventory and produce wrong
+ * plans. Operator can override via the warehouse picker.
+ */
+const DEFAULT_PLANNING_WAREHOUSE = 'MF Packaging';
 
 const SPREADSHEET = join(process.cwd(), 'data', 'kitchen capacity and family plans.xlsx');
 /**
@@ -65,21 +72,23 @@ function dailyStationOutput(unitsPerHour: number, hoursPerDay: number): number {
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ horizonWeeks?: string }>;
+  searchParams: Promise<{ horizonWeeks?: string; warehouse?: string }>;
 }) {
-  // The horizon picker writes ?horizonWeeks=N. We accept any value in
-  // HORIZON_WEEK_OPTIONS; everything else falls back to default. Awaited
-  // because Next.js 15 server components receive searchParams as a promise.
+  // Picker state is URL-driven so the choice survives reloads.
   const params = await searchParams;
   const requested = Number(params.horizonWeeks);
   const horizonWeeks = HORIZON_WEEK_OPTIONS.find((n) => n === requested)
     ?? DEFAULT_HORIZON_WEEKS;
+  const planningWarehouse =
+    typeof params.warehouse === 'string' && params.warehouse.length > 0
+      ? params.warehouse
+      : DEFAULT_PLANNING_WAREHOUSE;
 
   let pageError: string | null = null;
   let payload: Awaited<ReturnType<typeof buildPayload>> | null = null;
 
   try {
-    payload = buildPayload(horizonWeeks);
+    payload = buildPayload(horizonWeeks, planningWarehouse);
   } catch (e) {
     pageError = e instanceof Error ? e.message : 'Unknown error loading calendar data.';
   }
@@ -108,7 +117,7 @@ export default async function CalendarPage({
   return <CalendarApp {...payload} horizonOptions={[...HORIZON_WEEK_OPTIONS]} />;
 }
 
-function buildPayload(horizonWeeks: number) {
+function buildPayload(horizonWeeks: number, planningWarehouse: string) {
   const capacity = loadCapacityDataFromPath(SPREADSHEET);
   const demandData = loadMonthlyDemand();
   const horizon = defaultHorizon(horizonWeeks, new Date());
@@ -225,7 +234,7 @@ function buildPayload(horizonWeeks: number) {
     return {
       meta: chosenMeta,
       weeklyDemand,
-      initialInventory: sohOf(sohCache, r.productCode),
+      initialInventory: sohOf(sohCache, r.productCode, planningWarehouse),
       shelfLifeDays: resolved.shelfLifeDays,
       minBatchSize: DEFAULT_MIN_BATCH,
       maxBatchSize: resolved.maxBatchSize,
@@ -296,13 +305,25 @@ function buildPayload(horizonWeeks: number) {
     if (s) productStationDailyOutput[r.productCode] = dailyStationOutput(s.unitsPerHour, s.hoursPerDay);
   }
 
-  // Pass minimal SOH info to the client: per-SKU lookup the drawer needs,
-  // plus the cache's freshness timestamp for the header indicator.
-  const sohByProductCode: Record<string, number> = sohCache
+  // Pass per-warehouse SOH to the client. The drawer renders the breakdown
+  // (and the planning warehouse's number specifically); the warehouse picker
+  // uses `availableWarehouses` to populate options.
+  const sohByProductCode: Record<string, Record<string, number>> = sohCache
     ? sohCache.byProductCode
     : {};
   const sohFetchedAt: string | null = sohCache?.fetchedAt ?? null;
-  const sohWarehouse: string | null = sohCache?.warehouseFilter || null;
+  const availableWarehouses: string[] = sohCache?.warehouses ?? [];
+  // Per-product effective initial inventory — what the planner actually used.
+  const initialInventoryByProduct: Record<string, number> = {};
+  for (const r of balanced.routings) {
+    initialInventoryByProduct[r.productCode] = sohOf(
+      sohCache,
+      r.productCode,
+      planningWarehouse,
+    );
+  }
+  // Avoid TS unused warning while leaving the helper imported for tests.
+  void sohBreakdownOf;
 
   return {
     horizon,
@@ -315,7 +336,9 @@ function buildPayload(horizonWeeks: number) {
     productStationDailyOutput,
     sohByProductCode,
     sohFetchedAt,
-    sohWarehouse,
+    availableWarehouses,
+    planningWarehouse,
+    initialInventoryByProduct,
     globalDefaults: {
       shelfLifeDays: DEFAULT_SHELF_LIFE_DAYS,
     },

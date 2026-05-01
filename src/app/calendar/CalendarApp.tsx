@@ -80,12 +80,16 @@ interface CalendarAppProps {
   productOverrides: Record<string, ProductOverrideShape>;
   /** Per-product station daily output (units), used as default for max-batch override. */
   productStationDailyOutput: Record<string, number>;
-  /** SOH per product code; empty when no cache file exists. */
-  sohByProductCode: Record<string, number>;
+  /** SOH per (product code, warehouse name); empty when no cache file exists. */
+  sohByProductCode: Record<string, Record<string, number>>;
   /** ISO timestamp of the last SOH refresh, or null when cache is missing. */
   sohFetchedAt: string | null;
-  /** Warehouse filter the SOH cache was fetched against (informational). */
-  sohWarehouse: string | null;
+  /** Warehouses present in the SOH cache, used for the picker. */
+  availableWarehouses: string[];
+  /** Warehouse currently used as the planner's source of initialInventory. */
+  planningWarehouse: string;
+  /** Per-product effective initialInventory (= SOH at planningWarehouse). */
+  initialInventoryByProduct: Record<string, number>;
   /** Global defaults the user can override per product. */
   globalDefaults: { shelfLifeDays: number };
   /** Horizon-week options surfaced in the picker (e.g. 12 / 16 / 20 / 26). */
@@ -184,7 +188,9 @@ export function CalendarApp(props: CalendarAppProps) {
     productStationDailyOutput,
     sohByProductCode,
     sohFetchedAt,
-    sohWarehouse,
+    availableWarehouses,
+    planningWarehouse,
+    initialInventoryByProduct,
     globalDefaults,
     horizonOptions,
     summary,
@@ -622,17 +628,44 @@ export function CalendarApp(props: CalendarAppProps) {
             value={summary.demandSourceMtime ? new Date(summary.demandSourceMtime).toLocaleDateString('en-AU') : '—'}
           />
           <KPIRow
-            label="SOH"
+            label="SOH refreshed"
             value={
               sohFetchedAt
-                ? `${new Date(sohFetchedAt).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })}`
+                ? new Date(sohFetchedAt).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })
                 : 'never'
             }
             tone={sohFetchedAt ? undefined : 'amber'}
           />
-          {sohWarehouse && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: -4, marginBottom: 4 }}>
-              warehouse: {sohWarehouse}
+          {availableWarehouses.length > 0 && (
+            <div style={{ marginTop: 4, fontSize: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Plan from:</span>
+                <select
+                  value={planningWarehouse}
+                  onChange={(e) => {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('warehouse', e.target.value);
+                    window.location.assign(url.toString());
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '3px 4px',
+                    fontSize: 11,
+                    border: '0.5px solid var(--border)',
+                    borderRadius: 3,
+                    background: 'var(--bg-page)',
+                    color: 'inherit',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {availableWarehouses.includes(planningWarehouse) ? null : (
+                    <option value={planningWarehouse}>{planningWarehouse} (none)</option>
+                  )}
+                  {availableWarehouses.map((w) => (
+                    <option key={w} value={w}>{w}</option>
+                  ))}
+                </select>
+              </label>
             </div>
           )}
           {(summary.orchestratorWarningCount + summary.dayAssignerWarningCount + summary.capacityWarningCount) > 0 && (
@@ -836,7 +869,9 @@ export function CalendarApp(props: CalendarAppProps) {
           productOverride={productOverrides[selected.productCode]}
           stationDailyOutput={productStationDailyOutput[selected.productCode] ?? 0}
           globalShelfLifeDays={globalDefaults.shelfLifeDays}
-          sohOnHand={sohByProductCode[selected.productCode] ?? null}
+          sohBreakdown={sohByProductCode[selected.productCode] ?? null}
+          planningWarehouse={planningWarehouse}
+          plannerInitialInventory={initialInventoryByProduct[selected.productCode] ?? 0}
           onDismiss={() => dismiss(selected.stableId)}
           onUndismiss={() => undismiss(selected.stableId)}
           onReschedule={(date) => reschedule(selected.stableId, date)}
@@ -1114,7 +1149,9 @@ function ActivityDrawer({
   productOverride,
   stationDailyOutput,
   globalShelfLifeDays,
-  sohOnHand,
+  sohBreakdown,
+  planningWarehouse,
+  plannerInitialInventory,
   onDismiss,
   onUndismiss,
   onReschedule,
@@ -1134,8 +1171,12 @@ function ActivityDrawer({
   productOverride: ProductOverrideShape | undefined;
   stationDailyOutput: number;
   globalShelfLifeDays: number;
-  /** Current stock-on-hand for the product, null when SOH cache is empty. */
-  sohOnHand: number | null;
+  /** Per-warehouse SOH breakdown for this product, or null when cache is empty. */
+  sohBreakdown: Record<string, number> | null;
+  /** Warehouse the planner is using as the source of truth. */
+  planningWarehouse: string;
+  /** What the planner used as initialInventory for this product. */
+  plannerInitialInventory: number;
   onDismiss: () => void;
   onUndismiss: () => void;
   onReschedule: (newDate: string) => void;
@@ -1256,10 +1297,48 @@ function ActivityDrawer({
         />
         <Field label="Family" value={activity.family ?? '—'} />
         <Field label="Extended family" value={activity.extendedFamily ?? '—'} />
-        <Field
-          label="Stock on hand"
-          value={sohOnHand === null ? '— (no SOH cache)' : `${sohOnHand.toLocaleString()} units`}
-        />
+      </div>
+
+      {/* ─── Stock on hand (per-warehouse) ─────────────── */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+          Stock on hand
+        </div>
+        {sohBreakdown === null ? (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            No SOH cache. Click Refresh SOH in the header.
+          </div>
+        ) : Object.keys(sohBreakdown).length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            No stock recorded for this product.
+          </div>
+        ) : (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 12 }}>
+            {Object.entries(sohBreakdown)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([wh, qty]) => {
+                const isPlanning = wh === planningWarehouse;
+                return (
+                  <li
+                    key={wh}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      padding: '2px 0',
+                      fontWeight: isPlanning ? 500 : 400,
+                      color: isPlanning ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    <span>{wh}{isPlanning && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}> · planner uses this</span>}</span>
+                    <span>{qty.toLocaleString()}</span>
+                  </li>
+                );
+              })}
+          </ul>
+        )}
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+          Planner used: {plannerInitialInventory.toLocaleString()} units (from {planningWarehouse})
+        </div>
       </div>
 
       {/* ─── Reschedule picker ─────────────────────────── */}
