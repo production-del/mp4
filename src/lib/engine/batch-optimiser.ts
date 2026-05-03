@@ -171,6 +171,29 @@ export function optimiseSingleProduct(
     0,
   );
 
+  // When `initialInventory` exceeds the shelf-life-window cap, we'd otherwise
+  // mark the product infeasible — the initial state can't pass the cap check.
+  // But initial inventory is real: we already have it, the cap can't reduce
+  // it. We allow inventory to remain ABOVE the cap as long as it's draining
+  // monotonically (no production added on top). `naturalCarry[w]` = the
+  // inventory level reachable purely by draining from week 0 with no
+  // production — anything ≤ this is permissible at week w even if above
+  // forwardWindowDemand[w].
+  const cumulativeDemand: number[] = new Array(W + 1).fill(0);
+  for (let w = 0; w < W; w++) {
+    cumulativeDemand[w + 1] = cumulativeDemand[w] + input.weeklyDemand[w].quantity;
+  }
+  function naturalCarry(week: number): number {
+    return Math.max(0, input.initialInventory - cumulativeDemand[week]);
+  }
+  function effectiveCapAt(week: number): number {
+    return Math.max(forwardWindowDemand[week] ?? 0, naturalCarry(week));
+  }
+  const overallCap = Math.max(
+    shelfLifeInventoryCap,
+    input.initialInventory,
+  );
+
   // The hard storage cap is per-week from the input; the *modelled* cap is
   // shelf-life-bounded. Both apply: state must satisfy both.
   function storageCap(w: number): number {
@@ -188,11 +211,7 @@ export function optimiseSingleProduct(
   // ─── Discretise inventory ────────────────────────────────
   // Highest inventory we ever model. Add headroom = step so rounding doesn't
   // chop the top.
-  const ceilForState = Math.max(
-    shelfLifeInventoryCap,
-    input.initialInventory,
-    input.maxBatchSize,
-  );
+  const ceilForState = Math.max(overallCap, input.maxBatchSize);
   const stepCount = Math.max(1, Math.ceil(ceilForState / step) + 2);
 
   // ─── DP tables ────────────────────────────────────────────
@@ -218,17 +237,18 @@ export function optimiseSingleProduct(
 
       for (const runSize of batchSizes) {
         const inventoryAfterRun = inventoryAtStart + runSize;
-        // Reject states that exceed the shelf-life-bounded model cap or
-        // would map outside our discretised array.
-        if (inventoryAfterRun > shelfLifeInventoryCap + step) continue;
+        // Reject states that exceed the OVERALL cap (shelf-life cap, but
+        // relaxed to accept the initial inventory we actually have).
+        if (inventoryAfterRun > overallCap + step) continue;
         const inventoryAfterDemand = inventoryAfterRun - demand;
-        if (inventoryAfterDemand < 0) continue; // demand uncovered → infeasible branch
-        // Per-state shelf-life cap: at the start of week w+1 we must hold no
-        // more than the next `shelfLifeWeeks` of demand can consume. End of
-        // horizon (`w+1 === W`) requires zero inventory carry-out.
-        const nextWindowCap =
-          w + 1 < W ? forwardWindowDemand[w + 1] : 0;
-        if (inventoryAfterDemand > nextWindowCap + step) continue;
+        if (inventoryAfterDemand < 0) continue; // demand uncovered
+        // Per-state cap at week w+1: forward-window demand OR the natural
+        // drain from initial inventory, whichever is larger. The natural-
+        // carry term lets us drain through high starting stock without
+        // being prematurely cut off.
+        const nextCap =
+          w + 1 < W ? effectiveCapAt(w + 1) : naturalCarry(W);
+        if (inventoryAfterDemand > nextCap + step) continue;
         const nextI = Math.round(inventoryAfterDemand / step);
         if (nextI < 0 || nextI >= stepCount) continue;
 

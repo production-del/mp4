@@ -48,13 +48,26 @@ export const dynamic = 'force-dynamic'; // Always re-run; calendar reflects late
 /** Horizon options surfaced in the UI picker. 26 weeks ≈ 6 months — the cap. */
 const HORIZON_WEEK_OPTIONS = [12, 16, 20, 26] as const;
 const DEFAULT_HORIZON_WEEKS = 12;
+
 /**
- * Default warehouse the calendar treats as "where finished-good packaging
- * stock lives." MF Packaging is where SKUs ship from; counting Lundberg or
- * other warehouses' stock would inflate initialInventory and produce wrong
- * plans. Operator can override via the warehouse picker.
+ * Warehouses whose finished-goods stock is fulfilment-eligible — i.e. can
+ * cover customer demand directly or after a transfer. Sales drain from TBC
+ * (and TBC Height, the second sales-fulfilment site); MF Packaging holds
+ * finished goods from Hand / Elephant / Dust packaging stations; MF
+ * Operations holds finished goods from the Bottlo packaging line.
+ *
+ * Lundberg Storeroom is deliberately excluded — it holds intermediates
+ * and bulk material that haven't been packaged yet. Including it would
+ * inflate apparent finished-goods stock and produce under-production.
+ *
+ * Edit this list when warehouse roles change. UI doesn't expose this yet.
  */
-const DEFAULT_PLANNING_WAREHOUSE = 'MF Packaging';
+const FULFILMENT_ELIGIBLE_WAREHOUSES: ReadonlyArray<string> = [
+  'TBC',
+  'TBC Height',
+  'MF Packaging',
+  'MF Operations',
+];
 
 const SPREADSHEET = join(process.cwd(), 'data', 'kitchen capacity and family plans.xlsx');
 /**
@@ -79,23 +92,19 @@ function dailyStationOutput(unitsPerHour: number, hoursPerDay: number): number {
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ horizonWeeks?: string; warehouse?: string }>;
+  searchParams: Promise<{ horizonWeeks?: string }>;
 }) {
   // Picker state is URL-driven so the choice survives reloads.
   const params = await searchParams;
   const requested = Number(params.horizonWeeks);
   const horizonWeeks = HORIZON_WEEK_OPTIONS.find((n) => n === requested)
     ?? DEFAULT_HORIZON_WEEKS;
-  const planningWarehouse =
-    typeof params.warehouse === 'string' && params.warehouse.length > 0
-      ? params.warehouse
-      : DEFAULT_PLANNING_WAREHOUSE;
 
   let pageError: string | null = null;
   let payload: Awaited<ReturnType<typeof buildPayload>> | null = null;
 
   try {
-    payload = buildPayload(horizonWeeks, planningWarehouse);
+    payload = buildPayload(horizonWeeks);
   } catch (e) {
     pageError = e instanceof Error ? e.message : 'Unknown error loading calendar data.';
   }
@@ -124,7 +133,22 @@ export default async function CalendarPage({
   return <CalendarApp {...payload} horizonOptions={[...HORIZON_WEEK_OPTIONS]} />;
 }
 
-function buildPayload(horizonWeeks: number, planningWarehouse: string) {
+/** Sum SOH for a product across only the fulfilment-eligible warehouses. */
+function eligibleSohOf(
+  cache: ReturnType<typeof readSohCache>,
+  productCode: string,
+): number {
+  if (!cache) return 0;
+  const byWh = cache.byProductCode[productCode];
+  if (!byWh) return 0;
+  let sum = 0;
+  for (const wh of FULFILMENT_ELIGIBLE_WAREHOUSES) {
+    sum += byWh[wh] ?? 0;
+  }
+  return sum;
+}
+
+function buildPayload(horizonWeeks: number) {
   const capacity = loadCapacityDataFromPath(SPREADSHEET);
   const demandData = loadMonthlyDemand();
   const horizon = defaultHorizon(horizonWeeks, new Date());
@@ -260,7 +284,11 @@ function buildPayload(horizonWeeks: number, planningWarehouse: string) {
     return {
       meta: chosenMeta,
       weeklyDemand,
-      initialInventory: sohOf(sohCache, r.productCode, planningWarehouse),
+      // Global eligible SOH: sum across TBC + TBC Height + MF Packaging +
+      // MF Operations. Lundberg Storeroom (intermediates) excluded. Stock
+      // at non-target warehouses will be transferred in (Phase 4i.2 will
+      // surface the transfer requirements derived from this plan).
+      initialInventory: eligibleSohOf(sohCache, r.productCode),
       shelfLifeDays: resolved.shelfLifeDays,
       minBatchSize: DEFAULT_MIN_BATCH,
       maxBatchSize: resolved.maxBatchSize,
@@ -331,24 +359,23 @@ function buildPayload(horizonWeeks: number, planningWarehouse: string) {
     if (s) productStationDailyOutput[r.productCode] = dailyStationOutput(s.unitsPerHour, s.hoursPerDay);
   }
 
-  // Pass per-warehouse SOH to the client. The drawer renders the breakdown
-  // (and the planning warehouse's number specifically); the warehouse picker
-  // uses `availableWarehouses` to populate options.
+  // Pass per-warehouse SOH to the client. The drawer renders the full
+  // breakdown with eligible warehouses highlighted; the planner has already
+  // summed across eligible warehouses for initialInventory.
   const sohByProductCode: Record<string, Record<string, number>> = sohCache
     ? sohCache.byProductCode
     : {};
   const sohFetchedAt: string | null = sohCache?.fetchedAt ?? null;
   const availableWarehouses: string[] = sohCache?.warehouses ?? [];
+  const eligibleWarehouses: ReadonlyArray<string> = FULFILMENT_ELIGIBLE_WAREHOUSES;
   // Per-product effective initial inventory — what the planner actually used.
   const initialInventoryByProduct: Record<string, number> = {};
   for (const r of balanced.routings) {
-    initialInventoryByProduct[r.productCode] = sohOf(
-      sohCache,
-      r.productCode,
-      planningWarehouse,
-    );
+    initialInventoryByProduct[r.productCode] = eligibleSohOf(sohCache, r.productCode);
   }
-  // Avoid TS unused warning while leaving the helper imported for tests.
+  // Avoid TS unused warnings on imports kept for the future transfer
+  // detection wiring (Phase 4i.2).
+  void sohOf;
   void sohBreakdownOf;
 
   // Sales-orders summary for the client: per-product committed total + the
@@ -395,7 +422,7 @@ function buildPayload(horizonWeeks: number, planningWarehouse: string) {
     sohByProductCode,
     sohFetchedAt,
     availableWarehouses,
-    planningWarehouse,
+    eligibleWarehouses: [...eligibleWarehouses],
     initialInventoryByProduct,
     salesOrdersByProduct,
     committedByProduct,
