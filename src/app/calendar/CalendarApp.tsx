@@ -90,6 +90,21 @@ interface CalendarAppProps {
   planningWarehouse: string;
   /** Per-product effective initialInventory (= SOH at planningWarehouse). */
   initialInventoryByProduct: Record<string, number>;
+  /** Per-product list of active sales-order lines. Empty when no commitments. */
+  salesOrdersByProduct: Record<
+    string,
+    Array<{
+      orderNumber: string;
+      customerName: string;
+      orderStatus: string;
+      requiredDate: string;
+      quantityRemaining: number;
+    }>
+  >;
+  /** Per-product total committed units across all active orders. */
+  committedByProduct: Record<string, number>;
+  salesOrdersFetchedAt: string | null;
+  totalSalesOrderLines: number;
   /** Global defaults the user can override per product. */
   globalDefaults: { shelfLifeDays: number };
   /** Horizon-week options surfaced in the picker (e.g. 12 / 16 / 20 / 26). */
@@ -191,6 +206,10 @@ export function CalendarApp(props: CalendarAppProps) {
     availableWarehouses,
     planningWarehouse,
     initialInventoryByProduct,
+    salesOrdersByProduct,
+    committedByProduct,
+    salesOrdersFetchedAt,
+    totalSalesOrderLines,
     globalDefaults,
     horizonOptions,
     summary,
@@ -228,6 +247,26 @@ export function CalendarApp(props: CalendarAppProps) {
       setSohRefreshError(e instanceof Error ? e.message : 'Refresh failed');
     } finally {
       setRefreshingSoh(false);
+    }
+  }
+
+  // Sales-orders refresh: same shape as SOH refresh.
+  const [refreshingSO, setRefreshingSO] = useState(false);
+  const [soRefreshError, setSORefreshError] = useState<string | null>(null);
+  async function refreshSalesOrders() {
+    setRefreshingSO(true);
+    setSORefreshError(null);
+    try {
+      const res = await fetch('/api/refresh-sales-orders', { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail ?? data.error ?? `HTTP ${res.status}`);
+      }
+      router.refresh();
+    } catch (e) {
+      setSORefreshError(e instanceof Error ? e.message : 'Refresh failed');
+    } finally {
+      setRefreshingSO(false);
     }
   }
 
@@ -636,6 +675,15 @@ export function CalendarApp(props: CalendarAppProps) {
             }
             tone={sohFetchedAt ? undefined : 'amber'}
           />
+          <KPIRow
+            label="Sales orders"
+            value={
+              salesOrdersFetchedAt
+                ? `${totalSalesOrderLines} lines · ${new Date(salesOrdersFetchedAt).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })}`
+                : 'never'
+            }
+            tone={salesOrdersFetchedAt ? undefined : 'amber'}
+          />
           {availableWarehouses.length > 0 && (
             <div style={{ marginTop: 4, fontSize: 12 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -717,7 +765,7 @@ export function CalendarApp(props: CalendarAppProps) {
             <button
               type="button"
               onClick={refreshSoh}
-              disabled={refreshingSoh || isReplanning}
+              disabled={refreshingSoh || refreshingSO || isReplanning}
               style={{
                 padding: '6px 12px',
                 fontSize: 13,
@@ -731,6 +779,24 @@ export function CalendarApp(props: CalendarAppProps) {
               title="Pull current stock-on-hand from Unleashed and re-plan"
             >
               {refreshingSoh ? 'Refreshing SOH…' : 'Refresh SOH'}
+            </button>
+            <button
+              type="button"
+              onClick={refreshSalesOrders}
+              disabled={refreshingSoh || refreshingSO || isReplanning}
+              style={{
+                padding: '6px 12px',
+                fontSize: 13,
+                background: 'var(--bg-page)',
+                color: 'inherit',
+                border: '0.5px solid var(--border)',
+                borderRadius: 4,
+                cursor: refreshingSO ? 'wait' : 'pointer',
+                fontFamily: 'inherit',
+              }}
+              title="Pull active customer sales orders from Unleashed and re-plan"
+            >
+              {refreshingSO ? 'Refreshing SO…' : 'Refresh SO'}
             </button>
             <button
               type="button"
@@ -767,6 +833,21 @@ export function CalendarApp(props: CalendarAppProps) {
             }}
           >
             ⚠ SOH refresh failed: {sohRefreshError}
+          </div>
+        )}
+        {soRefreshError && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '8px 12px',
+              background: '#fef2f2',
+              border: '0.5px solid #fecaca',
+              borderRadius: 4,
+              fontSize: 12,
+              color: '#991b1b',
+            }}
+          >
+            ⚠ Sales-order refresh failed: {soRefreshError}
           </div>
         )}
 
@@ -872,6 +953,8 @@ export function CalendarApp(props: CalendarAppProps) {
           sohBreakdown={sohByProductCode[selected.productCode] ?? null}
           planningWarehouse={planningWarehouse}
           plannerInitialInventory={initialInventoryByProduct[selected.productCode] ?? 0}
+          salesOrders={salesOrdersByProduct[selected.productCode] ?? []}
+          totalCommitted={committedByProduct[selected.productCode] ?? 0}
           onDismiss={() => dismiss(selected.stableId)}
           onUndismiss={() => undismiss(selected.stableId)}
           onReschedule={(date) => reschedule(selected.stableId, date)}
@@ -1152,6 +1235,8 @@ function ActivityDrawer({
   sohBreakdown,
   planningWarehouse,
   plannerInitialInventory,
+  salesOrders,
+  totalCommitted,
   onDismiss,
   onUndismiss,
   onReschedule,
@@ -1177,6 +1262,15 @@ function ActivityDrawer({
   planningWarehouse: string;
   /** What the planner used as initialInventory for this product. */
   plannerInitialInventory: number;
+  /** Active sales-order lines for this product (sorted ascending by date). */
+  salesOrders: Array<{
+    orderNumber: string;
+    customerName: string;
+    orderStatus: string;
+    requiredDate: string;
+    quantityRemaining: number;
+  }>;
+  totalCommitted: number;
   onDismiss: () => void;
   onUndismiss: () => void;
   onReschedule: (newDate: string) => void;
@@ -1483,6 +1577,47 @@ function ActivityDrawer({
         >
           <div style={{ fontWeight: 500, marginBottom: 2 }}>Why this station?</div>
           {routingRationale}
+        </div>
+      )}
+
+      {/* ─── Committed customer orders (Phase 4h.3) ─────── */}
+      {(salesOrders.length > 0 || totalCommitted > 0) && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+            <span>Committed orders</span>
+            <span>total {totalCommitted.toLocaleString()} units</span>
+          </div>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 11, maxHeight: 140, overflowY: 'auto' }}>
+            {salesOrders.map((so) => {
+              const statusColor =
+                so.orderStatus === 'Backordered' ? '#dc2626'
+                : so.orderStatus === 'Placed' ? '#1e40af'
+                : 'var(--text-muted)';
+              return (
+                <li
+                  key={so.orderNumber}
+                  style={{
+                    padding: '3px 0',
+                    borderBottom: '0.5px solid var(--border)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 500 }}>{so.orderNumber}</span>
+                    <span>{so.quantityRemaining.toLocaleString()} units</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
+                    <span title={so.customerName} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
+                      {so.customerName}
+                    </span>
+                    <span style={{ display: 'flex', gap: 6 }}>
+                      <span style={{ color: statusColor }}>{so.orderStatus}</span>
+                      <span>by {so.requiredDate}</span>
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

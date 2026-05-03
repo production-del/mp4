@@ -34,6 +34,13 @@ import {
   resolveOverride,
 } from '@/lib/planning/product-overrides';
 import { readSohCache, sohOf, sohBreakdownOf } from '@/lib/planning/soh-cache';
+import {
+  readSalesOrdersCache,
+  salesOrdersForProduct,
+  totalCommittedFor,
+} from '@/lib/planning/sales-orders-cache';
+import type { Demand } from '@/lib/planning/demand';
+import { WAREHOUSES } from '@/lib/planning/warehouse-assignments';
 import { CalendarApp } from './CalendarApp';
 
 export const dynamic = 'force-dynamic'; // Always re-run; calendar reflects latest data
@@ -133,9 +140,28 @@ function buildPayload(horizonWeeks: number, planningWarehouse: string) {
     }
   }
 
+  // Convert active customer sales orders into dated Demand events for the
+  // forecaster. Each line becomes a single event at its requiredDate. The
+  // forecaster buckets these into the week containing the date and adds
+  // them to the rate-derived baseline. Out-of-horizon lines are silently
+  // dropped by the forecaster — committed demand far in the future doesn't
+  // belong in this horizon.
+  const salesCache = readSalesOrdersCache();
+  const salesEvents: Demand[] = (salesCache?.lines ?? []).map((line) => ({
+    productCode: line.productCode,
+    quantityNeeded: line.quantityRemaining,
+    needByDate: line.requiredDate,
+    destinationWarehouse: WAREHOUSES.MF_PACKAGING,
+    source: {
+      type: 'packaging_run',
+      runId: line.orderNumber,
+      runName: `${line.orderStatus}: ${line.customerName}`,
+    },
+  }));
+
   const forecast = forecastWeeklyDemand({
     monthlyRates,
-    events: [],
+    events: salesEvents,
     horizon,
   });
 
@@ -325,6 +351,38 @@ function buildPayload(horizonWeeks: number, planningWarehouse: string) {
   // Avoid TS unused warning while leaving the helper imported for tests.
   void sohBreakdownOf;
 
+  // Sales-orders summary for the client: per-product committed total + the
+  // line-level details for the drawer.
+  const salesOrdersByProduct: Record<
+    string,
+    Array<{
+      orderNumber: string;
+      customerName: string;
+      orderStatus: string;
+      requiredDate: string;
+      quantityRemaining: number;
+    }>
+  > = {};
+  const committedByProduct: Record<string, number> = {};
+  if (salesCache) {
+    for (const r of balanced.routings) {
+      const lines = salesOrdersForProduct(salesCache, r.productCode);
+      if (lines.length > 0) {
+        salesOrdersByProduct[r.productCode] = lines.map((l) => ({
+          orderNumber: l.orderNumber,
+          customerName: l.customerName,
+          orderStatus: l.orderStatus,
+          requiredDate: l.requiredDate,
+          quantityRemaining: l.quantityRemaining,
+        }));
+      }
+      const committed = totalCommittedFor(salesCache, r.productCode);
+      if (committed > 0) committedByProduct[r.productCode] = committed;
+    }
+  }
+  const salesOrdersFetchedAt: string | null = salesCache?.fetchedAt ?? null;
+  const totalSalesOrderLines = salesCache?.totalLines ?? 0;
+
   return {
     horizon,
     activities: projection.activities,
@@ -339,6 +397,10 @@ function buildPayload(horizonWeeks: number, planningWarehouse: string) {
     availableWarehouses,
     planningWarehouse,
     initialInventoryByProduct,
+    salesOrdersByProduct,
+    committedByProduct,
+    salesOrdersFetchedAt,
+    totalSalesOrderLines,
     globalDefaults: {
       shelfLifeDays: DEFAULT_SHELF_LIFE_DAYS,
     },
