@@ -39,6 +39,10 @@ import {
   writeMutationsToStorage,
   type MutationsMap,
 } from '@/lib/planning/calendar-mutations';
+import {
+  detectScheduleConflicts,
+  type ScheduleConflict,
+} from '@/lib/engine/schedule-conflicts';
 import type { PlanningHorizon, Station } from '@/lib/planning/engine-io';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -112,6 +116,8 @@ interface CalendarAppProps {
   globalDefaults: { shelfLifeDays: number };
   /** Horizon-week options surfaced in the picker (e.g. 12 / 16 / 20 / 26). */
   horizonOptions: number[];
+  /** productCode → list of intermediate codes its BOM consumes (depth 1). For conflict detection. */
+  consumesMap: Record<string, string[]>;
   summary: SummaryProps;
 }
 
@@ -247,6 +253,7 @@ export function CalendarApp(props: CalendarAppProps) {
     totalSalesOrderLines,
     globalDefaults,
     horizonOptions,
+    consumesMap,
     summary,
   } = props;
   const [infeasibleOpen, setInfeasibleOpen] = useState(false);
@@ -417,6 +424,35 @@ export function CalendarApp(props: CalendarAppProps) {
     () => activities.filter((a) => isDismissed(mutations, a.stableId)).length,
     [activities, mutations],
   );
+
+  // Schedule conflicts: re-detect on every mutation change so dragging a
+  // chip immediately surfaces (or clears) downstream dependency breaks.
+  const conflicts = useMemo<ScheduleConflict[]>(() => {
+    const dismissedSet = new Set<string>();
+    for (const a of activities) {
+      if (isDismissed(mutations, a.stableId)) dismissedSet.add(a.stableId);
+    }
+    return detectScheduleConflicts({
+      activities: mutatedActivities,
+      consumesMap,
+      dismissedStableIds: dismissedSet,
+    });
+  }, [mutatedActivities, consumesMap, mutations, activities]);
+
+  // Index conflicts by stableId for fast chip-render lookup. A consumer can
+  // have multiple conflicts (one per missing ingredient).
+  const conflictsByConsumer = useMemo(() => {
+    const out = new Map<string, ScheduleConflict[]>();
+    for (const c of conflicts) {
+      let arr = out.get(c.consumerStableId);
+      if (!arr) {
+        arr = [];
+        out.set(c.consumerStableId, arr);
+      }
+      arr.push(c);
+    }
+    return out;
+  }, [conflicts]);
 
   // Filter mutated activities through layer toggles + dismissal visibility.
   const visibleActivities = useMemo(() => {
@@ -1099,6 +1135,30 @@ export function CalendarApp(props: CalendarAppProps) {
           </div>
         )}
 
+        {conflicts.length > 0 && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '10px 12px',
+              background: '#fef2f2',
+              border: '0.5px solid #fecaca',
+              borderRadius: 4,
+              fontSize: 12,
+              color: '#991b1b',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <span style={{ flex: 1 }}>
+              ⚠ {conflicts.length} schedule conflict{conflicts.length === 1 ? '' : 's'} —
+              {' '}an activity needs an ingredient that won't be ready in time.
+              Drag the affected chips earlier, or move the upstream chip to finish sooner.
+              Click a chip with a red border for details.
+            </span>
+          </div>
+        )}
+
         {staleIds.length > 0 && (
           <div
             style={{
@@ -1149,6 +1209,7 @@ export function CalendarApp(props: CalendarAppProps) {
             onSelect={setSelected}
             selectedId={selected?.id ?? null}
             mutations={mutations}
+            conflictsByConsumer={conflictsByConsumer}
             onDropOnDate={(stableId, date) => {
               // No-op when dropped on the same day the activity is already on.
               const found = mutatedActivities.find((a) => a.stableId === stableId);
@@ -1209,6 +1270,7 @@ export function CalendarApp(props: CalendarAppProps) {
           plannerInitialInventory={initialInventoryByProduct[selected.productCode] ?? 0}
           salesOrders={salesOrdersByProduct[selected.productCode] ?? []}
           totalCommitted={committedByProduct[selected.productCode] ?? 0}
+          conflicts={conflictsByConsumer.get(selected.stableId) ?? []}
           onDismiss={() => dismiss(selected.stableId)}
           onUndismiss={() => undismiss(selected.stableId)}
           onReschedule={(date) => reschedule(selected.stableId, date)}
@@ -1270,6 +1332,7 @@ function MonthBlock({
   onSelect,
   selectedId,
   mutations,
+  conflictsByConsumer,
   onDropOnDate,
 }: {
   label: string;
@@ -1279,6 +1342,8 @@ function MonthBlock({
   onSelect: (a: CalendarActivity) => void;
   selectedId: string | null;
   mutations: MutationsMap;
+  /** Map of stableId → conflicts (used to highlight chips with red borders). */
+  conflictsByConsumer: Map<string, ScheduleConflict[]>;
   /** Called when a chip is dropped onto a day cell. Skip same-day drops upstream. */
   onDropOnDate: (stableId: string, date: string) => void;
 }) {
@@ -1411,6 +1476,7 @@ function MonthBlock({
                   activity={a}
                   selected={a.id === selectedId}
                   dismissed={isDismissed(mutations, a.stableId)}
+                  conflicted={conflictsByConsumer.has(a.stableId)}
                   onClick={() => onSelect(a)}
                 />
               ))}
@@ -1450,11 +1516,13 @@ function ActivityChip({
   activity,
   selected,
   dismissed,
+  conflicted,
   onClick,
 }: {
   activity: CalendarActivity;
   selected: boolean;
   dismissed: boolean;
+  conflicted: boolean;
   onClick: () => void;
 }) {
   const colors = colorOf(activity);
@@ -1494,6 +1562,7 @@ function ActivityChip({
         textOverflow: 'ellipsis',
         opacity: isDragging ? 0.4 : dismissed ? 0.35 : 1,
         textDecoration: dismissed ? 'line-through' : 'none',
+        boxShadow: conflicted ? 'inset 0 0 0 1.5px #dc2626' : undefined,
       }}
       title={
         activity.kind === 'kitchen-required'
@@ -1504,6 +1573,7 @@ function ActivityChip({
       }
     >
       <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {conflicted && <span style={{ marginRight: 3 }}>⚠</span>}
         {activity.productCode} <span style={{ opacity: 0.7 }}>×{activity.quantity}</span>
         {activity.kind === 'kitchen-required' && activity.durationDays && activity.durationDays > 1 && (
           <span style={{ opacity: 0.7 }}> · {activity.durationDays}d</span>
@@ -1544,6 +1614,7 @@ function ActivityDrawer({
   plannerInitialInventory,
   salesOrders,
   totalCommitted,
+  conflicts,
   onDismiss,
   onUndismiss,
   onReschedule,
@@ -1578,6 +1649,7 @@ function ActivityDrawer({
     quantityRemaining: number;
   }>;
   totalCommitted: number;
+  conflicts: ScheduleConflict[];
   onDismiss: () => void;
   onUndismiss: () => void;
   onReschedule: (newDate: string) => void;
@@ -1912,6 +1984,51 @@ function ActivityDrawer({
         >
           <div style={{ fontWeight: 500, marginBottom: 2 }}>Why this station?</div>
           {routingRationale}
+        </div>
+      )}
+
+      {/* ─── Schedule conflicts (Phase 4l.2) ──────────── */}
+      {conflicts.length > 0 && (
+        <div
+          style={{
+            marginBottom: 14,
+            padding: 10,
+            background: '#fef2f2',
+            border: '0.5px solid #fecaca',
+            borderRadius: 4,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              color: '#991b1b',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginBottom: 6,
+              fontWeight: 500,
+            }}
+          >
+            ⚠ Schedule conflicts ({conflicts.length})
+          </div>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 11 }}>
+            {conflicts.map((c, i) => (
+              <li
+                key={i}
+                style={{
+                  padding: '4px 0',
+                  color: '#991b1b',
+                  borderBottom: i < conflicts.length - 1 ? '0.5px solid #fecaca' : 'none',
+                }}
+              >
+                Needs <strong>{c.ingredientCode}</strong> ready by{' '}
+                <strong>{c.consumerDate}</strong>; closest run finishes{' '}
+                <strong>{c.earliestFinishDate}</strong>.
+              </li>
+            ))}
+          </ul>
+          <div style={{ fontSize: 10, color: '#7f1d1d', marginTop: 6 }}>
+            Move this chip later, or move the upstream chip to finish sooner. The 1-day buffer must hold.
+          </div>
         </div>
       )}
 
