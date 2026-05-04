@@ -43,6 +43,14 @@ import {
   readAssembliesCache,
   assembliesAtWarehouse,
 } from '@/lib/planning/assemblies-cache';
+import {
+  deriveIntermediateDemand,
+  type PackagingActivityForDemand,
+} from '@/lib/engine/intermediate-demand';
+import {
+  computeKitchenGaps,
+  type KitchenSupplyEvent,
+} from '@/lib/engine/kitchen-gap';
 import type { Demand } from '@/lib/planning/demand';
 import { WAREHOUSES } from '@/lib/planning/warehouse-assignments';
 import type { CalendarActivity } from '@/lib/planning/calendar-projection';
@@ -350,11 +358,92 @@ function buildPayload(horizonWeeks: number) {
       extendedFamily: null,
     });
   }
-  // Combine packaging activities (planner output) with kitchen activities
-  // (live Unleashed). Sort by date so the calendar grid renders in order.
+  // ─── Derived kitchen-required runs (Phase 4k) ────────────
+  // Walk packaging plan, derive intermediate demand via BOM, compare to
+  // Lundberg SOH + scheduled assemblies, surface gaps as required runs.
+  const intermediateCodes = new Set(capacity.intermediates.keys());
+  const packagingForDemand: PackagingActivityForDemand[] = projection.activities.map(
+    (a) => ({
+      productCode: a.productCode,
+      productName: a.productName,
+      quantity: a.quantity,
+      date: a.date,
+    }),
+  );
+  const intermediateDemand = deriveIntermediateDemand({
+    packagingActivities: packagingForDemand,
+    bom: capacity.bom,
+    intermediateCodes,
+    familyMap: capacity.familyMap,
+  });
+  // Build Lundberg SOH lookup (intermediates only — finished goods at
+  // Lundberg are out of scope for kitchen planning).
+  const lundbergSohByCode: Record<string, number> = {};
+  if (sohCache) {
+    for (const [code, byWh] of Object.entries(sohCache.byProductCode)) {
+      const lundberg = byWh[WAREHOUSES.LUNDBERG] ?? 0;
+      if (lundberg > 0 && intermediateCodes.has(code)) {
+        lundbergSohByCode[code] = lundberg;
+      }
+    }
+  }
+  // Convert scheduled Lundberg assemblies to supply events. Each assembly
+  // delivers `quantity` of its productCode on its scheduledDate.
+  const scheduledKitchenSupply: KitchenSupplyEvent[] = (
+    assembliesCache?.lines ?? []
+  )
+    .filter(
+      (a) =>
+        a.warehouseName === WAREHOUSES.LUNDBERG &&
+        intermediateCodes.has(a.productCode),
+    )
+    .map((a) => ({
+      intermediateCode: a.productCode,
+      date: a.scheduledDate,
+      quantity: a.quantity,
+      source: a.assemblyNumber,
+    }));
+  const kitchenGaps = computeKitchenGaps({
+    demand: intermediateDemand,
+    scheduledSupply: scheduledKitchenSupply,
+    lundbergSohByCode,
+  });
+  // Convert gaps to CalendarActivity[] with kind='kitchen-required'.
+  const kitchenRequiredActivities: CalendarActivity[] = kitchenGaps.map(
+    (g, i) => {
+      const d = new Date(g.requiredByDate + 'T00:00:00');
+      const dow = d.getDay();
+      const mondayOffset = dow === 0 ? -6 : 1 - dow;
+      const monday = new Date(d);
+      monday.setDate(d.getDate() + mondayOffset);
+      const weekStart = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+      const intermediateName = capacity.intermediates.get(g.intermediateCode)?.productName
+        ?? g.intermediateName;
+      return {
+        id: `kitchen-required-${g.intermediateCode}-${g.requiredByDate}-${i}`,
+        stableId: stableIdOf(g.intermediateCode, weekStart, i),
+        kind: 'kitchen-required',
+        date: g.requiredByDate,
+        weekStart,
+        orderInWeek: i,
+        station: null,
+        productCode: g.intermediateCode,
+        productName: intermediateName,
+        quantity: Math.round(g.shortfallQuantity),
+        durationMinutes: 0,
+        changeoverMinutes: 0,
+        family: g.intermediateCode,
+        extendedFamily: null,
+      };
+    },
+  );
+
+  // Combine packaging activities (planner output) with kitchen-related
+  // activities (live + required). Sort by date.
   const allActivities: CalendarActivity[] = [
     ...projection.activities,
     ...kitchenActivities,
+    ...kitchenRequiredActivities,
   ].sort((a, b) => a.date.localeCompare(b.date));
 
   // Build infeasible products list (with per-product unmet demand totals)
@@ -459,6 +548,7 @@ function buildPayload(horizonWeeks: number) {
 
   const assembliesFetchedAt: string | null = assembliesCache?.fetchedAt ?? null;
   const kitchenActivityCount = kitchenActivities.length;
+  const kitchenRequiredCount = kitchenRequiredActivities.length;
 
   return {
     horizon,
@@ -466,6 +556,7 @@ function buildPayload(horizonWeeks: number) {
     dayLoads: projection.dayLoads,
     assembliesFetchedAt,
     kitchenActivityCount,
+    kitchenRequiredCount,
     stationDailyMinutes,
     infeasibleProducts,
     routingDecisions,

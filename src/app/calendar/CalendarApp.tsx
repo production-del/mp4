@@ -73,6 +73,7 @@ interface CalendarAppProps {
   dayLoads: DayLoadSummary[];
   assembliesFetchedAt: string | null;
   kitchenActivityCount: number;
+  kitchenRequiredCount: number;
   /** Per-station daily capacity in minutes. Used for client-side load recompute. */
   stationDailyMinutes: Record<string, number>;
   infeasibleProducts: InfeasibleProduct[];
@@ -142,9 +143,22 @@ const KITCHEN_COLOR: ChipColor = {
   dot: '#ec4899',
 };
 
+/**
+ * Kitchen-REQUIRED runs (derived shortfalls): orange. Distinct from
+ * kitchen-scheduled (pink) so the operator can immediately see "this needs
+ * to be added" vs "this is already on the books."
+ */
+const KITCHEN_REQUIRED_COLOR: ChipColor = {
+  bg: '#ffedd5',
+  border: '#f97316',
+  text: '#9a3412',
+  dot: '#f97316',
+};
+
 /** Pick the chip's colour scheme based on kind + station. */
 function colorOf(activity: CalendarActivity): ChipColor {
   if (activity.kind === 'kitchen') return KITCHEN_COLOR;
+  if (activity.kind === 'kitchen-required') return KITCHEN_REQUIRED_COLOR;
   return activity.station ? STATION_COLORS[activity.station] : KITCHEN_COLOR;
 }
 
@@ -216,6 +230,7 @@ export function CalendarApp(props: CalendarAppProps) {
     dayLoads,
     assembliesFetchedAt,
     kitchenActivityCount,
+    kitchenRequiredCount,
     stationDailyMinutes,
     infeasibleProducts,
     routingDecisions,
@@ -319,6 +334,10 @@ export function CalendarApp(props: CalendarAppProps) {
   // of that kind regardless of per-station toggles.
   const [showPackaging, setShowPackaging] = useState(true);
   const [showKitchen, setShowKitchen] = useState(true);
+  // Sub-toggles within Kitchen: scheduled (live Unleashed) vs required
+  // (planner-derived gaps). Default both on; kitchen master gates the lot.
+  const [showKitchenScheduled, setShowKitchenScheduled] = useState(true);
+  const [showKitchenRequired, setShowKitchenRequired] = useState(true);
 
   // Selected activity for the drawer.
   const [selected, setSelected] = useState<CalendarActivity | null>(null);
@@ -402,15 +421,25 @@ export function CalendarApp(props: CalendarAppProps) {
   // Filter mutated activities through layer toggles + dismissal visibility.
   const visibleActivities = useMemo(() => {
     return mutatedActivities.filter((a) => {
-      // Category toggle (top-level)
+      // Category toggle (top-level): Packaging master / Kitchen master.
       if (a.kind === 'packaging' && !showPackaging) return false;
-      if (a.kind === 'kitchen' && !showKitchen) return false;
+      if (a.kind === 'kitchen' && (!showKitchen || !showKitchenScheduled)) return false;
+      if (a.kind === 'kitchen-required' && (!showKitchen || !showKitchenRequired)) return false;
       // Per-station toggle within packaging
       if (a.kind === 'packaging' && a.station && !visibleStations.has(a.station)) return false;
       if (!showDismissed && isDismissed(mutations, a.stableId)) return false;
       return true;
     });
-  }, [mutatedActivities, visibleStations, showPackaging, showKitchen, mutations, showDismissed]);
+  }, [
+    mutatedActivities,
+    visibleStations,
+    showPackaging,
+    showKitchen,
+    showKitchenScheduled,
+    showKitchenRequired,
+    mutations,
+    showDismissed,
+  ]);
   const activitiesByDate = useMemo(
     () => groupByDate(visibleActivities),
     [visibleActivities],
@@ -676,9 +705,8 @@ export function CalendarApp(props: CalendarAppProps) {
             })}
           </div>
 
-          {/* Kitchen master toggle. No sub-detail yet — all kitchen
-              activities sit under one bucket pending Phase 4j.2 (kitchen
-              equipment breakdown). */}
+          {/* Kitchen master toggle, with two sub-toggles for scheduled
+              (live Unleashed) vs required (planner-derived gaps). */}
           <label
             style={{
               display: 'flex',
@@ -698,20 +726,81 @@ export function CalendarApp(props: CalendarAppProps) {
               checked={showKitchen}
               onChange={() => setShowKitchen((v) => !v)}
             />
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: KITCHEN_COLOR.dot,
-                display: 'inline-block',
-              }}
-            />
             <span style={{ flex: 1 }}>Kitchen</span>
             <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-              {kitchenActivityCount}
+              {kitchenActivityCount + kitchenRequiredCount}
             </span>
           </label>
+          <div
+            style={{
+              paddingLeft: 18,
+              opacity: showKitchen ? 1 : 0.5,
+              pointerEvents: showKitchen ? 'auto' : 'none',
+            }}
+          >
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '4px 0',
+                fontSize: 12,
+                cursor: 'pointer',
+                opacity: showKitchenScheduled ? 1 : 0.4,
+                userSelect: 'none',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={showKitchenScheduled}
+                onChange={() => setShowKitchenScheduled((v) => !v)}
+              />
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: KITCHEN_COLOR.dot,
+                  display: 'inline-block',
+                }}
+              />
+              <span style={{ flex: 1 }}>Scheduled</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                {kitchenActivityCount}
+              </span>
+            </label>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '4px 0',
+                fontSize: 12,
+                cursor: 'pointer',
+                opacity: showKitchenRequired ? 1 : 0.4,
+                userSelect: 'none',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={showKitchenRequired}
+                onChange={() => setShowKitchenRequired((v) => !v)}
+              />
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: KITCHEN_REQUIRED_COLOR.dot,
+                  display: 'inline-block',
+                }}
+              />
+              <span style={{ flex: 1 }}>Required (planner)</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                {kitchenRequiredCount}
+              </span>
+            </label>
+          </div>
           {dismissedCount > 0 && (
             <label
               style={{
@@ -1518,7 +1607,9 @@ function ActivityDrawer({
         }}
       >
         {activity.kind === 'kitchen'
-          ? 'Kitchen'
+          ? 'Kitchen (scheduled)'
+          : activity.kind === 'kitchen-required'
+          ? 'Kitchen (required by plan)'
           : activity.station
           ? STATION_LABELS[activity.station]
           : '—'}
