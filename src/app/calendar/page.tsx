@@ -39,8 +39,14 @@ import {
   salesOrdersForProduct,
   totalCommittedFor,
 } from '@/lib/planning/sales-orders-cache';
+import {
+  readAssembliesCache,
+  assembliesAtWarehouse,
+} from '@/lib/planning/assemblies-cache';
 import type { Demand } from '@/lib/planning/demand';
 import { WAREHOUSES } from '@/lib/planning/warehouse-assignments';
+import type { CalendarActivity } from '@/lib/planning/calendar-projection';
+import { stableIdOf } from '@/lib/planning/calendar-projection';
 import { CalendarApp } from './CalendarApp';
 
 export const dynamic = 'force-dynamic'; // Always re-run; calendar reflects latest data
@@ -310,6 +316,47 @@ function buildPayload(horizonWeeks: number) {
 
   const projection = projectToCalendar(dayOutput);
 
+  // Kitchen production runs from Unleashed assemblies. Filtered to
+  // Lundberg Storeroom (kitchen production) — packaging assemblies are
+  // already covered by the optimiser output. Each assembly becomes one
+  // CalendarActivity with kind='kitchen' and station=null.
+  const assembliesCache = readAssembliesCache();
+  const kitchenActivities: CalendarActivity[] = [];
+  for (const a of assembliesAtWarehouse(assembliesCache, WAREHOUSES.LUNDBERG)) {
+    // Use the activity's scheduled date as both the day and the weekStart
+    // anchor (kitchen activities aren't placed by our weekly DP, so the
+    // weekStart concept doesn't apply naturally; use the Monday of the
+    // scheduled date as a stand-in for stableId stability).
+    const d = new Date(a.scheduledDate + 'T00:00:00');
+    const dow = d.getDay();
+    const mondayOffset = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + mondayOffset);
+    const weekStart = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+    kitchenActivities.push({
+      id: `kitchen-${a.assemblyNumber}`,
+      stableId: stableIdOf(a.productCode, weekStart, 0),
+      kind: 'kitchen',
+      date: a.scheduledDate,
+      weekStart,
+      orderInWeek: 0,
+      station: null,
+      productCode: a.productCode,
+      productName: a.productName,
+      quantity: a.quantity,
+      durationMinutes: 0, // not estimated for kitchen yet
+      changeoverMinutes: 0,
+      family: null,
+      extendedFamily: null,
+    });
+  }
+  // Combine packaging activities (planner output) with kitchen activities
+  // (live Unleashed). Sort by date so the calendar grid renders in order.
+  const allActivities: CalendarActivity[] = [
+    ...projection.activities,
+    ...kitchenActivities,
+  ].sort((a, b) => a.date.localeCompare(b.date));
+
   // Build infeasible products list (with per-product unmet demand totals)
   // for surfacing in the UI's left rail.
   const infeasibleProducts: Array<{
@@ -410,10 +457,15 @@ function buildPayload(horizonWeeks: number) {
   const salesOrdersFetchedAt: string | null = salesCache?.fetchedAt ?? null;
   const totalSalesOrderLines = salesCache?.totalLines ?? 0;
 
+  const assembliesFetchedAt: string | null = assembliesCache?.fetchedAt ?? null;
+  const kitchenActivityCount = kitchenActivities.length;
+
   return {
     horizon,
-    activities: projection.activities,
+    activities: allActivities,
     dayLoads: projection.dayLoads,
+    assembliesFetchedAt,
+    kitchenActivityCount,
     stationDailyMinutes,
     infeasibleProducts,
     routingDecisions,
