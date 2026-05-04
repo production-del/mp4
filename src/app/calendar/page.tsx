@@ -44,13 +44,10 @@ import {
   assembliesAtWarehouse,
 } from '@/lib/planning/assemblies-cache';
 import {
-  deriveIntermediateDemand,
   type PackagingActivityForDemand,
 } from '@/lib/engine/intermediate-demand';
-import {
-  computeKitchenGaps,
-  type KitchenSupplyEvent,
-} from '@/lib/engine/kitchen-gap';
+import { type KitchenSupplyEvent } from '@/lib/engine/kitchen-gap';
+import { planKitchenRuns } from '@/lib/engine/kitchen-run-planner';
 import type { Demand } from '@/lib/planning/demand';
 import { WAREHOUSES } from '@/lib/planning/warehouse-assignments';
 import type { CalendarActivity } from '@/lib/planning/calendar-projection';
@@ -358,9 +355,11 @@ function buildPayload(horizonWeeks: number) {
       extendedFamily: null,
     });
   }
-  // ─── Derived kitchen-required runs (Phase 4k) ────────────
+  // ─── Cascading kitchen-run planner (Phase 4k.2) ──────────
   // Walk packaging plan, derive intermediate demand via BOM, compare to
-  // Lundberg SOH + scheduled assemblies, surface gaps as required runs.
+  // Lundberg SOH + scheduled assemblies, surface gaps as required runs
+  // with proper lead-time backoff (chip date = start, finish day before
+  // downstream consumption). Recurses through sub-intermediates.
   const intermediateCodes = new Set(capacity.intermediates.keys());
   const packagingForDemand: PackagingActivityForDemand[] = projection.activities.map(
     (a) => ({
@@ -370,14 +369,7 @@ function buildPayload(horizonWeeks: number) {
       date: a.date,
     }),
   );
-  const intermediateDemand = deriveIntermediateDemand({
-    packagingActivities: packagingForDemand,
-    bom: capacity.bom,
-    intermediateCodes,
-    familyMap: capacity.familyMap,
-  });
-  // Build Lundberg SOH lookup (intermediates only — finished goods at
-  // Lundberg are out of scope for kitchen planning).
+  // Build Lundberg SOH lookup (intermediates only).
   const lundbergSohByCode: Record<string, number> = {};
   if (sohCache) {
     for (const [code, byWh] of Object.entries(sohCache.byProductCode)) {
@@ -387,8 +379,6 @@ function buildPayload(horizonWeeks: number) {
       }
     }
   }
-  // Convert scheduled Lundberg assemblies to supply events. Each assembly
-  // delivers `quantity` of its productCode on its scheduledDate.
   const scheduledKitchenSupply: KitchenSupplyEvent[] = (
     assembliesCache?.lines ?? []
   )
@@ -403,36 +393,46 @@ function buildPayload(horizonWeeks: number) {
       quantity: a.quantity,
       source: a.assemblyNumber,
     }));
-  const kitchenGaps = computeKitchenGaps({
-    demand: intermediateDemand,
-    scheduledSupply: scheduledKitchenSupply,
+
+  const kitchenRuns = planKitchenRuns({
+    packagingActivities: packagingForDemand,
+    bom: capacity.bom,
+    intermediates: capacity.intermediates,
+    intermediateCodes,
+    familyMap: capacity.familyMap,
     lundbergSohByCode,
+    scheduledSupply: scheduledKitchenSupply,
+    bufferDays: 1,
   });
-  // Convert gaps to CalendarActivity[] with kind='kitchen-required'.
-  const kitchenRequiredActivities: CalendarActivity[] = kitchenGaps.map(
-    (g, i) => {
-      const d = new Date(g.requiredByDate + 'T00:00:00');
+
+  // Convert kitchen runs to CalendarActivity[] anchored on the START date.
+  const kitchenRequiredActivities: CalendarActivity[] = kitchenRuns.map(
+    (run, i) => {
+      const d = new Date(run.startDate + 'T00:00:00');
       const dow = d.getDay();
       const mondayOffset = dow === 0 ? -6 : 1 - dow;
       const monday = new Date(d);
       monday.setDate(d.getDate() + mondayOffset);
       const weekStart = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
-      const intermediateName = capacity.intermediates.get(g.intermediateCode)?.productName
-        ?? g.intermediateName;
+      // Take requiredByDate from the first driver's date when available; otherwise availableDate.
+      const requiredByDate = run.availableDate; // approximation: downstream uses output the day after finish
       return {
-        id: `kitchen-required-${g.intermediateCode}-${g.requiredByDate}-${i}`,
-        stableId: stableIdOf(g.intermediateCode, weekStart, i),
+        id: `kitchen-required-${run.intermediateCode}-${run.startDate}-${i}`,
+        stableId: stableIdOf(run.intermediateCode, weekStart, i),
         kind: 'kitchen-required',
-        date: g.requiredByDate,
+        date: run.startDate,
         weekStart,
         orderInWeek: i,
         station: null,
-        productCode: g.intermediateCode,
-        productName: intermediateName,
-        quantity: Math.round(g.shortfallQuantity),
+        productCode: run.intermediateCode,
+        productName: run.intermediateName,
+        quantity: Math.round(run.quantity),
         durationMinutes: 0,
         changeoverMinutes: 0,
-        family: g.intermediateCode,
+        durationDays: run.durationDays,
+        finishDate: run.finishDate,
+        requiredByDate,
+        family: run.intermediateCode,
         extendedFamily: null,
       };
     },

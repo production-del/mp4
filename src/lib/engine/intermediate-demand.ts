@@ -20,7 +20,7 @@
  * planner can see what the packaging plan is asking of it.
  */
 
-import { explodeBom, aggregateExplodedComponents, type FamilyMeta } from './bom-explode';
+import { explodeBom, type FamilyMeta } from './bom-explode';
 import type { BOMComponent } from '@/lib/planning/engine-io';
 
 // ─── Public types ────────────────────────────────────────────
@@ -52,13 +52,17 @@ export interface IntermediateDemandEvent {
 // ─── Public API ──────────────────────────────────────────────
 
 /**
- * For each packaging activity, expand its BOM and collect any component
- * whose code is in `intermediateCodes` as an intermediate-demand event.
+ * For each packaging activity, expand its BOM and collect DIRECT-CHILD
+ * intermediates as demand events.
  *
- * Multiple BOM paths to the same intermediate within ONE packaging batch
- * are aggregated (a single event per (packaging-batch × intermediate)).
- * Different packaging batches that consume the same intermediate produce
- * separate events; consumer (kitchen-gap) aggregates over time.
+ * "Direct child" = depth 1 from the root product. We deliberately ignore
+ * deeper transitive intermediates because the cascading kitchen-run
+ * planner walks the BOM level-by-level with proper lead-time backoff at
+ * each step. If we accumulated all depths here, the planner would
+ * double-count when it cascades.
+ *
+ * Multiple direct-child paths to the same intermediate (rare diamond
+ * BOMs) sum into one event per (packaging-batch × intermediate).
  */
 export function deriveIntermediateDemand(input: {
   packagingActivities: ReadonlyArray<PackagingActivityForDemand>;
@@ -74,16 +78,27 @@ export function deriveIntermediateDemand(input: {
       bom: input.bom as BOMComponent[],
       familyMap: input.familyMap ?? {},
     });
-    // Aggregate by component code so multi-path components (rare, mostly
-    // diamond BOMs) come out as one row per code.
-    const aggregated = aggregateExplodedComponents(r.components);
-    for (const c of aggregated) {
+    // Sum direct-child paths per intermediate code.
+    const directQty = new Map<string, { name: string; qty: number }>();
+    for (const c of r.components) {
+      if (c.depth !== 1) continue; // skip transitive intermediates
       if (!input.intermediateCodes.has(c.productCode)) continue;
       if (c.totalQuantity <= 0) continue;
+      const existing = directQty.get(c.productCode);
+      if (existing) {
+        existing.qty += c.totalQuantity;
+      } else {
+        directQty.set(c.productCode, {
+          name: c.productName || c.productCode,
+          qty: c.totalQuantity,
+        });
+      }
+    }
+    for (const [code, { name, qty }] of directQty.entries()) {
       out.push({
-        intermediateCode: c.productCode,
-        intermediateName: c.productName || c.productCode,
-        quantity: c.totalQuantity,
+        intermediateCode: code,
+        intermediateName: name,
+        quantity: qty,
         requiredByDate: activity.date,
         drivenBy: {
           productCode: activity.productCode,
