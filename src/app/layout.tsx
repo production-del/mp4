@@ -4,6 +4,7 @@ import { ThemeProvider } from './components/ThemeProvider';
 import { ThemeToggle } from './components/ThemeToggle';
 import { NavLinks } from './components/NavLinks';
 import { UserMenu } from './components/UserMenu';
+import { PlanStoreInit } from './components/PlanStoreInit';
 
 export const metadata: Metadata = {
   title: "Byron Planner | Production Planning System",
@@ -27,6 +28,7 @@ export default function RootLayout({
       </head>
       <body style={{ background: 'var(--bg-page)', color: 'var(--text-primary)' }}>
         <ThemeProvider>
+          <PlanStoreInit />
           <div className="min-h-screen flex flex-col">
             <header style={{ position: 'sticky', top: 0, zIndex: 40, borderBottom: '0.5px solid var(--border)', background: 'var(--bg-page)' }}>
               {/* Full-width nav bar: no max-width constraint so the tabs can
