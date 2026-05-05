@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/* ── Design tokens (warm terracotta theme) ────────────── */
+:root {
+  --bg-page:      #faf7f2;
+  --bg-surface:   #f0ebe4;
+  --bg-hover:     #e5dfd6;
+  --text-primary: #1c1917;
+  --text-secondary:#44403c; /* bumped from #78716c for readability */
+  --text-muted:   #6d6561; /* bumped from #a8a29e for readability */
+  --border:       #e2ddd5;
+  --border-strong:#d4ccc0;
+  --accent:       #c26a3a;
+  --accent-light: #fdf4ee;
+  --danger:       #b91c1c;
+  --danger-light: #fef2f2;
+  --warning:      #b45309;
+  --warning-light:#fffbeb;
+  --success:      #15803d;
+  --success-light:#f0fdf4;
+  --purple:       #7c3aed;
+  --purple-light: #f5f3ff;
+  --purple-border:#a78bfa;
+
+  /* Equipment legend */
+  --equip-oven:       #d4874a;
+  --equip-dehydrator: #6ab070;
+  --equip-mixer:      #9882c4;
+
+  /* Chart palette */
+  --chart-soh:        #6ab070;
+  --chart-production: #5b7ec2;
+  --chart-consumed:   #d4874a;
+  --chart-min:        #c25050;
+  --chart-grid:       #e2ddd5;
+  --chart-label:      #78716c;
+  --chart-axis:       #a8a29e;
+}
+
+[data-theme="dark"] {
+  --bg-page:      #1c1917;
+  --bg-surface:   #292524;
+  --bg-hover:     #3a3533;
+  --text-primary: #faf7f2;
+  --text-secondary:#d6d3d1; /* bumped from #a8a29e for readability */
+  --text-muted:   #a8a29e; /* bumped from #78716c for readability */
+  --border:       #3a3533;
+  --border-strong:#4a4540;
+  --accent:       #d4834e;
+  --accent-light: #2a1f15;
+  --danger:       #f87171;
+  --danger-light: #3a1a1a;
+  --warning:      #fbbf24;
+  --warning-light:#3a2a0a;
+  --success:      #4ade80;
+  --success-light:#0a2a12;
+  --purple:       #a78bfa;
+  --purple-light: #1e1533;
+  --purple-border:#7c3aed;
+
+  /* Equipment legend */
+  --equip-oven:       #e0a06a;
+  --equip-dehydrator: #7cc88a;
+  --equip-mixer:      #b09ade;
+
+  /* Chart palette */
+  --chart-soh:        #7cc88a;
+  --chart-production: #7e9ee0;
+  --chart-consumed:   #e0a06a;
+  --chart-min:        #f87171;
+  --chart-grid:       #3a3533;
+  --chart-label:      #a8a29e;
+  --chart-axis:       #78716c;
+}
+
+* {
+  @apply box-border;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  @apply min-h-screen;
+  background: var(--bg-page);
+  color: var(--text-primary);
+}
+
+a {
+  color: var(--accent);
+  transition: opacity 0.15s;
+}
+a:hover {
+  opacity: 0.7;
+}
