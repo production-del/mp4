@@ -34,8 +34,17 @@ import type {
  * - 'kitchen'          — live Unleashed assemblies at Lundberg (already-scheduled)
  * - 'kitchen-required' — derived gap from intermediate-demand vs supply;
  *                        a kitchen run that must happen but isn't yet scheduled
+ * - 'po-placed'        — derived purchasing chip on the place-by date for a
+ *                        raw material expected to run short
+ * - 'po-receiving'     — derived purchasing chip on the arrive-by date
+ *                        (linked to the matching 'po-placed' chip)
  */
-export type CalendarActivityKind = 'packaging' | 'kitchen' | 'kitchen-required';
+export type CalendarActivityKind =
+  | 'packaging'
+  | 'kitchen'
+  | 'kitchen-required'
+  | 'po-placed'
+  | 'po-receiving';
 
 export interface CalendarActivity {
   /** Per-render identifier — fine for React keys, do NOT use for persistence. */
@@ -91,6 +100,21 @@ export interface CalendarActivity {
   /** Optional family info — used for color-coding / family-grouping in UI. */
   family: string | null;
   extendedFamily: string | null;
+  /**
+   * For `kind: 'po-placed'` and `kind: 'po-receiving'` only — purchasing
+   * details. The two chips for one PO share these fields and reference each
+   * other via `sisterStableId`.
+   */
+  poInfo?: {
+    placeByDate: string;
+    arriveByDate: string;
+    leadTimeDays: number;
+    overdue: boolean;
+    /** stableId of the linked chip (place ↔ receive). */
+    sisterStableId: string;
+    /** stableIds of activities driving this PO requirement. */
+    drivenBy: string[];
+  };
 }
 
 /** Build the stable identity used by the mutation store. */

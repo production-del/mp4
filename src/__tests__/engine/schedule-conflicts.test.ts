@@ -266,4 +266,127 @@ describe('detectScheduleConflicts', () => {
       ]);
     });
   });
+
+  // ─── PO chip integration (Phase 4m.3) ──────────────────────
+
+  describe('PO chip integration', () => {
+    function poPlaced(o: {
+      stableId: string;
+      productCode: string;
+      date: string;
+    }): CalendarActivity {
+      return {
+        id: o.stableId,
+        stableId: o.stableId,
+        kind: 'po-placed',
+        date: o.date,
+        weekStart: o.date,
+        orderInWeek: 0,
+        station: null,
+        productCode: o.productCode,
+        productName: o.productCode,
+        quantity: 100,
+        durationMinutes: 0,
+        changeoverMinutes: 0,
+        family: null,
+        extendedFamily: null,
+      };
+    }
+    function poReceiving(o: {
+      stableId: string;
+      productCode: string;
+      date: string;
+    }): CalendarActivity {
+      return {
+        id: o.stableId,
+        stableId: o.stableId,
+        kind: 'po-receiving',
+        date: o.date,
+        weekStart: o.date,
+        orderInWeek: 0,
+        station: null,
+        productCode: o.productCode,
+        productName: o.productCode,
+        quantity: 100,
+        durationMinutes: 0,
+        changeoverMinutes: 0,
+        family: null,
+        extendedFamily: null,
+      };
+    }
+
+    test('po-receiving arriving in time satisfies the constraint (no conflict)', () => {
+      const conflicts = detectScheduleConflicts({
+        activities: [
+          kitchenRequired({
+            stableId: 'K1',
+            productCode: 'ICC',
+            startDate: '2026-05-15',
+            finishDate: '2026-05-15',
+          }),
+          poPlaced({ stableId: 'PO-P|RAW', productCode: 'RAW', date: '2026-05-01' }),
+          poReceiving({ stableId: 'PO-R|RAW', productCode: 'RAW', date: '2026-05-13' }),
+        ],
+        consumesMap: { ICC: ['RAW'] },
+      });
+      expect(conflicts).toEqual([]);
+    });
+
+    test('po-receiving arriving too late raises conflict on the consuming kitchen run', () => {
+      const conflicts = detectScheduleConflicts({
+        activities: [
+          kitchenRequired({
+            stableId: 'K1',
+            productCode: 'ICC',
+            startDate: '2026-05-15',
+            finishDate: '2026-05-15',
+          }),
+          poPlaced({ stableId: 'PO-P|RAW', productCode: 'RAW', date: '2026-05-10' }),
+          poReceiving({ stableId: 'PO-R|RAW', productCode: 'RAW', date: '2026-05-20' }),
+        ],
+        consumesMap: { ICC: ['RAW'] },
+      });
+      expect(conflicts).toHaveLength(1);
+      expect(conflicts[0].consumerStableId).toBe('K1');
+      expect(conflicts[0].ingredientCode).toBe('RAW');
+      // Blocker should be the po-receiving chip, not po-placed.
+      expect(conflicts[0].blockedByStableId).toBe('PO-R|RAW');
+    });
+
+    test('po-placed is excluded from suppliers (would otherwise be a false negative)', () => {
+      // po-placed is on 5/01 (way before consumer 5/15) — if it were treated
+      // as a supplier, the detector would say "satisfied" and miss the
+      // genuine timing problem. Same productCode shared with po-receiving
+      // arriving 5/20 (too late).
+      const conflicts = detectScheduleConflicts({
+        activities: [
+          kitchenRequired({
+            stableId: 'K1',
+            productCode: 'ICC',
+            startDate: '2026-05-15',
+            finishDate: '2026-05-15',
+          }),
+          poPlaced({ stableId: 'PO-P|RAW', productCode: 'RAW', date: '2026-05-01' }),
+          poReceiving({ stableId: 'PO-R|RAW', productCode: 'RAW', date: '2026-05-20' }),
+        ],
+        consumesMap: { ICC: ['RAW'] },
+      });
+      // If po-placed were counted, conflicts would be [] (false negative).
+      expect(conflicts).toHaveLength(1);
+    });
+
+    test('packaging consuming a raw material directly: handles via PO chip', () => {
+      const conflicts = detectScheduleConflicts({
+        activities: [
+          packagingActivity({ stableId: 'P1', productCode: 'FCHOC', date: '2026-05-15' }),
+          poPlaced({ stableId: 'PO-P|LABEL', productCode: 'LABEL', date: '2026-05-10' }),
+          poReceiving({ stableId: 'PO-R|LABEL', productCode: 'LABEL', date: '2026-05-20' }),
+        ],
+        consumesMap: { FCHOC: ['LABEL'] }, // depth-1 raw material consumption
+      });
+      expect(conflicts).toHaveLength(1);
+      expect(conflicts[0].consumerStableId).toBe('P1');
+      expect(conflicts[0].ingredientCode).toBe('LABEL');
+    });
+  });
 });
