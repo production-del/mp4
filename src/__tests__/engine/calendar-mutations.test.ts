@@ -12,6 +12,10 @@ import {
   applyEditQuantity,
   applyClearEdit,
   editedQuantityOf,
+  applyEditLeadTime,
+  applyClearLeadTime,
+  editedLeadTimeDaysOf,
+  leadTimeOverridesByCode,
   clearStale,
   readMutationsFromStorage,
   writeMutationsToStorage,
@@ -168,6 +172,71 @@ describe('calendar-mutations: pure operations', () => {
         'A|2026-05-04|0': { stableId: 'A|2026-05-04|0', dismissed: true, updatedAt: 'x' },
       };
       expect(staleStableIds(m, new Set(['A|2026-05-04|0']))).toEqual([]);
+    });
+  });
+
+  describe('lead-time override (Phase 4m.4)', () => {
+    test('applyEditLeadTime stores days on a place-by chip stableId', () => {
+      const out = applyEditLeadTime({}, 'po-placed|RAW_X', 21);
+      expect(out['po-placed|RAW_X']?.editedLeadTimeDays).toBe(21);
+      expect(editedLeadTimeDaysOf(out, 'po-placed|RAW_X')).toBe(21);
+    });
+
+    test('rejects negative or non-finite days', () => {
+      expect(applyEditLeadTime({}, 'po-placed|X', -1)).toEqual({});
+      expect(applyEditLeadTime({}, 'po-placed|X', NaN)).toEqual({});
+    });
+
+    test('rounds non-integer days', () => {
+      const out = applyEditLeadTime({}, 'po-placed|X', 14.7);
+      expect(editedLeadTimeDaysOf(out, 'po-placed|X')).toBe(15);
+    });
+
+    test('applyClearLeadTime drops the field; entry vanishes when only it remained', () => {
+      const m = applyEditLeadTime({}, 'po-placed|X', 21);
+      const out = applyClearLeadTime(m, 'po-placed|X');
+      expect(out['po-placed|X']).toBeUndefined();
+    });
+
+    test('applyClearLeadTime preserves other fields', () => {
+      const m: MutationsMap = {
+        'po-placed|X': {
+          stableId: 'po-placed|X',
+          dismissed: true,
+          editedLeadTimeDays: 21,
+          updatedAt: 'x',
+        },
+      };
+      const out = applyClearLeadTime(m, 'po-placed|X');
+      expect(out['po-placed|X']?.editedLeadTimeDays).toBeUndefined();
+      expect(out['po-placed|X']?.dismissed).toBe(true);
+    });
+
+    test('leadTimeOverridesByCode extracts overrides keyed by raw material code', () => {
+      const m: MutationsMap = {
+        'po-placed|RAW_A': {
+          stableId: 'po-placed|RAW_A',
+          editedLeadTimeDays: 21,
+          updatedAt: 'x',
+        },
+        'po-placed|RAW_B': {
+          stableId: 'po-placed|RAW_B',
+          editedLeadTimeDays: 7,
+          updatedAt: 'x',
+        },
+        // Other mutations + non-place-by stableIds are ignored.
+        'FCHOC|2026-05-04|0': {
+          stableId: 'FCHOC|2026-05-04|0',
+          editedQuantity: 200,
+          updatedAt: 'x',
+        },
+        'po-receiving|RAW_A': {
+          stableId: 'po-receiving|RAW_A',
+          editedLeadTimeDays: 99, // would be wrong-key, ignored
+          updatedAt: 'x',
+        },
+      };
+      expect(leadTimeOverridesByCode(m)).toEqual({ RAW_A: 21, RAW_B: 7 });
     });
   });
 });

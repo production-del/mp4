@@ -195,6 +195,44 @@ export function productionDaysFor(intermediate: KitchenIntermediate): number {
   return Math.max(1, days);
 }
 
+// ─── Kitchen-team minutes per intermediate (Phase 4l.8) ───────
+// The 8-hour kitchen day (480 min) is shared across all kitchen runs that
+// initiate or cook on a given day. Each step costs the team a known amount
+// of attended minutes:
+//   soak                 → SOAK_SETUP_MINUTES (load tubs/IBCs)
+//   dehyd init (hours>0) → DEHYD_INIT_MINUTES (load trays, start dehydrator)
+//   cook                 → COOK_MINUTES (active stovetop / oven work)
+// Soaking & dehydrating run unattended after initiation, so they don't
+// re-charge the budget on subsequent days. Cook is treated as same-day
+// initiation cost — it ALSO falls on the start day of the chip in our
+// simplified model. (Real recipes spread cook across the cook calendar
+// day, which equals the start day for single-day recipes; multi-day
+// recipes overshoot the start-day estimate but the heatmap warns when
+// total exceeds 480.)
+//
+// When an intermediate has no recognised process steps, we fall back to
+// `KITCHEN_DEFAULT_MINUTES` so unknown recipes still register some load.
+
+export const SOAK_SETUP_MINUTES = 30;
+export const DEHYD_INIT_MINUTES = 15;
+export const COOK_MINUTES = 240;
+export const KITCHEN_DEFAULT_MINUTES = 240;
+
+export function kitchenTeamMinutesFor(intermediate: KitchenIntermediate): number {
+  const steps = intermediate.processSteps.map((s) => s.toLowerCase().trim());
+  let minutes = 0;
+  if (steps.some((s) => s === 'soak' || s.includes('soak'))) {
+    minutes += SOAK_SETUP_MINUTES;
+  }
+  if (intermediate.dehydHours && intermediate.dehydHours > 0) {
+    minutes += DEHYD_INIT_MINUTES;
+  }
+  if (steps.some((s) => s === 'cook' || s.includes('cook'))) {
+    minutes += COOK_MINUTES;
+  }
+  return minutes > 0 ? minutes : KITCHEN_DEFAULT_MINUTES;
+}
+
 /**
  * Subtract `days` calendar days from `iso` (YYYY-MM-DD) and return the
  * resulting ISO date. Local-time arithmetic to avoid UTC drift.

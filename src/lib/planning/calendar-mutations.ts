@@ -18,6 +18,8 @@
  * imports of localStorage outside guarded paths.
  */
 
+import type { CalendarActivity } from './calendar-projection';
+
 const STORAGE_KEY = 'byron-calendar-mutations-v1';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -35,6 +37,14 @@ export interface ActivityMutation {
   rescheduledTo?: string;
   /** If set, the activity's quantity has been overridden by the user. */
   editedQuantity?: number;
+  /**
+   * For PO chips (Phase 4m.4): user-set lead-time override. Replaces the
+   * file-default lead time and shifts both the place-by and receive-by
+   * dates accordingly. Stored on the place-by chip's stableId; the
+   * receive chip is recomputed from it client-side. Use cases: shipping
+   * delay this week, expedited shipping, vendor change.
+   */
+  editedLeadTimeDays?: number;
   /** ISO timestamp of last write — useful for "stale mutation" warnings. */
   updatedAt: string;
 }
@@ -183,6 +193,78 @@ export function editedQuantityOf(
   return map[stableId]?.editedQuantity ?? null;
 }
 
+// ─── Lead-time override (PO chips, Phase 4m.4) ──────────────
+
+/**
+ * Set a user lead-time override on a PO place-by chip's stableId.
+ * Negative or non-finite values are rejected silently. The receive chip's
+ * date is recomputed from this client-side by the PO projector.
+ */
+export function applyEditLeadTime(
+  map: MutationsMap,
+  stableId: string,
+  newLeadTimeDays: number,
+): MutationsMap {
+  if (!Number.isFinite(newLeadTimeDays) || newLeadTimeDays < 0) return map;
+  const existing = map[stableId];
+  return {
+    ...map,
+    [stableId]: {
+      ...(existing ?? { stableId, updatedAt: '' }),
+      stableId,
+      editedLeadTimeDays: Math.round(newLeadTimeDays),
+      updatedAt: new Date().toISOString(),
+    },
+  };
+}
+
+/** Clear a lead-time override (drop the field; drop the entry if empty). */
+export function applyClearLeadTime(
+  map: MutationsMap,
+  stableId: string,
+): MutationsMap {
+  const existing = map[stableId];
+  if (!existing || existing.editedLeadTimeDays === undefined) return map;
+  const { editedLeadTimeDays: _lt, ...rest } = existing;
+  const remainingFields = Object.keys(rest).filter(
+    (k) => k !== 'stableId' && k !== 'updatedAt',
+  );
+  if (remainingFields.length === 0) {
+    const out = { ...map };
+    delete out[stableId];
+    return out;
+  }
+  return {
+    ...map,
+    [stableId]: { ...rest, stableId, updatedAt: new Date().toISOString() },
+  };
+}
+
+export function editedLeadTimeDaysOf(
+  map: MutationsMap,
+  stableId: string,
+): number | null {
+  return map[stableId]?.editedLeadTimeDays ?? null;
+}
+
+/**
+ * Build the override map keyed by raw material code, suitable for the
+ * `projectPoChips` projector. Looks up the place-by chip's mutation
+ * (`po-placed|<rawCode>`) for each entry.
+ */
+export function leadTimeOverridesByCode(
+  map: MutationsMap,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [stableId, mut] of Object.entries(map)) {
+    if (!stableId.startsWith('po-placed|')) continue;
+    if (typeof mut.editedLeadTimeDays !== 'number') continue;
+    const code = stableId.slice('po-placed|'.length);
+    out[code] = mut.editedLeadTimeDays;
+  }
+  return out;
+}
+
 // ─── Bulk operations ─────────────────────────────────────────
 
 /** Drop all mutation entries whose stableIds are not in `validIds`. */
@@ -235,4 +317,83 @@ export function staleStableIds(
     if (!validIds.has(id)) out.push(id);
   }
   return out;
+}
+
+// ─── Activity projector ──────────────────────────────────────
+// Apply a MutationsMap to CalendarActivity values, producing the activities
+// the calendar should actually render and the engine should reason about.
+// Pure — no localStorage, no date side effects.
+
+/**
+ * Apply any rescheduledTo / editedQuantity entries on `mutation` to `activity`.
+ * Dismissed flag is NOT applied here (caller filters by `isDismissed`).
+ *
+ * Reschedule semantics: when `date` shifts by N days, `finishDate` shifts by
+ * the same N days for kitchen-required activities — production duration is
+ * preserved when the user simply moves the start day. `requiredByDate` is
+ * left as the original historical context.
+ *
+ * Edit-quantity semantics: `durationMinutes` scales linearly with the new
+ * quantity. `changeoverMinutes` is product+neighbour-dependent and not
+ * touched here.
+ */
+export function applyMutationToActivity(
+  activity: CalendarActivity,
+  mutation: ActivityMutation | undefined,
+): CalendarActivity {
+  if (
+    !mutation ||
+    (mutation.rescheduledTo === undefined &&
+      mutation.editedQuantity === undefined)
+  ) {
+    return activity;
+  }
+  const newQty = mutation.editedQuantity ?? activity.quantity;
+  const newDate = mutation.rescheduledTo ?? activity.date;
+  const durationScale = activity.quantity > 0 ? newQty / activity.quantity : 1;
+  const delta = newDate !== activity.date ? isoDayDelta(activity.date, newDate) : 0;
+  return {
+    ...activity,
+    quantity: newQty,
+    date: newDate,
+    durationMinutes: activity.durationMinutes * durationScale,
+    ...(activity.finishDate && delta !== 0
+      ? { finishDate: isoAddDays(activity.finishDate, delta) }
+      : {}),
+  };
+}
+
+/** Project a MutationsMap onto every activity. Convenience for engines/tests. */
+export function applyMutationsToActivities(
+  activities: ReadonlyArray<CalendarActivity>,
+  mutations: MutationsMap,
+): CalendarActivity[] {
+  return activities.map((a) => applyMutationToActivity(a, mutations[a.stableId]));
+}
+
+// ─── Local-time ISO date arithmetic (private) ───────────────
+// Kept here so the projector is self-contained. `capacity-data.ts` has a
+// `shiftDateBackwards`; we don't depend on it to avoid a layering reach.
+
+function isoFrom(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function isoTo(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function isoAddDays(iso: string, days: number): string {
+  const d = isoFrom(iso);
+  d.setDate(d.getDate() + days);
+  return isoTo(d);
+}
+
+function isoDayDelta(fromIso: string, toIso: string): number {
+  const ms = isoFrom(toIso).getTime() - isoFrom(fromIso).getTime();
+  return Math.round(ms / (1000 * 60 * 60 * 24));
 }
