@@ -12,7 +12,21 @@
  */
 
 import { join } from 'path';
-import { loadCapacityDataFromPath } from '@/lib/planning/capacity-data';
+import {
+  loadCapacityDataFromPath,
+  kitchenTeamMinutesFor,
+} from '@/lib/planning/capacity-data';
+import {
+  analyzeRawMaterials,
+  type ActivityForRawMaterials,
+  type RawMaterialShortage,
+  type PurchaseRequirement,
+} from '@/lib/engine/raw-material-demand';
+import {
+  readLeadTimes,
+  leadTimeDaysByCode as leadTimeDaysByCodeOf,
+  vendorByCode as vendorByCodeOf,
+} from '@/lib/planning/raw-material-lead-times';
 import { loadMonthlyDemand } from '@/lib/planning/demand-data-loader';
 import {
   defaultHorizon,
@@ -394,14 +408,15 @@ function buildPayload(horizonWeeks: number) {
       source: a.assemblyNumber,
     }));
 
-  // ─── Consumes map (Phase 4l.2) ────────────────────────────
-  // For each productCode that has BOM entries, list its depth-1
-  // intermediate dependencies. Client uses this with the current mutated
-  // activity dates to detect schedule conflicts (e.g. dragged a kitchen
-  // run too late, breaks 1-day buffer for downstream packaging).
+  // ─── Consumes map (Phase 4l.2 + 4m.3) ─────────────────────
+  // For each productCode with BOM entries, list its depth-1 dependencies —
+  // BOTH intermediates (handled by kitchen-required chips) AND raw materials
+  // (handled by PO chips). The client uses this with the current mutated
+  // activity dates to detect schedule conflicts: kitchen run dragged too
+  // late breaks the 1-day buffer for packaging, OR a raw material's PO
+  // arrives after its consuming kitchen/packaging activity.
   const consumesMap: Record<string, string[]> = {};
   for (const row of capacity.bom) {
-    if (!intermediateCodes.has(row.productCode)) continue;
     let arr = consumesMap[row.parentProductCode];
     if (!arr) {
       arr = [];
@@ -456,11 +471,14 @@ function buildPayload(horizonWeeks: number) {
 
   // Combine packaging activities (planner output) with kitchen-related
   // activities (live + required). Sort by date.
+  // Note: PO chips are appended to this list later (after the
+  // raw-material analyzer runs). Sort happens once at the end so PO
+  // chips slot into the correct chronological position.
   const allActivities: CalendarActivity[] = [
     ...projection.activities,
     ...kitchenActivities,
     ...kitchenRequiredActivities,
-  ].sort((a, b) => a.date.localeCompare(b.date));
+  ];
 
   // Build infeasible products list (with per-product unmet demand totals)
   // for surfacing in the UI's left rail.
@@ -502,6 +520,15 @@ function buildPayload(horizonWeeks: number) {
   const stationDailyMinutes: Record<string, number> = {};
   for (const [station, defaults] of Object.entries(capacity.stations)) {
     stationDailyMinutes[station] = defaults.hoursPerDay * 60;
+  }
+
+  // Per-recipe kitchen-team minutes (Phase 4l.8). Derived from process steps
+  // (soak setup + dehyd init + cook). Activities not in this map use the
+  // client-side default. Only intermediates the kitchen actually produces
+  // need entries — packaging codes are ignored by the resolver.
+  const kitchenMinutesByProductCode: Record<string, number> = {};
+  for (const [code, intermediate] of capacity.intermediates.entries()) {
+    kitchenMinutesByProductCode[code] = kitchenTeamMinutesFor(intermediate);
   }
 
   // Per-product station daily output (for drawer's max-batch default helper).
@@ -566,6 +593,74 @@ function buildPayload(horizonWeeks: number) {
   const kitchenActivityCount = kitchenActivities.length;
   const kitchenRequiredCount = kitchenRequiredActivities.length;
 
+  // ─── Raw-material projection (Phase 4m.1) ───────────────────
+  // Walk every packaging + kitchen-required activity to derive depth-1
+  // non-intermediate component demand, simulate SOH, and compute PO
+  // place-by dates. Live Unleashed assemblies (kitchenActivities) have
+  // already consumed their raw materials so they don't drive demand here.
+  const rawMaterialActivities: ActivityForRawMaterials[] = [
+    ...projection.activities.map((a) => ({
+      stableId: a.stableId,
+      productCode: a.productCode,
+      productName: a.productName,
+      quantity: a.quantity,
+      date: a.date,
+      kind: 'packaging' as const,
+    })),
+    ...kitchenRequiredActivities.map((a) => ({
+      stableId: a.stableId,
+      productCode: a.productCode,
+      productName: a.productName,
+      quantity: a.quantity,
+      date: a.date,
+      kind: 'kitchen-required' as const,
+    })),
+  ];
+  // Sum raw-material SOH across ALL warehouses — raw materials are stored
+  // where they're used; the eligible-warehouse filter (used for finished
+  // goods sales) doesn't apply.
+  const rawMaterialSohByCode: Record<string, number> = {};
+  if (sohCache) {
+    for (const [code, byWarehouse] of Object.entries(sohCache.byProductCode)) {
+      let total = 0;
+      for (const qty of Object.values(byWarehouse)) total += qty;
+      rawMaterialSohByCode[code] = total;
+    }
+  }
+  // Today's ISO for overdue flagging on PO requirements.
+  const todayLocal = (() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  })();
+  // Per-vendor lead times from data/raw-material-lead-times.json. Codes
+  // not in the file fall back to defaultLeadTimeDays (14 days). The user
+  // can override per-PO in the drawer for transient shipping delays —
+  // those overrides are localStorage-backed and applied client-side.
+  const leadTimesFile = readLeadTimes();
+  const leadTimeDaysByCode = leadTimeDaysByCodeOf(leadTimesFile);
+  const vendorByCode = vendorByCodeOf(leadTimesFile);
+  const rawMaterialAnalysis = analyzeRawMaterials({
+    activities: rawMaterialActivities,
+    bom: capacity.bom,
+    intermediateCodes,
+    initialSohByCode: rawMaterialSohByCode,
+    defaultLeadTimeDays: 14,
+    leadTimeDaysByCode,
+    today: todayLocal,
+  });
+  const rawMaterialShortages: RawMaterialShortage[] = rawMaterialAnalysis.shortages;
+  const purchaseRequirements: PurchaseRequirement[] = rawMaterialAnalysis.requirements;
+
+  // PO chips themselves are projected on the CLIENT (Phase 4m.4) so that
+  // user-set transient lead-time overrides (shipping-delay edits in the
+  // drawer) flow through naturally via the mutations layer. The server
+  // ships the requirements + today + vendor map; the client projects the
+  // chips and merges them into the activities list.
+  allActivities.sort((a, b) => a.date.localeCompare(b.date));
+
   return {
     horizon,
     activities: allActivities,
@@ -575,6 +670,7 @@ function buildPayload(horizonWeeks: number) {
     kitchenRequiredCount,
     consumesMap,
     stationDailyMinutes,
+    kitchenMinutesByProductCode,
     infeasibleProducts,
     routingDecisions,
     productOverrides,
@@ -588,6 +684,10 @@ function buildPayload(horizonWeeks: number) {
     committedByProduct,
     salesOrdersFetchedAt,
     totalSalesOrderLines,
+    rawMaterialShortages,
+    purchaseRequirements,
+    vendorByCode,
+    todayLocal,
     globalDefaults: {
       shelfLifeDays: DEFAULT_SHELF_LIFE_DAYS,
     },

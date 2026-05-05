@@ -17,7 +17,16 @@
  * them entirely.
  */
 
-import { Fragment, useEffect, useMemo, useState, useTransition } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import type {
   CalendarActivity,
@@ -33,16 +42,40 @@ import {
   applyEditQuantity,
   applyClearEdit,
   editedQuantityOf,
+  applyEditLeadTime,
+  applyClearLeadTime,
+  editedLeadTimeDaysOf,
+  leadTimeOverridesByCode,
   clearStale,
   staleStableIds,
   readMutationsFromStorage,
   writeMutationsToStorage,
+  applyMutationsToActivities,
   type MutationsMap,
 } from '@/lib/planning/calendar-mutations';
+import { projectPoChips } from '@/lib/planning/po-projection';
+import {
+  buildPoCsv,
+  buildPackagingCsv,
+  buildKitchenCsv,
+} from '@/lib/planning/report-csv';
+import {
+  buildPoHtml,
+  buildPackagingHtml,
+  buildKitchenHtml,
+} from '@/lib/planning/report-html';
 import {
   detectScheduleConflicts,
   type ScheduleConflict,
 } from '@/lib/engine/schedule-conflicts';
+import type {
+  RawMaterialShortage,
+  PurchaseRequirement,
+} from '@/lib/engine/raw-material-demand';
+import {
+  resolveScheduleConflicts,
+  type ResolveStrategy,
+} from '@/lib/engine/resolve-conflicts';
 import type { PlanningHorizon, Station } from '@/lib/planning/engine-io';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -80,6 +113,12 @@ interface CalendarAppProps {
   kitchenRequiredCount: number;
   /** Per-station daily capacity in minutes. Used for client-side load recompute. */
   stationDailyMinutes: Record<string, number>;
+  /**
+   * Per-recipe kitchen-team minutes (Phase 4l.8). Used by the kitchen
+   * heatmap and by the resolver for capacity walks. Activities whose
+   * productCode isn't in the map fall back to KITCHEN_DEFAULT_MINUTES.
+   */
+  kitchenMinutesByProductCode: Record<string, number>;
   infeasibleProducts: InfeasibleProduct[];
   /** productCode → cost-router rationale string (why this station was chosen). */
   routingDecisions: Record<string, string>;
@@ -112,6 +151,14 @@ interface CalendarAppProps {
   committedByProduct: Record<string, number>;
   salesOrdersFetchedAt: string | null;
   totalSalesOrderLines: number;
+  /** Raw-material projection — first-shortage rows for the risks panel. */
+  rawMaterialShortages: RawMaterialShortage[];
+  /** Derived PO place-by requirements (Phase 4m.1). */
+  purchaseRequirements: PurchaseRequirement[];
+  /** Per-raw-material vendor name from data/raw-material-lead-times.json. */
+  vendorByCode: Record<string, string>;
+  /** Today's date as YYYY-MM-DD local — used by the client-side PO projector. */
+  todayLocal: string;
   /** Global defaults the user can override per product. */
   globalDefaults: { shelfLifeDays: number };
   /** Horizon-week options surfaced in the picker (e.g. 12 / 16 / 20 / 26). */
@@ -124,6 +171,23 @@ interface CalendarAppProps {
 // ─── Constants ───────────────────────────────────────────────
 
 const STATIONS: Station[] = ['hand-packing', 'elephant', 'dust', 'bottlo'];
+
+/**
+ * Kitchen-team capacity model (Phase 4l.7 / 4l.8).
+ * Used both by the resolver (push/pull past kitchen-overloaded days) and by
+ * the calendar heatmap so the user sees the same load picture the resolver
+ * does.
+ *
+ * 8-hour kitchen day → 480 minutes total.
+ *
+ * Per-recipe minutes come from the spreadsheet via `kitchenTeamMinutesFor`,
+ * passed in as `kitchenMinutesByProductCode`. Activities whose productCode
+ * isn't in that map (unusual but possible — e.g. a kitchen-required chip
+ * for an intermediate that isn't in the kitchen-processes sheet) fall back
+ * to `KITCHEN_DEFAULT_CHIP_MINUTES`.
+ */
+const KITCHEN_DAILY_MINUTES = 480;
+const KITCHEN_DEFAULT_CHIP_MINUTES = 240;
 
 interface ChipColor { bg: string; border: string; text: string; dot: string }
 
@@ -161,10 +225,38 @@ const KITCHEN_REQUIRED_COLOR: ChipColor = {
   dot: '#f97316',
 };
 
+/** PO place-by chip — yellow/amber to read as "action needed". */
+const PO_PLACED_COLOR: ChipColor = {
+  bg: '#fef3c7',
+  border: '#d97706',
+  text: '#78350f',
+  dot: '#d97706',
+};
+/** PO arrive-by chip — soft green to read as "delivery, positive". */
+const PO_RECEIVING_COLOR: ChipColor = {
+  bg: '#d1fae5',
+  border: '#059669',
+  text: '#064e3b',
+  dot: '#059669',
+};
+/** Override colour when a PO is overdue (placeBy < today). */
+const PO_OVERDUE_COLOR: ChipColor = {
+  bg: '#fee2e2',
+  border: '#dc2626',
+  text: '#7f1d1d',
+  dot: '#dc2626',
+};
+
 /** Pick the chip's colour scheme based on kind + station. */
 function colorOf(activity: CalendarActivity): ChipColor {
   if (activity.kind === 'kitchen') return KITCHEN_COLOR;
   if (activity.kind === 'kitchen-required') return KITCHEN_REQUIRED_COLOR;
+  if (activity.kind === 'po-placed') {
+    return activity.poInfo?.overdue ? PO_OVERDUE_COLOR : PO_PLACED_COLOR;
+  }
+  if (activity.kind === 'po-receiving') {
+    return activity.poInfo?.overdue ? PO_OVERDUE_COLOR : PO_RECEIVING_COLOR;
+  }
   return activity.station ? STATION_COLORS[activity.station] : KITCHEN_COLOR;
 }
 
@@ -184,6 +276,13 @@ function toISO(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+/** Add `days` to an ISO date in local time. Used by the drawer for PO arrive-by computation. */
+function addDaysIso(iso: string, days: number): string {
+  const d = fromISO(iso);
+  d.setDate(d.getDate() + days);
+  return toISO(d);
 }
 
 /** Group activities by date for fast per-day lookup. */
@@ -222,9 +321,71 @@ function fmtMonthYear(iso: string): string {
   return d.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
 }
 
+/**
+ * Display format for any user-visible date: dd/mm/yyyy.
+ * Internal storage stays in ISO YYYY-MM-DD; this is the single conversion
+ * point so every date label in the UI matches.
+ */
 function fmtDate(iso: string): string {
-  const d = fromISO(iso);
-  return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/** Format an ISO timestamp (e.g. fs mtime) as dd/mm/yyyy in local time. */
+function fmtDateFromTimestamp(iso: string): string {
+  const dt = new Date(iso);
+  if (isNaN(dt.getTime())) return '';
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const d = String(dt.getDate()).padStart(2, '0');
+  return `${d}/${m}/${y}`;
+}
+
+/** Trigger a browser download of `csv` as a file with `filename`. */
+function downloadCsv(csv: string, filename: string): void {
+  if (typeof window === 'undefined') return;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Allow the click handler to flush before revoking.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+/**
+ * Open a printable report in a new window. The HTML carries its own
+ * `window.print()` call, so the print dialog opens automatically once the
+ * window finishes loading. Falls back to alerting when popups are blocked.
+ */
+function openPrintWindow(html: string): void {
+  if (typeof window === 'undefined') return;
+  const w = window.open('', '_blank');
+  if (!w) {
+    window.alert(
+      'Could not open the print window — your browser may have blocked the popup. Allow popups for this site and try again.',
+    );
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+/** Format an ISO timestamp as dd/mm/yyyy HH:mm in local time. */
+function fmtDateTimeFromTimestamp(iso: string): string {
+  const dt = new Date(iso);
+  if (isNaN(dt.getTime())) return '';
+  const y = dt.getFullYear();
+  const mo = String(dt.getMonth() + 1).padStart(2, '0');
+  const d = String(dt.getDate()).padStart(2, '0');
+  const h = String(dt.getHours()).padStart(2, '0');
+  const mi = String(dt.getMinutes()).padStart(2, '0');
+  return `${d}/${mo}/${y} ${h}:${mi}`;
 }
 
 // ─── Component ───────────────────────────────────────────────
@@ -238,6 +399,7 @@ export function CalendarApp(props: CalendarAppProps) {
     kitchenActivityCount,
     kitchenRequiredCount,
     stationDailyMinutes,
+    kitchenMinutesByProductCode,
     infeasibleProducts,
     routingDecisions,
     productOverrides,
@@ -251,6 +413,10 @@ export function CalendarApp(props: CalendarAppProps) {
     committedByProduct,
     salesOrdersFetchedAt,
     totalSalesOrderLines,
+    rawMaterialShortages,
+    purchaseRequirements,
+    vendorByCode,
+    todayLocal,
     globalDefaults,
     horizonOptions,
     consumesMap,
@@ -345,6 +511,9 @@ export function CalendarApp(props: CalendarAppProps) {
   // (planner-derived gaps). Default both on; kitchen master gates the lot.
   const [showKitchenScheduled, setShowKitchenScheduled] = useState(true);
   const [showKitchenRequired, setShowKitchenRequired] = useState(true);
+  // Purchasing chips (Phase 4m.2): place-by and arrive-by chips for raw
+  // materials projected to run short. Default on so the user sees them.
+  const [showPO, setShowPO] = useState(true);
 
   // Selected activity for the drawer.
   const [selected, setSelected] = useState<CalendarActivity | null>(null);
@@ -358,6 +527,11 @@ export function CalendarApp(props: CalendarAppProps) {
     setMutations(readMutationsFromStorage());
   }, []);
 
+  // Unplaceable chips from the most-recent Resolve-all run. Cleared by any
+  // subsequent mutation (the situation has changed; the user should re-run
+  // resolve to get a fresh verdict). Phase 4l.4.
+  const [unplaceableIds, setUnplaceableIds] = useState<string[]>([]);
+
   // Mutation actions — every one writes through to localStorage immediately.
   function persist(next: MutationsMap) {
     writeMutationsToStorage(next);
@@ -365,59 +539,120 @@ export function CalendarApp(props: CalendarAppProps) {
   }
   function dismiss(stableId: string) {
     setMutations((curr) => persist(applyDismiss(curr, stableId)));
+    setUnplaceableIds([]);
   }
   function undismiss(stableId: string) {
     setMutations((curr) => persist(applyUndismiss(curr, stableId)));
+    setUnplaceableIds([]);
   }
   function reschedule(stableId: string, newDate: string) {
     setMutations((curr) => persist(applyReschedule(curr, stableId, newDate)));
+    setUnplaceableIds([]);
   }
   function clearReschedule(stableId: string) {
     setMutations((curr) => persist(applyClearReschedule(curr, stableId)));
+    setUnplaceableIds([]);
   }
   function editQuantity(stableId: string, qty: number) {
     setMutations((curr) => persist(applyEditQuantity(curr, stableId, qty)));
+    setUnplaceableIds([]);
   }
   function clearEdit(stableId: string) {
     setMutations((curr) => persist(applyClearEdit(curr, stableId)));
+    setUnplaceableIds([]);
+  }
+  /** Edit lead time on a PO. Always passed the place-by chip's stableId. */
+  function editLeadTime(placeByStableId: string, days: number) {
+    setMutations((curr) => persist(applyEditLeadTime(curr, placeByStableId, days)));
+    setUnplaceableIds([]);
+  }
+  function clearLeadTime(placeByStableId: string) {
+    setMutations((curr) => persist(applyClearLeadTime(curr, placeByStableId)));
+    setUnplaceableIds([]);
   }
   function clearStaleMutations() {
     setMutations((curr) => persist(clearStale(curr, validStableIds)));
+    setUnplaceableIds([]);
+  }
+
+  /**
+   * Auto-cascade conflict resolution (Phase 4l.3 + 4l.4 + 4l.6).
+   *
+   * Delegates to the pure `resolveScheduleConflicts` engine module. Wired
+   * to two button pairs (banner + drawer), each offering both strategies:
+   *
+   *   - 'push': move consumers later (capacity-aware via stationDailyMinutes).
+   *   - 'pull': move blocking suppliers earlier (floor at horizon.startWeek
+   *     so we don't pull anything into the past).
+   *
+   * Both call the same function with a different `strategy` flag.
+   */
+  function resolveAllConflicts(strategy: ResolveStrategy) {
+    const result = resolveScheduleConflicts({
+      activities,
+      mutations,
+      consumesMap,
+      strategy,
+      stationDailyMinutes,
+      // Kitchen team's 8-hour day, shared with the heatmap below so the
+      // resolver and the user see the same load picture.
+      kitchenDailyMinutes: KITCHEN_DAILY_MINUTES,
+      kitchenStartMinutesByProductCode: kitchenMinutesByProductCode,
+      kitchenStartMinutesDefault: KITCHEN_DEFAULT_CHIP_MINUTES,
+      // Pull-supplier floor: never pull a chip earlier than the planning
+      // horizon's first day. (For 'push' this argument is ignored.)
+      earliestDate: horizon.startWeek,
+    });
+    setMutations(persist(result.mutations));
+    setUnplaceableIds(result.unplaceableStableIds);
   }
 
   // Set of stable IDs in the current engine output — used to detect stale
   // mutation entries (entries whose activity no longer exists in the plan).
-  const validStableIds = useMemo(
-    () => new Set(activities.map((a) => a.stableId)),
-    [activities],
-  );
+  // Includes PO chip stableIds so lead-time overrides aren't flagged stale.
+  const validStableIds = useMemo(() => {
+    const out = new Set(activities.map((a) => a.stableId));
+    for (const r of purchaseRequirements) {
+      out.add(`po-placed|${r.rawMaterialCode}`);
+      out.add(`po-receiving|${r.rawMaterialCode}`);
+    }
+    return out;
+  }, [activities, purchaseRequirements]);
 
   const staleIds = useMemo(
     () => staleStableIds(mutations, validStableIds),
     [mutations, validStableIds],
   );
 
-  // Apply mutations to each activity: override date if rescheduled, override
-  // quantity if edited (with proportional duration adjustment). Dismiss is
-  // applied later by the visibility filter.
-  const mutatedActivities = useMemo(() => {
-    return activities.map((a) => {
-      const mut = mutations[a.stableId];
-      if (!mut || (mut.rescheduledTo === undefined && mut.editedQuantity === undefined)) {
-        return a;
-      }
-      const newQty = mut.editedQuantity ?? a.quantity;
-      const newDate = mut.rescheduledTo ?? a.date;
-      const durationScale = a.quantity > 0 ? newQty / a.quantity : 1;
-      return {
-        ...a,
-        quantity: newQty,
-        date: newDate,
-        durationMinutes: a.durationMinutes * durationScale,
-        // changeoverMinutes is product+neighbour-dependent, not quantity-dependent
-      };
+  // PO chips are projected client-side (Phase 4m.4) so user-set lead-time
+  // overrides flow through naturally via the mutations map. Built before
+  // applying mutations so subsequent steps can reschedule/dismiss them.
+  const poChips = useMemo<CalendarActivity[]>(() => {
+    return projectPoChips({
+      purchaseRequirements,
+      today: todayLocal,
+      leadTimeOverrideDaysByCode: leadTimeOverridesByCode(mutations),
+      vendorByCode,
     });
-  }, [activities, mutations]);
+  }, [purchaseRequirements, todayLocal, mutations, vendorByCode]);
+
+  // Combined activities = server-side (packaging + kitchen + kitchen-required)
+  // + client-projected PO chips.
+  const activitiesWithPo = useMemo<CalendarActivity[]>(() => {
+    return [...activities, ...poChips].sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+  }, [activities, poChips]);
+
+  // Apply mutations to each activity: override date if rescheduled, override
+  // quantity if edited (with proportional duration + finishDate adjustment).
+  // Dismiss is applied later by the visibility filter.
+  //
+  // The projection logic itself lives in `calendar-mutations` so the engine
+  // resolver can use the same code path; here we just memoise the result.
+  const mutatedActivities = useMemo(() => {
+    return applyMutationsToActivities(activitiesWithPo, mutations);
+  }, [activitiesWithPo, mutations]);
 
   // Number of dismissed activities present in the current plan.
   const dismissedCount = useMemo(
@@ -454,6 +689,87 @@ export function CalendarApp(props: CalendarAppProps) {
     return out;
   }, [conflicts]);
 
+  // ─── Hover-arrow relationship map (Phase 4l.5) ──────────────
+  // For every activity, what other activities supply or consume it. Used by
+  // the calendar to draw dependency arrows when the user hovers a chip.
+  //
+  // Two filters apply, both of which match the conflict-detector semantics
+  // so the arrows match what the planner considers a "real" relationship:
+  //   1. Dismissed chips don't appear (dropped on either side).
+  //   2. **Temporal feasibility**: a supplier S is only a real supplier of
+  //      consumer C when S.finishDate < C.date (the 1-day buffer rule).
+  //      Without this filter we'd draw arrows from kitchen runs to packaging
+  //      chips that are actually too early to use them — e.g. a 5/15 IMK run
+  //      "supplying" a 5/8 packaging chip purely because they share the
+  //      product-code relationship in the BOM.
+  //
+  // The filter is applied on each (consumer, supplier) PAIR, not per chip,
+  // so the same supplier may appear for some consumers and not others.
+  type RelKind = 'supplier' | 'consumer';
+  interface RelEntry { stableId: string; kind: RelKind; }
+  const relatedByStableId = useMemo<Map<string, RelEntry[]>>(() => {
+    // Group non-dismissed activities by productCode for O(1) supplier lookup.
+    const byProductCode = new Map<string, CalendarActivity[]>();
+    for (const a of mutatedActivities) {
+      if (isDismissed(mutations, a.stableId)) continue;
+      let arr = byProductCode.get(a.productCode);
+      if (!arr) { arr = []; byProductCode.set(a.productCode, arr); }
+      arr.push(a);
+    }
+    // Build the inverse consumesMap: ingredient → list of parent codes that
+    // consume it. Lets us find consumers without scanning every chip.
+    const consumedBy = new Map<string, string[]>();
+    for (const [parent, ingredients] of Object.entries(consumesMap)) {
+      for (const ing of ingredients) {
+        let arr = consumedBy.get(ing);
+        if (!arr) { arr = []; consumedBy.set(ing, arr); }
+        arr.push(parent);
+      }
+    }
+    /** Mirrors `finishDateOf` in schedule-conflicts.ts. */
+    const finishOf = (a: CalendarActivity) => a.finishDate ?? a.date;
+    const out = new Map<string, RelEntry[]>();
+    for (const a of mutatedActivities) {
+      if (isDismissed(mutations, a.stableId)) continue;
+      const rels: RelEntry[] = [];
+      // Suppliers — chips whose productCode is one of `a`'s ingredients
+      // AND whose finishDate strictly precedes `a`'s date (1-day buffer).
+      for (const ing of consumesMap[a.productCode] ?? []) {
+        for (const s of byProductCode.get(ing) ?? []) {
+          if (s.stableId === a.stableId) continue;
+          if (finishOf(s) < a.date) {
+            rels.push({ stableId: s.stableId, kind: 'supplier' });
+          }
+        }
+      }
+      // Consumers — chips whose product consumes `a.productCode` AND whose
+      // date is strictly AFTER `a`'s finish.
+      const aFinish = finishOf(a);
+      for (const parent of consumedBy.get(a.productCode) ?? []) {
+        for (const c of byProductCode.get(parent) ?? []) {
+          if (c.stableId === a.stableId) continue;
+          if (aFinish < c.date) {
+            rels.push({ stableId: c.stableId, kind: 'consumer' });
+          }
+        }
+      }
+      if (rels.length > 0) out.set(a.stableId, rels);
+    }
+    return out;
+  }, [mutatedActivities, mutations, consumesMap]);
+
+  // Currently-hovered chip — drives arrow drawing. null = no arrows.
+  const [hoveredStableId, setHoveredStableId] = useState<string | null>(null);
+  const onChipHover = useCallback((id: string | null) => {
+    setHoveredStableId(id);
+  }, []);
+
+  // Fast lookup for chips that the most-recent Resolve-all left unplaced.
+  const unplaceableSet = useMemo(
+    () => new Set(unplaceableIds),
+    [unplaceableIds],
+  );
+
   // Filter mutated activities through layer toggles + dismissal visibility.
   const visibleActivities = useMemo(() => {
     return mutatedActivities.filter((a) => {
@@ -461,6 +777,8 @@ export function CalendarApp(props: CalendarAppProps) {
       if (a.kind === 'packaging' && !showPackaging) return false;
       if (a.kind === 'kitchen' && (!showKitchen || !showKitchenScheduled)) return false;
       if (a.kind === 'kitchen-required' && (!showKitchen || !showKitchenRequired)) return false;
+      // PO toggle: hides BOTH placed and receiving chips together.
+      if ((a.kind === 'po-placed' || a.kind === 'po-receiving') && !showPO) return false;
       // Per-station toggle within packaging
       if (a.kind === 'packaging' && a.station && !visibleStations.has(a.station)) return false;
       if (!showDismissed && isDismissed(mutations, a.stableId)) return false;
@@ -473,6 +791,7 @@ export function CalendarApp(props: CalendarAppProps) {
     showKitchen,
     showKitchenScheduled,
     showKitchenRequired,
+    showPO,
     mutations,
     showDismissed,
   ]);
@@ -519,6 +838,31 @@ export function CalendarApp(props: CalendarAppProps) {
     return out;
   }, [mutatedActivities, visibleStations, showPackaging, mutations, stationDailyMinutes]);
 
+  // Per-day kitchen-team load (Phase 4l.7 + 4l.8 per-recipe). Mirrors the
+  // kitchen capacity model the resolver uses: each kitchen-required chip
+  // costs `kitchenMinutesByProductCode[code] ?? KITCHEN_DEFAULT_CHIP_MINUTES`
+  // on its start day. Respects the kitchen visibility toggles so hiding
+  // kitchen-required chips clears their load contribution.
+  const kitchenLoadByDate = useMemo(() => {
+    const out = new Map<string, { usedMinutes: number; capacityMinutes: number; utilisation: number }>();
+    if (!showKitchen || !showKitchenRequired) return out;
+    const used = new Map<string, number>();
+    for (const a of mutatedActivities) {
+      if (a.kind !== 'kitchen-required') continue;
+      if (isDismissed(mutations, a.stableId)) continue;
+      const cost = kitchenMinutesByProductCode[a.productCode] ?? KITCHEN_DEFAULT_CHIP_MINUTES;
+      used.set(a.date, (used.get(a.date) ?? 0) + cost);
+    }
+    for (const [date, mins] of used.entries()) {
+      out.set(date, {
+        usedMinutes: mins,
+        capacityMinutes: KITCHEN_DAILY_MINUTES,
+        utilisation: KITCHEN_DAILY_MINUTES > 0 ? mins / KITCHEN_DAILY_MINUTES : 0,
+      });
+    }
+    return out;
+  }, [mutatedActivities, mutations, showKitchen, showKitchenRequired, kitchenMinutesByProductCode]);
+
   // Per-station counts (for the chip labels in the rail) — count BEFORE
   // filtering so the user can see what they'd un-hide. Kitchen activities
   // (station=null) don't contribute to packaging-station counts.
@@ -545,20 +889,28 @@ export function CalendarApp(props: CalendarAppProps) {
   // capacity heatmap panel below the calendar. For each (week, station)
   // we surface the PEAK day utilisation in that week (overruns are what
   // matter most operationally); the tooltip shows the weekly total minutes.
+  // The kitchen row is computed alongside using the same constants the
+  // resolver uses (one source of truth for kitchen load).
   const heatmapByWeek = useMemo(() => {
     type Cell = { peakUtilisation: number; totalMinutes: number };
     const usedByDateStation = new Map<string, Map<Station, number>>();
+    const usedByDateKitchen = new Map<string, number>();
     for (const a of mutatedActivities) {
       if (isDismissed(mutations, a.stableId)) continue;
-      // Heatmap is a packaging-station concept; kitchen activities have
-      // station=null and don't contribute.
-      if (a.kind !== 'packaging' || !a.station) continue;
-      let stMap = usedByDateStation.get(a.date);
-      if (!stMap) {
-        stMap = new Map();
-        usedByDateStation.set(a.date, stMap);
+      if (a.kind === 'packaging' && a.station) {
+        let stMap = usedByDateStation.get(a.date);
+        if (!stMap) {
+          stMap = new Map();
+          usedByDateStation.set(a.date, stMap);
+        }
+        stMap.set(a.station, (stMap.get(a.station) ?? 0) + a.durationMinutes + a.changeoverMinutes);
+      } else if (a.kind === 'kitchen-required') {
+        const cost = kitchenMinutesByProductCode[a.productCode] ?? KITCHEN_DEFAULT_CHIP_MINUTES;
+        usedByDateKitchen.set(
+          a.date,
+          (usedByDateKitchen.get(a.date) ?? 0) + cost,
+        );
       }
-      stMap.set(a.station, (stMap.get(a.station) ?? 0) + a.durationMinutes + a.changeoverMinutes);
     }
     const weekStarts: string[] = [];
     {
@@ -570,6 +922,7 @@ export function CalendarApp(props: CalendarAppProps) {
       }
     }
     const out = new Map<string, Map<Station, Cell>>();
+    const kitchenByWeek = new Map<string, Cell>();
     for (const ws of weekStarts) {
       const stationMap = new Map<Station, Cell>();
       const days: string[] = [];
@@ -591,10 +944,19 @@ export function CalendarApp(props: CalendarAppProps) {
         }
         stationMap.set(station, { peakUtilisation: peakUtil, totalMinutes: totalMin });
       }
-      out.set(ws, stationMap);
+      // Kitchen-team row: peak day utilisation across the working week.
+      let kPeak = 0;
+      let kTotal = 0;
+      for (const d of days) {
+        const used = usedByDateKitchen.get(d) ?? 0;
+        kTotal += used;
+        const util = KITCHEN_DAILY_MINUTES > 0 ? used / KITCHEN_DAILY_MINUTES : 0;
+        if (util > kPeak) kPeak = util;
+      }
+      kitchenByWeek.set(ws, { peakUtilisation: kPeak, totalMinutes: kTotal });
     }
-    return { weekStarts, byWeek: out };
-  }, [mutatedActivities, mutations, horizon, stationDailyMinutes]);
+    return { weekStarts, byWeek: out, kitchenByWeek };
+  }, [mutatedActivities, mutations, horizon, stationDailyMinutes, kitchenMinutesByProductCode]);
 
   // Group dates into months for section headers.
   const monthGroups = useMemo(() => {
@@ -837,6 +1199,44 @@ export function CalendarApp(props: CalendarAppProps) {
               </span>
             </label>
           </div>
+          {/* Purchasing toggle (Phase 4m.2). Single master switch — both
+              place-by and arrive-by chips toggle together. The count is
+              the requirement count (one PO per material). */}
+          {purchaseRequirements.length > 0 && (
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 0',
+                marginTop: 4,
+                fontSize: 13,
+                cursor: 'pointer',
+                opacity: showPO ? 1 : 0.4,
+                userSelect: 'none',
+                fontWeight: 500,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={showPO}
+                onChange={() => setShowPO((v) => !v)}
+              />
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: PO_PLACED_COLOR.dot,
+                  display: 'inline-block',
+                }}
+              />
+              <span style={{ flex: 1 }}>Purchasing</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                {purchaseRequirements.length}
+              </span>
+            </label>
+          )}
           {dismissedCount > 0 && (
             <label
               style={{
@@ -917,16 +1317,114 @@ export function CalendarApp(props: CalendarAppProps) {
           </Section>
         )}
 
+        <Section title="Reports">
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.4 }}>
+            Each report reflects the current plan with your edits applied.
+            Print opens a formatted view; CSV opens in Excel.
+          </div>
+          {/* Build the driver lookup once so both PO buttons share it. */}
+          {(() => {
+            const driverLookup = new Map(
+              activitiesWithPo.map((a) => [
+                a.stableId,
+                { productCode: a.productCode, productName: a.productName, date: a.date },
+              ]),
+            );
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* PO row */}
+                <ReportRow
+                  label={`Purchase orders (${purchaseRequirements.length})`}
+                  enabled={purchaseRequirements.length > 0}
+                  onPrint={() =>
+                    openPrintWindow(
+                      buildPoHtml({
+                        purchaseRequirements,
+                        vendorByCode,
+                        mutations,
+                        today: todayLocal,
+                        driverLookup,
+                      }),
+                    )
+                  }
+                  onCsv={() =>
+                    downloadCsv(
+                      buildPoCsv({
+                        purchaseRequirements,
+                        vendorByCode,
+                        mutations,
+                        today: todayLocal,
+                        driverLookup,
+                      }),
+                      `byron-po-plan-${todayLocal}.csv`,
+                    )
+                  }
+                />
+                <ReportRow
+                  label="Packaging schedule"
+                  enabled
+                  onPrint={() =>
+                    openPrintWindow(
+                      buildPackagingHtml({
+                        activities: mutatedActivities,
+                        mutations,
+                        stationDailyMinutes,
+                        today: todayLocal,
+                      }),
+                    )
+                  }
+                  onCsv={() =>
+                    downloadCsv(
+                      buildPackagingCsv({
+                        activities: mutatedActivities,
+                        mutations,
+                        stationDailyMinutes,
+                      }),
+                      `byron-packaging-plan-${todayLocal}.csv`,
+                    )
+                  }
+                />
+                <ReportRow
+                  label={`Kitchen runs (${kitchenRequiredCount})`}
+                  enabled={kitchenRequiredCount > 0}
+                  onPrint={() =>
+                    openPrintWindow(
+                      buildKitchenHtml({
+                        activities: mutatedActivities,
+                        mutations,
+                        kitchenMinutesByProductCode,
+                        kitchenDefaultMinutes: KITCHEN_DEFAULT_CHIP_MINUTES,
+                        today: todayLocal,
+                      }),
+                    )
+                  }
+                  onCsv={() =>
+                    downloadCsv(
+                      buildKitchenCsv({
+                        activities: mutatedActivities,
+                        mutations,
+                        kitchenMinutesByProductCode,
+                        kitchenDefaultMinutes: KITCHEN_DEFAULT_CHIP_MINUTES,
+                      }),
+                      `byron-kitchen-plan-${todayLocal}.csv`,
+                    )
+                  }
+                />
+              </div>
+            );
+          })()}
+        </Section>
+
         <Section title="Data">
           <KPIRow
             label="Demand source"
-            value={summary.demandSourceMtime ? new Date(summary.demandSourceMtime).toLocaleDateString('en-AU') : '—'}
+            value={summary.demandSourceMtime ? fmtDateFromTimestamp(summary.demandSourceMtime) : '—'}
           />
           <KPIRow
             label="SOH refreshed"
             value={
               sohFetchedAt
-                ? new Date(sohFetchedAt).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })
+                ? fmtDateTimeFromTimestamp(sohFetchedAt)
                 : 'never'
             }
             tone={sohFetchedAt ? undefined : 'amber'}
@@ -935,7 +1433,7 @@ export function CalendarApp(props: CalendarAppProps) {
             label="Sales orders"
             value={
               salesOrdersFetchedAt
-                ? `${totalSalesOrderLines} lines · ${new Date(salesOrdersFetchedAt).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })}`
+                ? `${totalSalesOrderLines} lines · ${fmtDateTimeFromTimestamp(salesOrdersFetchedAt)}`
                 : 'never'
             }
             tone={salesOrdersFetchedAt ? undefined : 'amber'}
@@ -944,7 +1442,7 @@ export function CalendarApp(props: CalendarAppProps) {
             label="Kitchen assemblies"
             value={
               assembliesFetchedAt
-                ? `${kitchenActivityCount} runs · ${new Date(assembliesFetchedAt).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })}`
+                ? `${kitchenActivityCount} runs · ${fmtDateTimeFromTimestamp(assembliesFetchedAt)}`
                 : 'never'
             }
             tone={assembliesFetchedAt ? undefined : 'amber'}
@@ -1156,6 +1654,113 @@ export function CalendarApp(props: CalendarAppProps) {
               Drag the affected chips earlier, or move the upstream chip to finish sooner.
               Click a chip with a red border for details.
             </span>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => resolveAllConflicts('auto')}
+                title="Try to PULL each blocking kitchen run earlier; for any conflict that can't be pulled (floored at the planning-horizon start, or kitchen capacity full), PUSH the consumer later instead. The natural 'just fix it' option."
+                style={{
+                  padding: '5px 12px',
+                  fontSize: 11,
+                  background: '#dc2626',
+                  color: '#fff',
+                  border: '0.5px solid #b91c1c',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Resolve all (auto)
+              </button>
+              <button
+                type="button"
+                onClick={() => resolveAllConflicts('pull')}
+                title="PULL every blocking ingredient run earlier so it finishes in time. Floored at the planning-horizon start and respects kitchen-team capacity (8 hrs/day); if floored, the chip is reported as unplaceable."
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 10,
+                  background: '#fee2e2',
+                  color: '#991b1b',
+                  border: '0.5px solid #fecaca',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                ← Pull only
+              </button>
+              <button
+                type="button"
+                onClick={() => resolveAllConflicts('push')}
+                title="PUSH every conflicted activity later to its earliest feasible date. Respects per-station and kitchen-team capacity."
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 10,
+                  background: '#fee2e2',
+                  color: '#991b1b',
+                  border: '0.5px solid #fecaca',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Push only →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {unplaceableIds.length > 0 && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '10px 12px',
+              background: '#fffbeb',
+              border: '0.5px solid #fcd34d',
+              borderRadius: 4,
+              fontSize: 12,
+              color: '#78350f',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <span style={{ flex: 1 }}>
+              ⚠ {unplaceableIds.length} chip{unplaceableIds.length === 1 ? '' : 's'} couldn't
+              be auto-placed — no working day with capacity within the search horizon. Try
+              moving them manually, freeing capacity on a downstream day, or dismissing
+              the activity.
+              {' '}
+              <span style={{ color: '#92400e' }}>
+                ({unplaceableIds.slice(0, 3).map((id) => id.split('|')[0]).join(', ')}
+                {unplaceableIds.length > 3 ? `, +${unplaceableIds.length - 3} more` : ''})
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setUnplaceableIds([])}
+              title="Clear this notice (the chips remain unmoved)."
+              style={{
+                padding: '4px 10px',
+                fontSize: 11,
+                background: '#fef3c7',
+                color: '#78350f',
+                border: '0.5px solid #fcd34d',
+                borderRadius: 3,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
@@ -1206,10 +1811,15 @@ export function CalendarApp(props: CalendarAppProps) {
             dates={group.dates}
             activitiesByDate={activitiesByDate}
             peakLoadByDate={peakLoadByDate}
+            kitchenLoadByDate={kitchenLoadByDate}
             onSelect={setSelected}
             selectedId={selected?.id ?? null}
             mutations={mutations}
             conflictsByConsumer={conflictsByConsumer}
+            unplaceableSet={unplaceableSet}
+            hoveredStableId={hoveredStableId}
+            onChipHover={onChipHover}
+            relatedByStableId={relatedByStableId}
             onDropOnDate={(stableId, date) => {
               // No-op when dropped on the same day the activity is already on.
               const found = mutatedActivities.find((a) => a.stableId === stableId);
@@ -1246,6 +1856,16 @@ export function CalendarApp(props: CalendarAppProps) {
           <CapacityHeatmap data={heatmapByWeek} />
           <StockoutPanel infeasibleProducts={infeasibleProducts} />
         </div>
+
+        {/* ─── Raw-material risks (Phase 4m.1) ────────────── */}
+        {(rawMaterialShortages.length > 0 || purchaseRequirements.length > 0) && (
+          <div style={{ marginTop: 16 }}>
+            <RawMaterialRiskPanel
+              shortages={rawMaterialShortages}
+              requirements={purchaseRequirements}
+            />
+          </div>
+        )}
       </main>
 
       {/* ─── Right drawer ──────────────────────────────── */}
@@ -1256,12 +1876,26 @@ export function CalendarApp(props: CalendarAppProps) {
           // overlay any current mutation. Selected gets stale when mutations
           // happen otherwise.
           activity={selected}
-          original={activities.find((a) => a.stableId === selected.stableId) ?? selected}
+          original={activitiesWithPo.find((a) => a.stableId === selected.stableId) ?? selected}
           routingRationale={routingDecisions[selected.productCode] ?? null}
           dismissed={isDismissed(mutations, selected.stableId)}
           rescheduledTo={rescheduledTo(mutations, selected.stableId)}
           editedQuantity={editedQuantityOf(mutations, selected.stableId)}
+          editedLeadTimeDays={editedLeadTimeDaysOf(
+            mutations,
+            // Lead-time mutation is keyed on the place-by chip's stableId,
+            // regardless of which sister chip the user clicked.
+            selected.kind === 'po-receiving' && selected.poInfo
+              ? selected.poInfo.sisterStableId
+              : selected.stableId,
+          )}
+          vendor={vendorByCode[selected.productCode] ?? null}
           stationDailyMinutes={selected.station ? stationDailyMinutes[selected.station] ?? 480 : 480}
+          kitchenChipMinutes={
+            selected.kind === 'kitchen-required'
+              ? kitchenMinutesByProductCode[selected.productCode] ?? KITCHEN_DEFAULT_CHIP_MINUTES
+              : null
+          }
           productOverride={productOverrides[selected.productCode]}
           stationDailyOutput={productStationDailyOutput[selected.productCode] ?? 0}
           globalShelfLifeDays={globalDefaults.shelfLifeDays}
@@ -1271,12 +1905,27 @@ export function CalendarApp(props: CalendarAppProps) {
           salesOrders={salesOrdersByProduct[selected.productCode] ?? []}
           totalCommitted={committedByProduct[selected.productCode] ?? 0}
           conflicts={conflictsByConsumer.get(selected.stableId) ?? []}
+          onResolveConflicts={(strategy) => resolveAllConflicts(strategy)}
           onDismiss={() => dismiss(selected.stableId)}
           onUndismiss={() => undismiss(selected.stableId)}
           onReschedule={(date) => reschedule(selected.stableId, date)}
           onClearReschedule={() => clearReschedule(selected.stableId)}
           onEditQuantity={(qty) => editQuantity(selected.stableId, qty)}
           onClearEdit={() => clearEdit(selected.stableId)}
+          onEditLeadTime={(days) => {
+            const placeId =
+              selected.kind === 'po-receiving' && selected.poInfo
+                ? selected.poInfo.sisterStableId
+                : selected.stableId;
+            editLeadTime(placeId, days);
+          }}
+          onClearLeadTime={() => {
+            const placeId =
+              selected.kind === 'po-receiving' && selected.poInfo
+                ? selected.poInfo.sisterStableId
+                : selected.stableId;
+            clearLeadTime(placeId);
+          }}
           onClose={() => setSelected(null)}
         />
       )}
@@ -1306,6 +1955,69 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/**
+ * One row in the Reports section: report name on the left + Print and CSV
+ * buttons on the right. Both buttons share the same enabled flag (a report
+ * with zero activities still exports an empty CSV / "no items" page; we
+ * just disable when there's literally nothing to say).
+ */
+function ReportRow({
+  label,
+  enabled,
+  onPrint,
+  onCsv,
+}: {
+  label: string;
+  enabled: boolean;
+  onPrint: () => void;
+  onCsv: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: 6,
+        alignItems: 'center',
+        opacity: enabled ? 1 : 0.5,
+      }}
+    >
+      <div style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{label}</div>
+      <button
+        type="button"
+        onClick={onPrint}
+        disabled={!enabled}
+        title="Open a printable version in a new tab and trigger the print dialog."
+        style={reportSubButtonStyle(enabled)}
+      >
+        Print
+      </button>
+      <button
+        type="button"
+        onClick={onCsv}
+        disabled={!enabled}
+        title="Download the report as a CSV file (opens in Excel / Sheets)."
+        style={reportSubButtonStyle(enabled)}
+      >
+        CSV
+      </button>
+    </div>
+  );
+}
+
+function reportSubButtonStyle(enabled: boolean): React.CSSProperties {
+  return {
+    padding: '4px 8px',
+    fontSize: 11,
+    background: enabled ? 'var(--bg-page)' : 'transparent',
+    color: enabled ? 'inherit' : 'var(--text-muted)',
+    border: '0.5px solid var(--border)',
+    borderRadius: 3,
+    cursor: enabled ? 'pointer' : 'default',
+    fontFamily: 'inherit',
+    fontWeight: 500,
+  };
+}
+
 function KPIRow({
   label,
   value,
@@ -1329,21 +2041,36 @@ function MonthBlock({
   dates,
   activitiesByDate,
   peakLoadByDate,
+  kitchenLoadByDate,
   onSelect,
   selectedId,
   mutations,
   conflictsByConsumer,
+  unplaceableSet,
+  hoveredStableId,
+  onChipHover,
+  relatedByStableId,
   onDropOnDate,
 }: {
   label: string;
   dates: string[];
   activitiesByDate: Map<string, CalendarActivity[]>;
   peakLoadByDate: Map<string, { utilisation: number; usedMinutes: number; capacityMinutes: number; station: Station }>;
+  /** Per-day kitchen-team utilisation (Phase 4l.7). */
+  kitchenLoadByDate: Map<string, { usedMinutes: number; capacityMinutes: number; utilisation: number }>;
   onSelect: (a: CalendarActivity) => void;
   selectedId: string | null;
   mutations: MutationsMap;
   /** Map of stableId → conflicts (used to highlight chips with red borders). */
   conflictsByConsumer: Map<string, ScheduleConflict[]>;
+  /** Set of stableIds left unplaced by the most-recent Resolve-all run. */
+  unplaceableSet: ReadonlySet<string>;
+  /** Currently-hovered chip stableId (drives the arrow overlay). */
+  hoveredStableId: string | null;
+  /** Hover handler — pass id on enter, null on leave. */
+  onChipHover: (id: string | null) => void;
+  /** stableId → list of related chips with direction. */
+  relatedByStableId: ReadonlyMap<string, ReadonlyArray<{ stableId: string; kind: 'supplier' | 'consumer' }>>;
   /** Called when a chip is dropped onto a day cell. Skip same-day drops upstream. */
   onDropOnDate: (stableId: string, date: string) => void;
 }) {
@@ -1351,6 +2078,72 @@ function MonthBlock({
   // Per-month — the user can only drag one thing at a time, so it's enough to
   // track inside this component without a ref.
   const [hoverDate, setHoverDate] = useState<string | null>(null);
+
+  // Per-month chip ref registry — used by the arrow overlay to resolve DOM
+  // positions. Refs live in a Map keyed by stableId; chips register on mount
+  // and unregister on unmount via the callback-ref pattern.
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const chipRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const registerChipRef = useCallback((stableId: string, el: HTMLElement | null) => {
+    if (el) chipRefs.current.set(stableId, el);
+    else chipRefs.current.delete(stableId);
+  }, []);
+
+  // Computed arrows for the current hover. Coords are relative to containerRef.
+  type Arrow = { id: string; x1: number; y1: number; x2: number; y2: number; kind: 'supplier' | 'consumer' };
+  const [arrows, setArrows] = useState<Arrow[]>([]);
+  // Re-measure on every layout pass while hover is active. Trigger when:
+  //   - hoveredStableId changes (different chip hovered)
+  //   - activitiesByDate changes (chips moved → DOM positions changed)
+  //   - relatedByStableId changes (relationships updated)
+  useLayoutEffect(() => {
+    if (!hoveredStableId) {
+      if (arrows.length > 0) setArrows([]);
+      return;
+    }
+    const container = containerRef.current;
+    const sourceEl = chipRefs.current.get(hoveredStableId);
+    if (!container || !sourceEl) {
+      // Hovered chip isn't in this month's grid → no arrows here.
+      if (arrows.length > 0) setArrows([]);
+      return;
+    }
+    const cRect = container.getBoundingClientRect();
+    const sRect = sourceEl.getBoundingClientRect();
+    const sCx = (sRect.left + sRect.right) / 2 - cRect.left;
+    const sCy = (sRect.top + sRect.bottom) / 2 - cRect.top;
+    const out: Arrow[] = [];
+    for (const rel of relatedByStableId.get(hoveredStableId) ?? []) {
+      const relEl = chipRefs.current.get(rel.stableId);
+      if (!relEl) continue; // related chip not in this month
+      const rRect = relEl.getBoundingClientRect();
+      const rCx = (rRect.left + rRect.right) / 2 - cRect.left;
+      const rCy = (rRect.top + rRect.bottom) / 2 - cRect.top;
+      // Direction: arrow always flows supplier → consumer.
+      // - rel.kind === 'supplier': rel is the supplier, source is the consumer.
+      // - rel.kind === 'consumer': source is the supplier, rel is the consumer.
+      if (rel.kind === 'supplier') {
+        out.push({ id: rel.stableId, x1: rCx, y1: rCy, x2: sCx, y2: sCy, kind: 'supplier' });
+      } else {
+        out.push({ id: rel.stableId, x1: sCx, y1: sCy, x2: rCx, y2: rCy, kind: 'consumer' });
+      }
+    }
+    setArrows(out);
+    // We intentionally exclude `arrows` from deps to avoid re-running on our own setState.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoveredStableId, activitiesByDate, relatedByStableId]);
+
+  // Set of stableIds currently related to the hovered chip — used to highlight
+  // related chips with a colored ring. Computed cheaply once per render.
+  const relatedHighlight = useMemo(() => {
+    const out = new Map<string, 'supplier' | 'consumer'>();
+    if (!hoveredStableId) return out;
+    for (const rel of relatedByStableId.get(hoveredStableId) ?? []) {
+      out.set(rel.stableId, rel.kind);
+    }
+    return out;
+  }, [hoveredStableId, relatedByStableId]);
+
   // Pad the front of the first week so calendar columns align with day-of-week.
   const first = fromISO(dates[0]);
   const dowOfFirst = (first.getDay() + 6) % 7; // Mon = 0
@@ -1363,6 +2156,7 @@ function MonthBlock({
     <div style={{ marginBottom: 32 }}>
       <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>{label}</h2>
       <div
+        ref={containerRef}
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(7, 1fr)',
@@ -1370,6 +2164,7 @@ function MonthBlock({
           borderRadius: 6,
           overflow: 'hidden',
           background: 'var(--bg-surface)',
+          position: 'relative',
         }}
       >
         {DAY_NAMES.map((n) => (
@@ -1401,7 +2196,9 @@ function MonthBlock({
           const dow = (fromISO(cell.date).getDay() + 6) % 7;
           const isWeekend = dow >= 5;
           const peakLoad = peakLoadByDate.get(cell.date);
+          const kitchenLoad = kitchenLoadByDate.get(cell.date);
           const overrun = peakLoad ? peakLoad.utilisation > 1 : false;
+          const kitchenOverrun = kitchenLoad ? kitchenLoad.utilisation > 1 : false;
           const isHover = hoverDate === cell.date;
           // We need a deterministic cellKey so the drop-state computation
           // closes over the right date. Captured below.
@@ -1457,18 +2254,36 @@ function MonthBlock({
                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                   {fmtDayShort(cell.date)}
                 </span>
-                {peakLoad && (
-                  <span
-                    style={{
-                      fontSize: 9,
-                      color: overrun ? '#dc2626' : peakLoad.utilisation > 0.85 ? '#d97706' : 'var(--text-muted)',
-                      fontWeight: overrun ? 600 : 400,
-                    }}
-                    title={`Peak load: ${peakLoad.station} at ${peakLoad.usedMinutes}/${peakLoad.capacityMinutes} min`}
-                  >
-                    {Math.round(peakLoad.utilisation * 100)}%
-                  </span>
-                )}
+                <div style={{ display: 'flex', gap: 4, alignItems: 'baseline' }}>
+                  {kitchenLoad && (
+                    <span
+                      style={{
+                        fontSize: 9,
+                        color: kitchenOverrun
+                          ? '#dc2626'
+                          : kitchenLoad.utilisation > 0.85
+                          ? '#d97706'
+                          : 'var(--text-muted)',
+                        fontWeight: kitchenOverrun ? 600 : 400,
+                      }}
+                      title={`Kitchen team: ${Math.round(kitchenLoad.usedMinutes)}/${kitchenLoad.capacityMinutes} min (${Math.round(kitchenLoad.utilisation * 100)}%)`}
+                    >
+                      K{Math.round(kitchenLoad.utilisation * 100)}%
+                    </span>
+                  )}
+                  {peakLoad && (
+                    <span
+                      style={{
+                        fontSize: 9,
+                        color: overrun ? '#dc2626' : peakLoad.utilisation > 0.85 ? '#d97706' : 'var(--text-muted)',
+                        fontWeight: overrun ? 600 : 400,
+                      }}
+                      title={`Peak load: ${peakLoad.station} at ${peakLoad.usedMinutes}/${peakLoad.capacityMinutes} min`}
+                    >
+                      {Math.round(peakLoad.utilisation * 100)}%
+                    </span>
+                  )}
+                </div>
               </div>
               {dayActivities.map((a) => (
                 <ActivityChip
@@ -1477,36 +2292,133 @@ function MonthBlock({
                   selected={a.id === selectedId}
                   dismissed={isDismissed(mutations, a.stableId)}
                   conflicted={conflictsByConsumer.has(a.stableId)}
+                  unplaceable={unplaceableSet.has(a.stableId)}
+                  relatedKind={relatedHighlight.get(a.stableId) ?? null}
+                  isHoveredSource={hoveredStableId === a.stableId}
+                  registerRef={registerChipRef}
+                  onHover={onChipHover}
                   onClick={() => onSelect(a)}
                 />
               ))}
-              {peakLoad && (
+              {(peakLoad || kitchenLoad) && (
                 <div
                   style={{
                     position: 'absolute',
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    height: 3,
-                    background: 'var(--border)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1,
                   }}
                 >
-                  <div
-                    style={{
-                      width: `${Math.min(100, peakLoad.utilisation * 100)}%`,
-                      height: '100%',
-                      background: overrun
-                        ? '#dc2626'
-                        : peakLoad.utilisation > 0.85
-                        ? '#d97706'
-                        : '#10b981',
-                    }}
-                  />
+                  {/* Kitchen-team sub-bar (Phase 4l.7). Positioned ABOVE
+                      the packaging bar so packaging stays the canonical
+                      "bottom strip" the user is used to. Italic K marker
+                      in the corner makes the bar's identity obvious without
+                      a legend. */}
+                  {kitchenLoad && (
+                    <div
+                      style={{
+                        height: 2,
+                        background: 'var(--border)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${Math.min(100, kitchenLoad.utilisation * 100)}%`,
+                          height: '100%',
+                          background: kitchenOverrun
+                            ? '#dc2626'
+                            : kitchenLoad.utilisation > 0.85
+                            ? '#d97706'
+                            : '#a78bfa',
+                        }}
+                      />
+                    </div>
+                  )}
+                  {peakLoad && (
+                    <div
+                      style={{
+                        height: 3,
+                        background: 'var(--border)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${Math.min(100, peakLoad.utilisation * 100)}%`,
+                          height: '100%',
+                          background: overrun
+                            ? '#dc2626'
+                            : peakLoad.utilisation > 0.85
+                            ? '#d97706'
+                            : '#10b981',
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           );
         })}
+
+        {/* ─── Hover-arrow overlay (Phase 4l.5) ─────────────────
+            Absolutely positioned over the month grid; pointer-events:none
+            so day cells/chips remain interactive. Drawn only while a chip
+            in this month is hovered AND has visible related chips. */}
+        {arrows.length > 0 && (
+          <svg
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+              overflow: 'visible',
+            }}
+            aria-hidden="true"
+          >
+            <defs>
+              <marker
+                id={`arrow-supplier-${label}`}
+                viewBox="0 0 10 10"
+                refX="9"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#059669" />
+              </marker>
+              <marker
+                id={`arrow-consumer-${label}`}
+                viewBox="0 0 10 10"
+                refX="9"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706" />
+              </marker>
+            </defs>
+            {arrows.map((a) => (
+              <line
+                key={a.id + a.kind}
+                x1={a.x1}
+                y1={a.y1}
+                x2={a.x2}
+                y2={a.y2}
+                stroke={a.kind === 'supplier' ? '#059669' : '#d97706'}
+                strokeWidth={1.5}
+                strokeOpacity={0.8}
+                strokeDasharray="4 3"
+                markerEnd={`url(#arrow-${a.kind}-${label})`}
+              />
+            ))}
+          </svg>
+        )}
       </div>
     </div>
   );
@@ -1517,29 +2429,64 @@ function ActivityChip({
   selected,
   dismissed,
   conflicted,
+  unplaceable,
+  relatedKind,
+  isHoveredSource,
+  registerRef,
+  onHover,
   onClick,
 }: {
   activity: CalendarActivity;
   selected: boolean;
   dismissed: boolean;
   conflicted: boolean;
+  unplaceable: boolean;
+  /** Highlight as supplier/consumer of the currently-hovered chip, or null. */
+  relatedKind: 'supplier' | 'consumer' | null;
+  /** True when THIS chip is the one being hovered. Drives the source-glow style. */
+  isHoveredSource: boolean;
+  /** Callback-ref hook so MonthBlock can resolve this chip's DOM position. */
+  registerRef: (stableId: string, el: HTMLElement | null) => void;
+  /** Hover handler — id on enter, null on leave. */
+  onHover: (id: string | null) => void;
   onClick: () => void;
 }) {
   const colors = colorOf(activity);
   // Local "is dragging" state controls opacity feedback. Reset on dragend.
   const [isDragging, setIsDragging] = useState(false);
+  // PO chips have derived dates (computed from kitchen demand + lead time)
+  // and aren't draggable — moving them would mislead the user about what
+  // actually changes the timeline.
+  const isPo = activity.kind === 'po-placed' || activity.kind === 'po-receiving';
+  // Compose the box-shadow: conflict (red) + related (green/orange) +
+  // hovered-source (blue) can stack.
+  const shadows: string[] = [];
+  if (conflicted) shadows.push('inset 0 0 0 1.5px #dc2626');
+  if (relatedKind === 'supplier') shadows.push('inset 0 0 0 1.5px #059669');
+  if (relatedKind === 'consumer') shadows.push('inset 0 0 0 1.5px #d97706');
+  if (isHoveredSource) shadows.push('0 0 0 2px #3b82f6');
+  if (unplaceable) shadows.push('inset 0 0 0 1.5px #d97706');
   return (
     <button
       type="button"
       onClick={onClick}
+      ref={(el) => registerRef(activity.stableId, el)}
+      onMouseEnter={() => onHover(activity.stableId)}
+      onMouseLeave={() => onHover(null)}
       // Dragging the chip writes its stableId to the dataTransfer; day cells
-      // read that to apply a reschedule mutation. Native HTML5 DnD —
-      // browsers handle the visual movement; we just opacity-fade the source.
-      draggable
+      // read that to apply a reschedule mutation. PO chips opt out — their
+      // dates are derived, not authoritative.
+      draggable={!isPo}
       onDragStart={(e) => {
+        if (isPo) {
+          e.preventDefault();
+          return;
+        }
         e.dataTransfer.setData('text/plain', activity.stableId);
         e.dataTransfer.effectAllowed = 'move';
         setIsDragging(true);
+        // Drop hover on drag-start: the user is no longer pointing at it.
+        onHover(null);
       }}
       onDragEnd={() => setIsDragging(false)}
       style={{
@@ -1555,26 +2502,45 @@ function ActivityChip({
         border: 'none',
         borderLeft: `3px solid ${colors.border}`,
         outline: selected ? `1.5px solid ${colors.border}` : 'none',
-        cursor: isDragging ? 'grabbing' : 'grab',
+        cursor: isPo ? 'pointer' : isDragging ? 'grabbing' : 'grab',
         fontFamily: 'inherit',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         opacity: isDragging ? 0.4 : dismissed ? 0.35 : 1,
         textDecoration: dismissed ? 'line-through' : 'none',
-        boxShadow: conflicted ? 'inset 0 0 0 1.5px #dc2626' : undefined,
+        boxShadow: shadows.length > 0 ? shadows.join(', ') : undefined,
+        position: 'relative',
+        zIndex: isHoveredSource ? 2 : 'auto',
       }}
       title={
-        activity.kind === 'kitchen-required'
-          ? `${activity.productCode} — ${activity.productName} — REQUIRED ${activity.quantity} units · starts ${activity.date}, finishes ${activity.finishDate ?? '?'}, available ${activity.requiredByDate ?? '?'}`
+        activity.kind === 'po-placed'
+          ? `PLACE PO · ${activity.productCode} — ${activity.productName}\nQty ${Math.round(activity.quantity).toLocaleString()}\nPlace by ${activity.poInfo ? fmtDate(activity.poInfo.placeByDate) : '?'}, arrives ${activity.poInfo ? fmtDate(activity.poInfo.arriveByDate) : '?'} (${activity.poInfo?.leadTimeDays}-day lead time)${activity.poInfo?.overdue ? '\n⚠ OVERDUE — placeBy is in the past' : ''}`
+          : activity.kind === 'po-receiving'
+          ? `RECEIVE PO · ${activity.productCode} — ${activity.productName}\nQty ${Math.round(activity.quantity).toLocaleString()}\nArrive by ${activity.poInfo ? fmtDate(activity.poInfo.arriveByDate) : '?'}, place by ${activity.poInfo ? fmtDate(activity.poInfo.placeByDate) : '?'} (${activity.poInfo?.leadTimeDays}-day lead time)${activity.poInfo?.overdue ? '\n⚠ Linked PO is OVERDUE' : ''}`
+          : activity.kind === 'kitchen-required'
+          ? `${activity.productCode} — ${activity.productName} — REQUIRED ${activity.quantity} units · starts ${fmtDate(activity.date)}, finishes ${activity.finishDate ? fmtDate(activity.finishDate) : '?'}, available ${activity.requiredByDate ? fmtDate(activity.requiredByDate) : '?'}`
           : dismissed
           ? `${activity.productCode} — ${activity.productName} — DISMISSED (${activity.quantity} units, ${Math.round(activity.durationMinutes)} min)`
+          : unplaceable
+          ? `${activity.productCode} — ${activity.productName} — Resolve all couldn't find a feasible date for this chip (no working day with capacity within search horizon)`
           : `${activity.productCode} — ${activity.productName} (${activity.quantity} units, ${Math.round(activity.durationMinutes)} min)`
       }
     >
       <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {conflicted && <span style={{ marginRight: 3 }}>⚠</span>}
-        {activity.productCode} <span style={{ opacity: 0.7 }}>×{activity.quantity}</span>
+        {unplaceable && !conflicted && <span style={{ marginRight: 3 }}>⚠</span>}
+        {activity.kind === 'po-placed' && (
+          <span style={{ marginRight: 3, fontWeight: 600 }}>
+            {activity.poInfo?.overdue ? '⚠ ' : ''}PO→
+          </span>
+        )}
+        {activity.kind === 'po-receiving' && (
+          <span style={{ marginRight: 3, fontWeight: 600 }}>
+            {activity.poInfo?.overdue ? '⚠ ' : ''}↓PO
+          </span>
+        )}
+        {activity.productCode} <span style={{ opacity: 0.7 }}>×{Math.round(activity.quantity)}</span>
         {activity.kind === 'kitchen-required' && activity.durationDays && activity.durationDays > 1 && (
           <span style={{ opacity: 0.7 }}> · {activity.durationDays}d</span>
         )}
@@ -1605,7 +2571,10 @@ function ActivityDrawer({
   dismissed,
   rescheduledTo: rescheduled,
   editedQuantity,
+  editedLeadTimeDays,
+  vendor,
   stationDailyMinutes,
+  kitchenChipMinutes,
   productOverride,
   stationDailyOutput,
   globalShelfLifeDays,
@@ -1615,12 +2584,15 @@ function ActivityDrawer({
   salesOrders,
   totalCommitted,
   conflicts,
+  onResolveConflicts,
   onDismiss,
   onUndismiss,
   onReschedule,
   onClearReschedule,
   onEditQuantity,
   onClearEdit,
+  onEditLeadTime,
+  onClearLeadTime,
   onClose,
 }: {
   activity: CalendarActivity;
@@ -1630,7 +2602,16 @@ function ActivityDrawer({
   dismissed: boolean;
   rescheduledTo: string | null;
   editedQuantity: number | null;
+  /** Lead-time override on a PO chip (Phase 4m.4). null = use file default. */
+  editedLeadTimeDays: number | null;
+  /** Vendor name from the lead-times file, or null when missing. */
+  vendor: string | null;
   stationDailyMinutes: number;
+  /**
+   * Per-recipe kitchen-team minutes consumed on the START day. `null` for
+   * non-kitchen-required activities (Phase 4l.8).
+   */
+  kitchenChipMinutes: number | null;
   productOverride: ProductOverrideShape | undefined;
   stationDailyOutput: number;
   globalShelfLifeDays: number;
@@ -1650,12 +2631,17 @@ function ActivityDrawer({
   }>;
   totalCommitted: number;
   conflicts: ScheduleConflict[];
+  /** Auto-cascade resolver — push (consumers later) or pull (suppliers earlier). */
+  onResolveConflicts: (strategy: ResolveStrategy) => void;
   onDismiss: () => void;
   onUndismiss: () => void;
   onReschedule: (newDate: string) => void;
   onClearReschedule: () => void;
   onEditQuantity: (qty: number) => void;
   onClearEdit: () => void;
+  /** Apply a lead-time override (PO chips). */
+  onEditLeadTime: (days: number) => void;
+  onClearLeadTime: () => void;
   onClose: () => void;
 }) {
   const colors = colorOf(activity);
@@ -1676,6 +2662,20 @@ function ActivityDrawer({
     qtyValid &&
     activity.quantity > 0 &&
     (activity.durationMinutes * (parsedQty / activity.quantity)) > stationDailyMinutes;
+
+  // ─── PO chip lead-time editor state (Phase 4m.4) ──────────
+  const isPo = activity.kind === 'po-placed' || activity.kind === 'po-receiving';
+  const effectiveLeadTime =
+    activity.poInfo
+      ? editedLeadTimeDays ?? activity.poInfo.leadTimeDays
+      : 0;
+  const [leadInput, setLeadInput] = useState<string>('');
+  useEffect(() => {
+    if (isPo) setLeadInput(String(effectiveLeadTime));
+  }, [activity.stableId, effectiveLeadTime, isPo]);
+  const parsedLead = Number(leadInput);
+  const leadValid = Number.isFinite(parsedLead) && parsedLead >= 0;
+  const leadChanged = leadValid && Math.round(parsedLead) !== effectiveLeadTime;
   return (
     <aside
       style={{
@@ -1726,6 +2726,10 @@ function ActivityDrawer({
           ? 'Kitchen (scheduled)'
           : activity.kind === 'kitchen-required'
           ? 'Kitchen (required by plan)'
+          : activity.kind === 'po-placed'
+          ? 'Purchase order — place by'
+          : activity.kind === 'po-receiving'
+          ? 'Purchase order — arrive by'
           : activity.station
           ? STATION_LABELS[activity.station]
           : '—'}
@@ -1766,6 +2770,62 @@ function ActivityDrawer({
             value={fmtDate(activity.requiredByDate)}
           />
         )}
+        {activity.kind === 'kitchen-required' && kitchenChipMinutes !== null && (
+          <Field
+            label="Kitchen-team min"
+            value={`${kitchenChipMinutes} min on start day`}
+          />
+        )}
+        {/* Purchase order details (Phase 4m.2 + 4m.4). Shows the EFFECTIVE
+            dates (computed with any lead-time override) plus the ideal
+            file-default values for context. */}
+        {(activity.kind === 'po-placed' || activity.kind === 'po-receiving') &&
+          activity.poInfo && (
+            <>
+              <Field
+                label="Place by"
+                value={fmtDate(activity.date)}
+                modified={activity.poInfo.overdue}
+                originalValue={
+                  activity.poInfo.overdue
+                    ? fmtDate(activity.poInfo.placeByDate)
+                    : undefined
+                }
+              />
+              <Field
+                label="Arrive by"
+                value={
+                  activity.kind === 'po-receiving'
+                    ? fmtDate(activity.date)
+                    : fmtDate(
+                        // Compute effective arrival from poInfo + this chip's date.
+                        addDaysIso(activity.date, effectiveLeadTime),
+                      )
+                }
+                modified={editedLeadTimeDays !== null || activity.poInfo.overdue}
+                originalValue={
+                  editedLeadTimeDays !== null || activity.poInfo.overdue
+                    ? fmtDate(activity.poInfo.arriveByDate)
+                    : undefined
+                }
+              />
+              <Field
+                label="Lead time"
+                value={`${effectiveLeadTime} days`}
+                modified={editedLeadTimeDays !== null}
+                originalValue={
+                  editedLeadTimeDays !== null
+                    ? `${activity.poInfo.leadTimeDays} days (default)`
+                    : undefined
+                }
+              />
+              <Field
+                label="Status"
+                value={activity.poInfo.overdue ? 'OVERDUE' : 'On track'}
+              />
+              {vendor && <Field label="Vendor" value={vendor} />}
+            </>
+          )}
         {activity.kind === 'packaging' && (
           <>
             <Field label="Production" value={`${Math.round(activity.durationMinutes)} min`} />
@@ -1970,6 +3030,95 @@ function ActivityDrawer({
         )}
       </div>
 
+      {/* ─── Edit lead time (Phase 4m.4) ──────────────────
+          Only on PO chips. Shifts both place-by and arrive-by chips by
+          the difference between the override and the file default.
+          Useful for transient shipping delays the user knows about. */}
+      {isPo && activity.poInfo && (
+        <div style={{ marginBottom: 14 }}>
+          <div
+            style={{
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginBottom: 6,
+            }}
+          >
+            Edit lead time
+          </div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              type="number"
+              min={0}
+              value={leadInput}
+              onChange={(e) => setLeadInput(e.target.value)}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                fontSize: 13,
+                border: '0.5px solid var(--border)',
+                borderRadius: 3,
+                fontFamily: 'inherit',
+                background: 'var(--bg-page)',
+                color: 'inherit',
+              }}
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>days</span>
+            <button
+              type="button"
+              onClick={() => leadValid && onEditLeadTime(parsedLead)}
+              disabled={!leadValid || !leadChanged}
+              style={{
+                padding: '6px 12px',
+                fontSize: 12,
+                border: '0.5px solid var(--border)',
+                borderRadius: 3,
+                background:
+                  leadValid && leadChanged ? colors.bg : 'var(--bg-page)',
+                color:
+                  leadValid && leadChanged ? colors.text : 'var(--text-muted)',
+                cursor: leadValid && leadChanged ? 'pointer' : 'default',
+                fontFamily: 'inherit',
+              }}
+            >
+              Apply
+            </button>
+          </div>
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 10,
+              color: 'var(--text-muted)',
+              lineHeight: 1.4,
+            }}
+          >
+            File default: {activity.poInfo.leadTimeDays} days. Override applies
+            to this PO only and is stored in your browser; clear it to re-use
+            the default.
+          </div>
+          {editedLeadTimeDays !== null && (
+            <button
+              type="button"
+              onClick={onClearLeadTime}
+              style={{
+                marginTop: 6,
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+                fontFamily: 'inherit',
+                textDecoration: 'underline',
+              }}
+            >
+              Reset to file default
+            </button>
+          )}
+        </div>
+      )}
+
       {routingRationale && (
         <div
           style={{
@@ -2000,15 +3149,83 @@ function ActivityDrawer({
         >
           <div
             style={{
-              fontSize: 11,
-              color: '#991b1b',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
               marginBottom: 6,
-              fontWeight: 500,
             }}
           >
-            ⚠ Schedule conflicts ({conflicts.length})
+            <div
+              style={{
+                fontSize: 11,
+                color: '#991b1b',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                fontWeight: 500,
+                flex: 1,
+              }}
+            >
+              ⚠ Schedule conflicts ({conflicts.length})
+            </div>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => onResolveConflicts('auto')}
+                title="Try to pull the blocking run earlier; if it can't be pulled (floored or kitchen capacity), push this activity later instead."
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 10,
+                  background: '#dc2626',
+                  color: '#fff',
+                  border: '0.5px solid #b91c1c',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Resolve (auto)
+              </button>
+              <button
+                type="button"
+                onClick={() => onResolveConflicts('pull')}
+                title="Pull the blocking ingredient run earlier so it finishes in time. Floored at the planning-horizon start and respects kitchen-team capacity."
+                style={{
+                  padding: '3px 6px',
+                  fontSize: 9,
+                  background: '#fee2e2',
+                  color: '#991b1b',
+                  border: '0.5px solid #fecaca',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                ←
+              </button>
+              <button
+                type="button"
+                onClick={() => onResolveConflicts('push')}
+                title="Push this activity later to the earliest feasible date and recompute."
+                style={{
+                  padding: '3px 6px',
+                  fontSize: 9,
+                  background: '#fee2e2',
+                  color: '#991b1b',
+                  border: '0.5px solid #fecaca',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                →
+              </button>
+            </div>
           </div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 11 }}>
             {conflicts.map((c, i) => (
@@ -2021,13 +3238,14 @@ function ActivityDrawer({
                 }}
               >
                 Needs <strong>{c.ingredientCode}</strong> ready by{' '}
-                <strong>{c.consumerDate}</strong>; closest run finishes{' '}
-                <strong>{c.earliestFinishDate}</strong>.
+                <strong>{fmtDate(c.consumerDate)}</strong>; closest run finishes{' '}
+                <strong>{fmtDate(c.earliestFinishDate)}</strong>.
               </li>
             ))}
           </ul>
           <div style={{ fontSize: 10, color: '#7f1d1d', marginTop: 6 }}>
             Move this chip later, or move the upstream chip to finish sooner. The 1-day buffer must hold.
+            Resolve auto-cascades through dependents.
           </div>
         </div>
       )}
@@ -2063,7 +3281,7 @@ function ActivityDrawer({
                     </span>
                     <span style={{ display: 'flex', gap: 6 }}>
                       <span style={{ color: statusColor }}>{so.orderStatus}</span>
-                      <span>by {so.requiredDate}</span>
+                      <span>by {fmtDate(so.requiredDate)}</span>
                     </span>
                   </div>
                 </li>
@@ -2392,6 +3610,8 @@ function CapacityHeatmap({
   data: {
     weekStarts: string[];
     byWeek: Map<string, Map<Station, { peakUtilisation: number; totalMinutes: number }>>;
+    /** Per-week kitchen-team utilisation (Phase 4l.7). */
+    kitchenByWeek: Map<string, { peakUtilisation: number; totalMinutes: number }>;
   };
 }) {
   function color(util: number): string {
@@ -2426,7 +3646,7 @@ function CapacityHeatmap({
               padding: '2px 0',
               color: 'var(--text-muted)',
             }}
-            title={`Week of ${ws}`}
+            title={`Week of ${fmtDate(ws)}`}
           >
             W{i + 1}
           </div>
@@ -2454,12 +3674,45 @@ function CapacityHeatmap({
                     background: color(util),
                     borderRadius: 1,
                   }}
-                  title={`${STATION_LABELS[s]} · week of ${ws}: peak ${Math.round(util * 100)}%, total ${Math.round(cell?.totalMinutes ?? 0)} min`}
+                  title={`${STATION_LABELS[s]} · week of ${fmtDate(ws)}: peak ${Math.round(util * 100)}%, total ${Math.round(cell?.totalMinutes ?? 0)} min`}
                 />
               );
             })}
           </Fragment>
         ))}
+
+        {/* Kitchen-team row (Phase 4l.7). Visually separated from the
+            packaging stations by a gap row above the cells. */}
+        <Fragment>
+          <div
+            style={{
+              fontSize: 11,
+              paddingRight: 10,
+              paddingTop: 4,
+              color: 'var(--text-secondary)',
+              whiteSpace: 'nowrap',
+              fontStyle: 'italic',
+            }}
+          >
+            Kitchen team
+          </div>
+          {data.weekStarts.map((ws) => {
+            const cell = data.kitchenByWeek.get(ws);
+            const util = cell?.peakUtilisation ?? 0;
+            return (
+              <div
+                key={ws + 'kitchen'}
+                style={{
+                  height: 18,
+                  marginTop: 4,
+                  background: color(util),
+                  borderRadius: 1,
+                }}
+                title={`Kitchen team · week of ${fmtDate(ws)}: peak ${Math.round(util * 100)}%, total ${Math.round(cell?.totalMinutes ?? 0)} min (8 hr/day budget)`}
+              />
+            );
+          })}
+        </Fragment>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 10, color: 'var(--text-muted)', alignItems: 'center' }}>
         <span>Idle</span>
@@ -2543,6 +3796,152 @@ function StockoutPanel({
     </section>
   );
 }
+
+/**
+ * Raw-material risks (Phase 4m.1).
+ *
+ * One row per material that's projected to run short within the planning
+ * horizon. Each row shows:
+ *   - Material code + name
+ *   - Required arrival date (1 day before first shortage)
+ *   - PO place-by date (= arriveBy − lead time)
+ *   - Quantity short
+ *   - Overdue flag when placeBy is already in the past
+ *
+ * The panel sorts most-urgent first (overdue rows at top, then by placeBy
+ * date ascending). Clicking a row could open a per-material drilldown in a
+ * future phase; for now the row is informational.
+ */
+function RawMaterialRiskPanel({
+  shortages,
+  requirements,
+}: {
+  shortages: RawMaterialShortage[];
+  requirements: PurchaseRequirement[];
+}) {
+  // Index shortages by code so the requirement row can show the demand
+  // context (initial SOH, total demand, drivers).
+  const shortageByCode = new Map<string, RawMaterialShortage>();
+  for (const s of shortages) shortageByCode.set(s.rawMaterialCode, s);
+
+  // Sort: overdue first, then by placeBy ascending.
+  const ordered = [...requirements].sort((a, b) => {
+    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+    return a.placeByDate.localeCompare(b.placeByDate);
+  });
+  const overdueCount = ordered.filter((r) => r.overdue).length;
+
+  return (
+    <section
+      style={{
+        background: 'var(--bg-surface)',
+        border: '0.5px solid var(--border)',
+        borderRadius: 6,
+        padding: 14,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          marginBottom: 10,
+        }}
+      >
+        <h3
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            color: 'var(--text-muted)',
+            margin: 0,
+          }}
+        >
+          Raw material risks &middot; {ordered.length} PO{ordered.length === 1 ? '' : 's'} needed
+        </h3>
+        {overdueCount > 0 && (
+          <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 500 }}>
+            ⚠ {overdueCount} overdue
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8 }}>
+        Default lead time 14 days. Place-by dates assume the kitchen needs the
+        material 1 day before its first shortage. Per-vendor lead times can be
+        wired in later.
+      </div>
+      <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ color: 'var(--text-muted)', textAlign: 'left' }}>
+            <th style={cellStyle}>Material</th>
+            <th style={cellStyle}>Place by</th>
+            <th style={cellStyle}>Arrive by</th>
+            <th style={{ ...cellStyle, textAlign: 'right' }}>Qty</th>
+            <th style={{ ...cellStyle, textAlign: 'right' }}>SOH</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ordered.map((r) => {
+            const s = shortageByCode.get(r.rawMaterialCode);
+            return (
+              <tr
+                key={r.rawMaterialCode}
+                title={
+                  s
+                    ? `Initial SOH ${s.initialSoh.toLocaleString()}, total demand ${Math.round(s.totalDemand).toLocaleString()}, first shortage ${fmtDate(s.shortageDate)}.`
+                    : undefined
+                }
+                style={{
+                  borderTop: '0.5px solid var(--border)',
+                  background: r.overdue ? '#fef2f2' : 'transparent',
+                }}
+              >
+                <td style={cellStyle}>
+                  <div style={{ fontWeight: 500 }}>{r.rawMaterialCode}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                    {r.rawMaterialName}
+                  </div>
+                </td>
+                <td
+                  style={{
+                    ...cellStyle,
+                    color: r.overdue ? '#dc2626' : 'inherit',
+                    fontWeight: r.overdue ? 600 : 400,
+                  }}
+                >
+                  {fmtDate(r.placeByDate)}
+                  {r.overdue && (
+                    <span style={{ marginLeft: 4, fontSize: 10 }}>⚠</span>
+                  )}
+                </td>
+                <td style={cellStyle}>{fmtDate(r.arriveByDate)}</td>
+                <td style={{ ...cellStyle, textAlign: 'right' }}>
+                  {Math.round(r.quantity).toLocaleString()}
+                </td>
+                <td
+                  style={{
+                    ...cellStyle,
+                    textAlign: 'right',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  {s ? Math.round(s.initialSoh).toLocaleString() : '–'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+const cellStyle: React.CSSProperties = {
+  padding: '6px 8px',
+  verticalAlign: 'top',
+  fontWeight: 'normal',
+};
 
 function Field({
   label,
