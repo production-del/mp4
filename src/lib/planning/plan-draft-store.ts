@@ -28,6 +28,7 @@ import type {
 } from './plan-item';
 import { ofKind } from './plan-item';
 import { toLocalISODate, dayIntToISO } from './working-day';
+import { enqueue as enqueueServerOp } from './plan-store-sync';
 
 const STORE_KEY = 'byron-plan-drafts-v1';
 
@@ -116,6 +117,7 @@ export function replaceByKind<K extends PlanItemKind>(
   const store = readStore();
   const kept = store.items.filter(i => i.kind !== kind);
   writeStoreRaw({ ...store, version: 1, items: [...kept, ...items] });
+  enqueueServerOp({ op: 'replaceByKind', kind, items });
 }
 
 /** Upsert a single item by id (keeping its existing kind). */
@@ -126,6 +128,7 @@ export function upsertPlanItem(item: PlanItem): void {
   if (idx === -1) next.push(item);
   else next[idx] = item;
   writeStoreRaw({ ...store, version: 1, items: next });
+  enqueueServerOp({ op: 'upsert', items: [item] });
 }
 
 /**
@@ -157,6 +160,7 @@ export function upsertMany(items: PlanItem[]): void {
     if (!seen.has(item.id)) next.push(item);
   }
   writeStoreRaw({ ...store, version: 1, items: next });
+  enqueueServerOp({ op: 'upsert', items });
 }
 
 /** Remove a single item by id. */
@@ -167,6 +171,7 @@ export function removePlanItem(id: string): void {
     version: 1,
     items: store.items.filter(i => i.id !== id),
   });
+  enqueueServerOp({ op: 'remove', ids: [id] });
 }
 
 /** Mark many items as pushed (e.g., after a successful Unleashed push). */
@@ -181,6 +186,7 @@ export function markPushed(ids: string[]): void {
       idSet.has(i.id) ? ({ ...i, lifecycle: 'pushed' as Lifecycle }) : i,
     ),
   });
+  enqueueServerOp({ op: 'markPushed', ids });
 }
 
 // ─── Dismissed kitchen keys ──────────────────────────────────
@@ -201,6 +207,7 @@ export function addDismissedKitchenKey(key: string): void {
   const current = store.dismissedKitchenKeys ?? [];
   if (current.includes(key)) return;
   writeStoreRaw({ ...store, version: 1, dismissedKitchenKeys: [...current, key] });
+  enqueueServerOp({ op: 'addDismissed', key });
 }
 
 /** Remove a key from the dismissed set; no-op if absent. */
@@ -213,12 +220,14 @@ export function removeDismissedKitchenKey(key: string): void {
     version: 1,
     dismissedKitchenKeys: current.filter(k => k !== key),
   });
+  enqueueServerOp({ op: 'removeDismissed', key });
 }
 
 /** Clear all dismissed keys (used by Reset). */
 export function clearDismissedKitchenKeys(): void {
   const store = readStore();
   writeStoreRaw({ ...store, version: 1, dismissedKitchenKeys: [] });
+  enqueueServerOp({ op: 'clearDismissed' });
 }
 
 // ─── Legacy migration ────────────────────────────────────────
