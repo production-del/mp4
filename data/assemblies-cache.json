@@ -1,12 +1,93 @@
 {
-  "fetchedAt": "2026-05-04T02:11:23.046Z",
+  "fetchedAt": "2026-05-06T04:08:43.767Z",
   "lines": [
     {
-      "assemblyNumber": "AS-00015823",
-      "productCode": "MFTERIMB10",
-      "productName": "Munchies Teriyaki - Organic & Activated BULK (10kg)",
-      "quantity": 23,
-      "scheduledDate": "2026-05-04",
+      "assemblyNumber": "AS-00016007",
+      "productCode": "MFTAMARSM",
+      "productName": "Tamari Almonds - Organic & Activated SML BAG (300g)",
+      "quantity": 340,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015878",
+      "productCode": "MFTAMARME",
+      "productName": "Tamari Almonds - Organic & Activated MED (250g)",
+      "quantity": 121,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015877",
+      "productCode": "MFTAMARLG",
+      "productName": "Tamari Almonds - Organic & Activated LRG (500g)",
+      "quantity": 141,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015949",
+      "productCode": "MFCINNPSM",
+      "productName": "Cinnamon Powder (Ceylon) - Organic SML (120g)",
+      "quantity": 1200,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015892",
+      "productCode": "MFSEEDMME",
+      "productName": "Seed Mix - Organic & Activated MED (330g)",
+      "quantity": 744,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Operations",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "ASMAR270123",
+      "productCode": "MFLOTUSSM",
+      "productName": "Blue Lotus Flowers Organic SML - 12g",
+      "quantity": 423,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "ASAPR0004",
+      "productCode": "MFMORINSM",
+      "productName": "Moringa Powder SML - Organic 105g",
+      "quantity": 220,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015879",
+      "productCode": "MFBEETPME",
+      "productName": "Beetroot Powder - Organic MED (340g)",
+      "quantity": 1122,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015847",
+      "productCode": "MFALMONME",
+      "productName": "Almonds - Organic & Activated MED (250g)",
+      "quantity": 859,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Operations",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015844",
+      "productCode": "MFCACBPB5",
+      "productName": "Cacao Brain Power - Organic & Activated BULK (5kg)",
+      "quantity": 10,
+      "scheduledDate": "2026-05-06",
       "warehouseName": "MF Packaging",
       "status": "Parked"
     },
@@ -15,6 +96,780 @@
       "productCode": "MFPEPITLG",
       "productName": "Pepitas Styrian - Organic & Activated LRG (600g)",
       "quantity": 308,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "ASAPR0027",
+      "productCode": "MFROSEPSM",
+      "productName": "Rose Petals SML (15g)",
+      "quantity": 620,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "ASMAR201008",
+      "productCode": "MFMATCHSM",
+      "productName": "Ceremonial Matcha - Mindful Foods - SML 100g",
+      "quantity": 471,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015998",
+      "productCode": "MFBKBRYBG",
+      "productName": "Mindful Foods Berry Buckies - 350g",
+      "quantity": 574,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015999",
+      "productCode": "SDREDLOXL",
+      "productName": "STARDUST Red \"Longevity\" - 1.2kg JAR",
+      "quantity": 4,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "ASMAR201030",
+      "productCode": "FREISHSM",
+      "productName": "FUNGI Reishi 20:1 Extract Powder SML (100g)",
+      "quantity": 200,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015491",
+      "productCode": "IRC",
+      "productName": "Red Coconut Intermediate",
+      "quantity": 96,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015996",
+      "productCode": "MFSUNFSME",
+      "productName": "Sunflower Seeds - Activated & Organic MED (250g)",
+      "quantity": 517,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016016",
+      "productCode": "MFIRPIS",
+      "productName": "Pistachio - Coconut Roasted BULK",
+      "quantity": 120,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015829",
+      "productCode": "MFSUNFSLG",
+      "productName": "Sunflower Seeds - Activated & Organic LRG (500g)",
+      "quantity": 109,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015997",
+      "productCode": "MFIMMUNME",
+      "productName": "ImmuniTea - Organic Herbal Tea MED (100g)",
+      "quantity": 351,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016090",
+      "productCode": "MFTUMMTSM",
+      "productName": "Tummy Tea - Organic Herbal Tea SML (60g)",
+      "quantity": 150,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016089",
+      "productCode": "IABR",
+      "productName": "Brazil Nuts Intermediate",
+      "quantity": 200,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015925",
+      "productCode": "IAA",
+      "productName": "Almonds Intermediate",
+      "quantity": 200,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016088",
+      "productCode": "MFCARCLB4.5",
+      "productName": "Clusters Caramel Wattleseed - Organic & Activated BULK (4.5kg)",
+      "quantity": 1,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015798",
+      "productCode": "MFCINNPME",
+      "productName": "Cinnamon Powder (Ceylon) - Organic MED (240g)",
+      "quantity": 750,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Operations",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016086",
+      "productCode": "MFCURNTME",
+      "productName": "Currants Organic MED (300g)",
+      "quantity": 1350,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "ASAPR0031",
+      "productCode": "MFPECANME",
+      "productName": "Pecans - Organic & Activated MED (220g)",
+      "quantity": 750,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015983",
+      "productCode": "MFCURNTME",
+      "productName": "Currants Organic MED (300g)",
+      "quantity": 500,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "KPLAPRIL17",
+      "productCode": "ITF",
+      "productName": "Firestarter Intermediate",
+      "quantity": 20,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016083",
+      "productCode": "SDREDLOXL",
+      "productName": "STARDUST Red \"Longevity\" - 1.2kg JAR",
+      "quantity": 5,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016062",
+      "productCode": "SDBLUEILG",
+      "productName": "STARDUST Blue \"Immunity\" - Organic LRG (600g)",
+      "quantity": 5,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016084",
+      "productCode": "MFBIRPBB6",
+      "productName": "Birchia Paleo Prebiotic - Organic & Activated BULK (6kg)",
+      "quantity": 1,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016056",
+      "productCode": "BULK-AHDUL-1KG",
+      "productName": "Bulk - Purple Dulse Powder - 1kg Bag",
+      "quantity": 1,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016085",
+      "productCode": "IAPCB",
+      "productName": "Pecans B Grade Intermediate",
+      "quantity": 80,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015619",
+      "productCode": "IABKBR",
+      "productName": "Berry Buckies Intermediate",
+      "quantity": 250,
+      "scheduledDate": "2026-05-06",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016072",
+      "productCode": "MFTERIMME",
+      "productName": "Munchies Teriyaki - Organic & Activated MED (220g)",
+      "quantity": 24,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015869",
+      "productCode": "MFWALNUXL",
+      "productName": "Walnuts - Organic & Activated XLRG (1kg)",
+      "quantity": 240,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016042",
+      "productCode": "MFTURMESM",
+      "productName": "Turmeric (High Potency 5%) - Organic SML (150g)",
+      "quantity": 1793,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015918",
+      "productCode": "MFTUMMTSM",
+      "productName": "Tummy Tea - Organic Herbal Tea SML (60g)",
+      "quantity": 411,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015914",
+      "productCode": "MFTUMMTME",
+      "productName": "Tummy Tea - Organic Herbal Tea MED (120g)",
+      "quantity": 1274,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016060",
+      "productCode": "SDGREENXLSOURCE",
+      "productName": "THE SOURCE - STARDUST Green \"Detoxify\" - 900g JAR",
+      "quantity": 10,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "ASMAR11005",
+      "productCode": "SDSCHISSM",
+      "productName": "STARDUST Schisandra 20:1 Extract Powder SML (120g)",
+      "quantity": 240,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015802",
+      "productCode": "SDREDLOLG",
+      "productName": "STARDUST Red \"Longevity\" - Organic LRG (650g)",
+      "quantity": 66,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015795",
+      "productCode": "SDPORIGLG",
+      "productName": "STARDUST Plant Protein ORIGINAL - LRG (380g)",
+      "quantity": 558,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016040",
+      "productCode": "SDCACAOSM",
+      "productName": "STARDUST Cacao \"Energise\" - Organic SML (120g)",
+      "quantity": 640,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "ASMAR11001",
+      "productCode": "SDASTRASM",
+      "productName": "STARDUST Astragalus 20:1 Extract Powder SML (120g)",
+      "quantity": 120,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015863",
+      "productCode": "MFSPEARME",
+      "productName": "Spearmint MED (70g)",
+      "quantity": 111,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "ASMAR181006",
+      "productCode": "MFROSHBSM",
+      "productName": "Rosehip Shells (Granules) SML - Organic 175g",
+      "quantity": 20,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015857",
+      "productCode": "MFRASLFME",
+      "productName": "Raspberry Leaf MED - Organic 50g",
+      "quantity": 261,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015874",
+      "productCode": "MFRASFDME",
+      "productName": "Raspberries - Freeze-dried Organic MED (40g)",
+      "quantity": 750,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015862",
+      "productCode": "MFPEPPEME",
+      "productName": "Peppermint - MED - 60g",
+      "quantity": 311,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015866",
+      "productCode": "MFPASSIME",
+      "productName": "Passionflower MED (80g)",
+      "quantity": 256,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015719",
+      "productCode": "MFYEASTME",
+      "productName": "Nutritional Yeast Flakes - Fortified & Toasted MED (140g)",
+      "quantity": 399,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015803",
+      "productCode": "MFMAPLEB10",
+      "productName": "Munchies Maple - Organic & Activated BULK (10kg)",
+      "quantity": 30,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015753",
+      "productCode": "MFKBBQMME",
+      "productName": "Munchies Korean BBQ - Organic & Activated MED (220g)",
+      "quantity": 1100,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015871",
+      "productCode": "MFKELPMSM",
+      "productName": "Kelp Meal (Tasmanian) - Raw SML (180g)",
+      "quantity": 840,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015800",
+      "productCode": "MFKELPMME",
+      "productName": "Kelp Meal (Tasmanian) - Raw MED (380g)",
+      "quantity": 453,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015712",
+      "productCode": "MFJASMIME",
+      "productName": "Jasmine Buds MED (55g)",
+      "quantity": 300,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016071",
+      "productCode": "MFHEMPSB5.5",
+      "productName": "Hemp Seeds (Tasmanian) - Insecticide-Free BULK (5.5kg)",
+      "quantity": 1,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016024",
+      "productCode": "MFLINSEME",
+      "productName": "Golden Linseed (Flaxseed) - Organic MED (350g)",
+      "quantity": 163,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015713",
+      "productCode": "MFGOLDGXL",
+      "productName": "Golden Granola - Organic & Activated XLRG (1kg)",
+      "quantity": 160,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015881",
+      "productCode": "MFGINGRME",
+      "productName": "Ginger Root - MED - 220g",
+      "quantity": 183,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016036",
+      "productCode": "MFGINGGSM",
+      "productName": "Ginger Ground - Organic SML (90g)",
+      "quantity": 270,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015883",
+      "productCode": "MFENGLBME",
+      "productName": "English Breakfast MED (90g)",
+      "quantity": 180,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015864",
+      "productCode": "MFDATESLG",
+      "productName": "Dates (Pitted) - Organic LRG (600g)",
+      "quantity": 49,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016070",
+      "productCode": "MFCHOCLSM",
+      "productName": "Clusters Chocolate Davidson Plum - Organic & Activated SML (200g)",
+      "quantity": 800,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016018",
+      "productCode": "MFCHOCLLG",
+      "productName": "Clusters Chocolate Davidson Plum - Organic & Activated LRG (350g)",
+      "quantity": 569,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016067",
+      "productCode": "MFCARCLB4.5",
+      "productName": "Clusters Caramel Wattleseed - Organic & Activated BULK (4.5kg)",
+      "quantity": 3,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016069",
+      "productCode": "MFCINNQXL",
+      "productName": "Cinnamon Quills BULK (1kg)",
+      "quantity": 4,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016068",
+      "productCode": "MFCINNPXL",
+      "productName": "Cinnamon Powder (Ceylon) - Organic XLRG (1kg)",
+      "quantity": 1,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016041",
+      "productCode": "MFCHIASLG",
+      "productName": "Chia Seeds - Organic LRG (700g)",
+      "quantity": 125,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015858",
+      "productCode": "MFCELTSSM",
+      "productName": "Celtic Sea Salt (COURSE) SML (300g)",
+      "quantity": 1400,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015865",
+      "productCode": "MFCASHEME",
+      "productName": "Cashews - Organic & Activated MED (260g)",
+      "quantity": 960,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015690",
+      "productCode": "MFBKCARAB9",
+      "productName": "Caramel Buckies BULK (9kg)",
+      "quantity": 40,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015853",
+      "productCode": "MFCANIBME",
+      "productName": "Cacao Nibs - Organic - MED - 280g",
+      "quantity": 400,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015843",
+      "productCode": "MFCACBPXL",
+      "productName": "Cacao Brain Power - Organic & Activated XLRG (1kg)",
+      "quantity": 277,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015717",
+      "productCode": "MFBUCKWLG",
+      "productName": "Buckwheat - Activated & Organic LRG (680g)",
+      "quantity": 371,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016021",
+      "productCode": "MFBKBRYB9",
+      "productName": "Berry Buckies BULK (9kg)",
+      "quantity": 30,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015868",
+      "productCode": "MFASHWAME",
+      "productName": "Ashwagandha Root Cut MED (150g)",
+      "quantity": 113,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016038",
+      "productCode": "MFASHWPSM",
+      "productName": "Ashwagandha Powder  - Organic - SML 125g",
+      "quantity": 500,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015846",
+      "productCode": "MFALMONSM",
+      "productName": "Almonds - Organic & Activated SML (120g)",
+      "quantity": 702,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015801",
+      "productCode": "SDBLUEISM",
+      "productName": "STARDUST Blue \"Immunity\" - Organic SML (150g)",
+      "quantity": 740,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016066",
+      "productCode": "IGE",
+      "productName": "Eros Granola Intermediate",
+      "quantity": 225,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016065",
+      "productCode": "IRC",
+      "productName": "Red Coconut Intermediate",
+      "quantity": 96,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015971",
+      "productCode": "IMM",
+      "productName": "Maple Munchies Intermediate",
+      "quantity": 500,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016064",
+      "productCode": "IAM",
+      "productName": "Mixed Nuts Intermediate",
+      "quantity": 300,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016063",
+      "productCode": "IAM",
+      "productName": "Mixed Nuts Intermediate",
+      "quantity": 300,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015672",
+      "productCode": "IGC",
+      "productName": "Cacao Granola Intermediate",
+      "quantity": 270,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015926",
+      "productCode": "IMS",
+      "productName": "Seed Mix Intermediate",
+      "quantity": 240,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015763",
+      "productCode": "ISWC",
+      "productName": "Wildfire Cashew Snack Intermediate",
+      "quantity": 200,
+      "scheduledDate": "2026-05-05",
+      "warehouseName": "Lundberg Storeroom",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00015895",
+      "productCode": "SDREDLOSM",
+      "productName": "STARDUST Red \"Longevity\" - Organic SML (150g)",
+      "quantity": 499,
+      "scheduledDate": "2026-05-04",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016059",
+      "productCode": "MFBKCHOCB9",
+      "productName": "Chocolate Buckies BULK (9kg)",
+      "quantity": 24,
+      "scheduledDate": "2026-05-04",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016058",
+      "productCode": "SDASHWASM",
+      "productName": "STARDUST Ashwagandha 20:1 Extract Powder SML (120g)",
+      "quantity": 309,
+      "scheduledDate": "2026-05-04",
+      "warehouseName": "TBC",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016055",
+      "productCode": "MFCECACLG",
+      "productName": "Ceremonial Cacao - Mindful Foods - LRG (700g)",
+      "quantity": 300,
+      "scheduledDate": "2026-05-04",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016054",
+      "productCode": "MFCECACME",
+      "productName": "Ceremonial Cacao - Mindful Foods - MED (350g)",
+      "quantity": 300,
+      "scheduledDate": "2026-05-04",
+      "warehouseName": "MF Packaging",
+      "status": "Parked"
+    },
+    {
+      "assemblyNumber": "AS-00016053",
+      "productCode": "MFCECACSM",
+      "productName": "Ceremonial Cacao - Mindful Foods - SML (150g)",
+      "quantity": 300,
       "scheduledDate": "2026-05-04",
       "warehouseName": "MF Packaging",
       "status": "Parked"
@@ -24,87 +879,6 @@
       "productCode": "MFLOTUSME",
       "productName": "Blue Lotus Flowers Organic MED - 20g",
       "quantity": 477,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS03MAR0103",
-      "productCode": "MFBLUBUSM",
-      "productName": "Blue Butterfly Pea Flowers SML - Organic 25g",
-      "quantity": 400,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015907",
-      "productCode": "IRPLOCO",
-      "productName": "Pecans Roasted with Maple Cinnamon Intermediate",
-      "quantity": 90,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015655",
-      "productCode": "IABKCH",
-      "productName": "Buckies Chocolate Intermediate",
-      "quantity": 350,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015680",
-      "productCode": "IAS",
-      "productName": "Sunflower Seeds Intermediate",
-      "quantity": 250,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016029",
-      "productCode": "BULK-AHNUT-1KG",
-      "productName": "Bulk - Nutmeg (Whole) - 1kg Bag",
-      "quantity": 2,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015947",
-      "productCode": "MFBEETPSM",
-      "productName": "Beetroot Powder - Organic SML (150g)",
-      "quantity": 983,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015879",
-      "productCode": "MFBEETPME",
-      "productName": "Beetroot Powder - Organic MED (340g)",
-      "quantity": 1122,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015715",
-      "productCode": "MFBKCHOCBG",
-      "productName": "Mindful Foods Chocolate Buckies - 350g",
-      "quantity": 789,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015848",
-      "productCode": "MFBKCHOCB9",
-      "productName": "Chocolate Buckies BULK (9kg)",
-      "quantity": 32,
       "scheduledDate": "2026-05-04",
       "warehouseName": "MF Packaging",
       "status": "Parked"
@@ -209,46 +983,10 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00016042",
-      "productCode": "MFTURMESM",
-      "productName": "Turmeric (High Potency 5%) - Organic SML (150g)",
-      "quantity": 740,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015894",
       "productCode": "SDREDLOB3",
       "productName": "STARDUST Red \"Longevity\" - Organic BULK (3kg)",
       "quantity": 22,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015802",
-      "productCode": "SDREDLOLG",
-      "productName": "STARDUST Red \"Longevity\" - Organic LRG (650g)",
-      "quantity": 68,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016041",
-      "productCode": "MFCHIASLG",
-      "productName": "Chia Seeds - Organic LRG (700g)",
-      "quantity": 201,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016040",
-      "productCode": "SDCACAOSM",
-      "productName": "STARDUST Cacao \"Energise\" - Organic SML (120g)",
-      "quantity": 639,
       "scheduledDate": "2026-05-04",
       "warehouseName": "TBC",
       "status": "Parked"
@@ -263,15 +1001,6 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00016038",
-      "productCode": "MFASHWPSM",
-      "productName": "Ashwagandha Powder  - Organic - SML 125g",
-      "quantity": 442,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00016037",
       "productCode": "MFMIXENB11",
       "productName": "Mixed Nuts - Organic & Activated BULK (11kg)",
@@ -281,109 +1010,10 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00016036",
-      "productCode": "MFGINGGSM",
-      "productName": "Ginger Ground - Organic SML (90g)",
-      "quantity": 562,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015844",
-      "productCode": "MFCACBPB5",
-      "productName": "Cacao Brain Power - Organic & Activated BULK (5kg)",
-      "quantity": 10,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016011",
-      "productCode": "MFHAZELB6",
-      "productName": "Hazelnuts - Organic & Activated BULK (6kg)",
-      "quantity": 1,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016035",
-      "productCode": "MFCACBPB10",
-      "productName": "Cacao Brain Power - Organic & Activated BULK (10kg)",
-      "quantity": 12,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016034",
-      "productCode": "MFCASHEB6",
-      "productName": "Cashews - Organic & Activated BULK (6kg)",
-      "quantity": 5,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016012",
-      "productCode": "MFYEASTB2",
-      "productName": "Nutritional Yeast Flakes - Fortified & Toasted BULK (2kg)",
-      "quantity": 2,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016033",
-      "productCode": "MFKELPMB5",
-      "productName": "Kelp Meal (Tasmanian) - Raw BULK (5kg)",
-      "quantity": 2,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016032",
-      "productCode": "BULK-EACIN-1KG",
-      "productName": "Bulk - Cinnamon Ceylon Powder - 1kg Bag",
-      "quantity": 2,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016031",
-      "productCode": "BULK-AHCFO-1KG",
-      "productName": "Bulk - Chilli Flakes - 1kg Bag",
-      "quantity": 2,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015684",
-      "productCode": "MFWALNUME",
-      "productName": "Walnuts - Organic & Activated MED (200g)",
-      "quantity": 1774,
-      "scheduledDate": "2026-05-04",
-      "warehouseName": "MF Operations",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00016025",
       "productCode": "MFHIBISME",
       "productName": "Hibiscus MED (150g)",
       "quantity": 528,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016024",
-      "productCode": "MFLINSEME",
-      "productName": "Golden Linseed (Flaxseed) - Organic MED (350g)",
-      "quantity": 142,
       "scheduledDate": "2026-05-01",
       "warehouseName": "TBC",
       "status": "Parked"
@@ -407,15 +1037,6 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00016021",
-      "productCode": "MFBKBRYB9",
-      "productName": "Berry Buckies BULK (9kg)",
-      "quantity": 34,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00016020",
       "productCode": "MFMAPLESM",
       "productName": "Munchies Maple - Organic & Activated SML (100g)",
@@ -434,183 +1055,12 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00016018",
-      "productCode": "MFCHOCLLG",
-      "productName": "Clusters Chocolate Davidson Plum - Organic & Activated LRG (350g)",
-      "quantity": 569,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015918",
-      "productCode": "MFTUMMTSM",
-      "productName": "Tummy Tea - Organic Herbal Tea SML (60g)",
-      "quantity": 347,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "ASAPR0004",
-      "productCode": "MFMORINSM",
-      "productName": "Moringa Powder SML - Organic 105g",
-      "quantity": 416,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016015",
-      "productCode": "IRPIS",
-      "productName": "Pistachio - Coconut Roasted",
-      "quantity": 120,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016016",
-      "productCode": "MFIRPIS",
-      "productName": "Pistachio - Coconut Roasted BULK",
-      "quantity": 120,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015619",
-      "productCode": "IABKBR",
-      "productName": "Berry Buckies Intermediate",
-      "quantity": 200,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016009",
-      "productCode": "MFCELFINSM",
-      "productName": "Celtic Sea Salt (FINE) SML (300g)",
-      "quantity": 300,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015982",
-      "productCode": "MFWILDCSMJAR",
-      "productName": "Wildfire Cashews - Organic & Activated SML JAR (120g)",
-      "quantity": 474,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015895",
-      "productCode": "SDREDLOSM",
-      "productName": "STARDUST Red \"Longevity\" - Organic SML (150g)",
-      "quantity": 499,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015968",
-      "productCode": "MFTURMEME",
-      "productName": "Turmeric (High Potency 5%) - Organic MED (300g)",
-      "quantity": 700,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015948",
-      "productCode": "MFCHOCLSM",
-      "productName": "Clusters Chocolate Davidson Plum - Organic & Activated SML (200g)",
-      "quantity": 265,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "ASAPR0027",
-      "productCode": "MFROSEPSM",
-      "productName": "Rose Petals SML (15g)",
-      "quantity": 620,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "ASMAR11005",
-      "productCode": "SDSCHISSM",
-      "productName": "STARDUST Schisandra 20:1 Extract Powder SML (120g)",
-      "quantity": 87,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "ASMAR201030",
-      "productCode": "FREISHSM",
-      "productName": "FUNGI Reishi 20:1 Extract Powder SML (100g)",
-      "quantity": 200,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "ASMAR11001",
-      "productCode": "SDASTRASM",
-      "productName": "STARDUST Astragalus 20:1 Extract Powder SML (120g)",
-      "quantity": 44,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "ASMAR181006",
-      "productCode": "MFROSHBSM",
-      "productName": "Rosehip Shells (Granules) SML - Organic 175g",
-      "quantity": 21,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015798",
-      "productCode": "MFCINNPME",
-      "productName": "Cinnamon Powder (Ceylon) - Organic MED (240g)",
-      "quantity": 349,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "MF Operations",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015491",
-      "productCode": "IRC",
-      "productName": "Red Coconut Intermediate",
-      "quantity": 96,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015893",
       "productCode": "MFSEEDMLG",
       "productName": "Seed Mix - Organic & Activated LRG (650g)",
       "quantity": 114,
       "scheduledDate": "2026-05-01",
       "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015892",
-      "productCode": "MFSEEDMME",
-      "productName": "Seed Mix - Organic & Activated MED (330g)",
-      "quantity": 744,
-      "scheduledDate": "2026-05-01",
-      "warehouseName": "TBC",
       "status": "Parked"
     },
     {
@@ -623,39 +1073,12 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "ASAPR0031",
-      "productCode": "MFPECANME",
-      "productName": "Pecans - Organic & Activated MED (220g)",
-      "quantity": 750,
-      "scheduledDate": "2026-04-30",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015923",
-      "productCode": "IGC",
-      "productName": "Cacao Granola Intermediate",
-      "quantity": 270,
-      "scheduledDate": "2026-04-30",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015502",
       "productCode": "MFCELTSME",
       "productName": "Celtic Sea Salt (COURSE) MED (600g)",
       "quantity": 717,
       "scheduledDate": "2026-04-30",
       "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015926",
-      "productCode": "IMS",
-      "productName": "Seed Mix Intermediate",
-      "quantity": 240,
-      "scheduledDate": "2026-04-30",
-      "warehouseName": "Lundberg Storeroom",
       "status": "Parked"
     },
     {
@@ -695,42 +1118,6 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00015713",
-      "productCode": "MFGOLDGXL",
-      "productName": "Golden Granola - Organic & Activated XLRG (1kg)",
-      "quantity": 60,
-      "scheduledDate": "2026-04-30",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015878",
-      "productCode": "MFTAMARME",
-      "productName": "Tamari Almonds - Organic & Activated MED (250g)",
-      "quantity": 121,
-      "scheduledDate": "2026-04-30",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015877",
-      "productCode": "MFTAMARLG",
-      "productName": "Tamari Almonds - Organic & Activated LRG (500g)",
-      "quantity": 141,
-      "scheduledDate": "2026-04-30",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00016007",
-      "productCode": "MFTAMARSM",
-      "productName": "Tamari Almonds - Organic & Activated SML BAG (300g)",
-      "quantity": 340,
-      "scheduledDate": "2026-04-30",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015840",
       "productCode": "MFWILDCSM",
       "productName": "Wildfire Cashews - Organic & Activated SML BAG (300g)",
@@ -749,15 +1136,6 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00015829",
-      "productCode": "MFSUNFSLG",
-      "productName": "Sunflower Seeds - Activated & Organic LRG (500g)",
-      "quantity": 109,
-      "scheduledDate": "2026-04-30",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015700",
       "productCode": "MFFENUWSM",
       "productName": "Fenugreek Whole SML - Organic 200g",
@@ -773,51 +1151,6 @@
       "quantity": 785,
       "scheduledDate": "2026-04-29",
       "warehouseName": "MF Operations",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015999",
-      "productCode": "SDREDLOXL",
-      "productName": "STARDUST Red \"Longevity\" - 1.2kg JAR",
-      "quantity": 4,
-      "scheduledDate": "2026-04-29",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015998",
-      "productCode": "MFBKBRYBG",
-      "productName": "Mindful Foods Berry Buckies - 350g",
-      "quantity": 574,
-      "scheduledDate": "2026-04-29",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015997",
-      "productCode": "MFIMMUNME",
-      "productName": "ImmuniTea - Organic Herbal Tea MED (100g)",
-      "quantity": 351,
-      "scheduledDate": "2026-04-29",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015996",
-      "productCode": "MFSUNFSME",
-      "productName": "Sunflower Seeds - Activated & Organic MED (250g)",
-      "quantity": 517,
-      "scheduledDate": "2026-04-29",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015763",
-      "productCode": "ISWC",
-      "productName": "Wildfire Cashew Snack Intermediate",
-      "quantity": 200,
-      "scheduledDate": "2026-04-29",
-      "warehouseName": "Lundberg Storeroom",
       "status": "Parked"
     },
     {
@@ -845,24 +1178,6 @@
       "quantity": 21,
       "scheduledDate": "2026-04-29",
       "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015672",
-      "productCode": "IGC",
-      "productName": "Cacao Granola Intermediate",
-      "quantity": 270,
-      "scheduledDate": "2026-04-29",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015843",
-      "productCode": "MFCACBPXL",
-      "productName": "Cacao Brain Power - Organic & Activated XLRG (1kg)",
-      "quantity": 142,
-      "scheduledDate": "2026-04-29",
-      "warehouseName": "TBC",
       "status": "Parked"
     },
     {
@@ -920,48 +1235,12 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00015983",
-      "productCode": "MFCURNTME",
-      "productName": "Currants Organic MED (300g)",
-      "quantity": 500,
-      "scheduledDate": "2026-04-28",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015949",
-      "productCode": "MFCINNPSM",
-      "productName": "Cinnamon Powder (Ceylon) - Organic SML (120g)",
-      "quantity": 1200,
-      "scheduledDate": "2026-04-28",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "ASAPR0011",
       "productCode": "MFCHILBME",
       "productName": "Chillax Brew - Organic Herbal Tea MED (60g)",
       "quantity": 409,
       "scheduledDate": "2026-04-28",
       "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015977",
-      "productCode": "MFWALNULG",
-      "productName": "Walnuts - Organic & Activated LRG (400g)",
-      "quantity": 859,
-      "scheduledDate": "2026-04-28",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015869",
-      "productCode": "MFWALNUXL",
-      "productName": "Walnuts - Organic & Activated XLRG (1kg)",
-      "quantity": 159,
-      "scheduledDate": "2026-04-28",
-      "warehouseName": "TBC",
       "status": "Parked"
     },
     {
@@ -989,69 +1268,6 @@
       "quantity": 6,
       "scheduledDate": "2026-04-28",
       "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015971",
-      "productCode": "IMM",
-      "productName": "Maple Munchies Intermediate",
-      "quantity": 500,
-      "scheduledDate": "2026-04-24",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015966",
-      "productCode": "ABWAO10",
-      "productName": "Almonds NP ACTIVATED ORGANIC BULK 10kg (ABW)",
-      "quantity": 8,
-      "scheduledDate": "2026-04-24",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015965",
-      "productCode": "ABWAIF10",
-      "productName": "Almonds Insecticide Free BULK 10kg (ABW)",
-      "quantity": 50,
-      "scheduledDate": "2026-04-24",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015832",
-      "productCode": "MFCECACME",
-      "productName": "Ceremonial Cacao - Mindful Foods - MED (350g)",
-      "quantity": 80,
-      "scheduledDate": "2026-04-23",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015835",
-      "productCode": "MFCECACSM",
-      "productName": "Ceremonial Cacao - Mindful Foods - SML (150g)",
-      "quantity": 80,
-      "scheduledDate": "2026-04-23",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015836",
-      "productCode": "MFCECACXL",
-      "productName": "Ceremonial Cacao - Mindful Foods - XLRG (1kg)",
-      "quantity": 10,
-      "scheduledDate": "2026-04-23",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015831",
-      "productCode": "MFCECACLG",
-      "productName": "Ceremonial Cacao - Mindful Foods - LRG (700g)",
-      "quantity": 70,
-      "scheduledDate": "2026-04-23",
-      "warehouseName": "MF Packaging",
       "status": "Parked"
     },
     {
@@ -1084,7 +1300,7 @@
     {
       "assemblyNumber": "ASMAR270126",
       "productCode": "MFCHILFME",
-      "productName": "Chilli Flakes MED (150g)",
+      "productName": "Chilli Flakes MED (150g) DISCONTINUED",
       "quantity": 149,
       "scheduledDate": "2026-04-23",
       "warehouseName": "TBC",
@@ -1149,15 +1365,6 @@
       "productCode": "IMS",
       "productName": "Seed Mix Intermediate",
       "quantity": 240,
-      "scheduledDate": "2026-04-23",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015925",
-      "productCode": "IAA",
-      "productName": "Almonds Intermediate",
-      "quantity": 250,
       "scheduledDate": "2026-04-23",
       "warehouseName": "Lundberg Storeroom",
       "status": "Parked"
@@ -1235,28 +1442,10 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00015753",
-      "productCode": "MFKBBQMME",
-      "productName": "Munchies Korean BBQ - Organic & Activated MED (220g)",
-      "quantity": 1128,
-      "scheduledDate": "2026-04-22",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015707",
       "productCode": "MFTUMMTB.8",
       "productName": "Tummy Tea - Organic Herbal Tea BULK (800g)",
       "quantity": 11,
-      "scheduledDate": "2026-04-22",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015914",
-      "productCode": "MFTUMMTME",
-      "productName": "Tummy Tea - Organic Herbal Tea MED (120g)",
-      "quantity": 744,
       "scheduledDate": "2026-04-22",
       "warehouseName": "TBC",
       "status": "Parked"
@@ -1268,15 +1457,6 @@
       "quantity": 120,
       "scheduledDate": "2026-04-22",
       "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015909",
-      "productCode": "MFIRPLOCO",
-      "productName": "Pecans Roasted with Maple Cinnamon BULK",
-      "quantity": 90,
-      "scheduledDate": "2026-04-22",
-      "warehouseName": "MF Packaging",
       "status": "Parked"
     },
     {
@@ -1343,15 +1523,6 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00015690",
-      "productCode": "MFBKCARAB9",
-      "productName": "Caramel Buckies BULK (9kg)",
-      "quantity": 22,
-      "scheduledDate": "2026-04-22",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015888",
       "productCode": "MFBKCHOCBG",
       "productName": "Mindful Foods Chocolate Buckies - 350g",
@@ -1397,33 +1568,6 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00015883",
-      "productCode": "MFENGLBME",
-      "productName": "English Breakfast MED (90g)",
-      "quantity": 175,
-      "scheduledDate": "2026-04-22",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015881",
-      "productCode": "MFGINGRME",
-      "productName": "Ginger Root - MED - 220g",
-      "quantity": 197,
-      "scheduledDate": "2026-04-22",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015874",
-      "productCode": "MFRASFDME",
-      "productName": "Raspberries - Freeze-dried Organic MED (40g)",
-      "quantity": 815,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015872",
       "productCode": "MFGOCHUME",
       "productName": "Gochugaru MED (220g)",
@@ -1433,82 +1577,10 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00015871",
-      "productCode": "MFKELPMSM",
-      "productName": "Kelp Meal (Tasmanian) - Raw SML (180g)",
-      "quantity": 493,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015870",
       "productCode": "BULK-RAWCA-BOX",
       "productName": "Bulk - Raw Organic Cashews - WW320 - 22.68kg Box",
       "quantity": 16,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015868",
-      "productCode": "MFASHWAME",
-      "productName": "Ashwagandha Root Cut MED (150g)",
-      "quantity": 130,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015867",
-      "productCode": "MFPECANLG",
-      "productName": "Pecans - Organic & Activated LRG (420g)",
-      "quantity": 379,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015866",
-      "productCode": "MFPASSIME",
-      "productName": "Passionflower MED (80g)",
-      "quantity": 225,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015865",
-      "productCode": "MFCASHEME",
-      "productName": "Cashews - Organic & Activated MED (260g)",
-      "quantity": 590,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015864",
-      "productCode": "MFDATESLG",
-      "productName": "Dates (Pitted) - Organic LRG (600g)",
-      "quantity": 216,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015863",
-      "productCode": "MFSPEARME",
-      "productName": "Spearmint MED (70g)",
-      "quantity": 259,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015862",
-      "productCode": "MFPEPPEME",
-      "productName": "Peppermint - MED - 60g",
-      "quantity": 348,
       "scheduledDate": "2026-04-21",
       "warehouseName": "TBC",
       "status": "Parked"
@@ -1541,82 +1613,10 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00015858",
-      "productCode": "MFCELTSSM",
-      "productName": "Celtic Sea Salt (COURSE) SML (300g)",
-      "quantity": 686,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015857",
-      "productCode": "MFRASLFME",
-      "productName": "Raspberry Leaf MED - Organic 50g",
-      "quantity": 261,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015718",
-      "productCode": "SDBLUEILG",
-      "productName": "STARDUST Blue \"Immunity\" - Organic LRG (600g)",
-      "quantity": 55,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015801",
-      "productCode": "SDBLUEISM",
-      "productName": "STARDUST Blue \"Immunity\" - Organic SML (150g)",
-      "quantity": 740,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "ASMAR201008",
-      "productCode": "MFMATCHSM",
-      "productName": "Ceremonial Matcha - Mindful Foods - SML 100g",
-      "quantity": 471,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015855",
       "productCode": "SDBLUEIB3",
       "productName": "STARDUST Blue \"Immunity\" - Organic BULK (3kg)",
       "quantity": 5,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015853",
-      "productCode": "MFCANIBME",
-      "productName": "Cacao Nibs - Organic - MED - 280g",
-      "quantity": 410,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015851",
-      "productCode": "MFTERIMME",
-      "productName": "Munchies Teriyaki - Organic & Activated MED (220g)",
-      "quantity": 314,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015850",
-      "productCode": "MFTERIMSM",
-      "productName": "Munchies Teriyaki - Organic & Activated SML (90g)",
-      "quantity": 321,
       "scheduledDate": "2026-04-21",
       "warehouseName": "TBC",
       "status": "Parked"
@@ -1631,37 +1631,10 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00015847",
-      "productCode": "MFALMONME",
-      "productName": "Almonds - Organic & Activated MED (250g)",
-      "quantity": 859,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015846",
-      "productCode": "MFALMONSM",
-      "productName": "Almonds - Organic & Activated SML (120g)",
-      "quantity": 246,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015845",
       "productCode": "MFALMONLG",
       "productName": "Almonds - Organic & Activated LRG (500g)",
       "quantity": 376,
-      "scheduledDate": "2026-04-21",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015803",
-      "productCode": "MFMAPLEB10",
-      "productName": "Munchies Maple - Organic & Activated BULK (10kg)",
-      "quantity": 10,
       "scheduledDate": "2026-04-21",
       "warehouseName": "TBC",
       "status": "Parked"
@@ -1682,15 +1655,6 @@
       "quantity": 17,
       "scheduledDate": "2026-04-20",
       "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015800",
-      "productCode": "MFKELPMME",
-      "productName": "Kelp Meal (Tasmanian) - Raw MED (380g)",
-      "quantity": 405,
-      "scheduledDate": "2026-04-17",
-      "warehouseName": "TBC",
       "status": "Parked"
     },
     {
@@ -1716,15 +1680,6 @@
       "productCode": "MFCACAPSM",
       "productName": "Cacao Powder - Organic Raw SML (100g)",
       "quantity": 475,
-      "scheduledDate": "2026-04-17",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015795",
-      "productCode": "SDPORIGLG",
-      "productName": "STARDUST Plant Protein ORIGINAL - LRG (380g)",
-      "quantity": 554,
       "scheduledDate": "2026-04-17",
       "warehouseName": "TBC",
       "status": "Parked"
@@ -1775,15 +1730,6 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00015733",
-      "productCode": "BULK-ABBFO-BOX",
-      "productName": "Bulk - Buckwheat Flour - 20kg Box",
-      "quantity": 1,
-      "scheduledDate": "2026-04-15",
-      "warehouseName": "MF Packaging",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015735",
       "productCode": "BULK-AFQF-BOX",
       "productName": "Bulk - Quinoa Flakes - 15kg Box",
@@ -1811,37 +1757,10 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "AS-00015719",
-      "productCode": "MFYEASTME",
-      "productName": "Nutritional Yeast Flakes - Fortified & Toasted MED (140g)",
-      "quantity": 357,
-      "scheduledDate": "2026-04-13",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015717",
-      "productCode": "MFBUCKWLG",
-      "productName": "Buckwheat - Activated & Organic LRG (680g)",
-      "quantity": 392,
-      "scheduledDate": "2026-04-13",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015716",
       "productCode": "MFFRANKSM",
       "productName": "Frankincense SML (150g)",
       "quantity": 58,
-      "scheduledDate": "2026-04-13",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015712",
-      "productCode": "MFJASMIME",
-      "productName": "Jasmine Buds MED (55g)",
-      "quantity": 251,
       "scheduledDate": "2026-04-13",
       "warehouseName": "TBC",
       "status": "Parked"
@@ -1853,15 +1772,6 @@
       "quantity": 120,
       "scheduledDate": "2026-04-13",
       "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "ASMAR201010",
-      "productCode": "MFCASHELG",
-      "productName": "Cashews - Organic & Activated LRG (520g)",
-      "quantity": 424,
-      "scheduledDate": "2026-04-10",
-      "warehouseName": "MF Packaging",
       "status": "Parked"
     },
     {
@@ -1919,15 +1829,6 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "KPLAPRIL17",
-      "productCode": "ITF",
-      "productName": "Firestarter Intermediate",
-      "quantity": 20,
-      "scheduledDate": "2026-04-08",
-      "warehouseName": "Lundberg Storeroom",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "ASAPR0025",
       "productCode": "BULK-ABBNR-BOX",
       "productName": "Bulk - Raw Brazil Nuts - 20kg Box",
@@ -1946,37 +1847,10 @@
       "status": "Parked"
     },
     {
-      "assemblyNumber": "ASMAR270123",
-      "productCode": "MFLOTUSSM",
-      "productName": "Blue Lotus Flowers Organic SML - 12g",
-      "quantity": 423,
-      "scheduledDate": "2026-04-07",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
       "assemblyNumber": "AS-00015463",
       "productCode": "MFGINSEME",
       "productName": "Ginseng MED (100g)",
       "quantity": 152,
-      "scheduledDate": "2026-04-07",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "ASMAR270121",
-      "productCode": "MFCASHESM",
-      "productName": "Cashews - Organic & Activated SML (120g)",
-      "quantity": 342,
-      "scheduledDate": "2026-04-07",
-      "warehouseName": "TBC",
-      "status": "Parked"
-    },
-    {
-      "assemblyNumber": "AS-00015356",
-      "productCode": "MFTERIMLG",
-      "productName": "Munchies Teriyaki - Organic & Activated LRG (400g)",
-      "quantity": 352,
       "scheduledDate": "2026-04-07",
       "warehouseName": "TBC",
       "status": "Parked"
@@ -2036,5 +1910,5 @@
       "status": "Parked"
     }
   ],
-  "totalLines": 226
+  "totalLines": 212
 }
