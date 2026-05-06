@@ -64,42 +64,76 @@ Today's `bomMap` is one level deep. Finished-good demand must drive raw-material
 
 ## Phase 3 — Batch optimiser (week 2–3)
 
-The keystone module. Pure, pluggable cost function.
+The keystone module. Pure engine, pluggable cost function. Inputs sourced from [`docs/CAPACITY-DATA.md`](./CAPACITY-DATA.md) — the spreadsheet at `data/kitchen capacity and family plans.xlsx`.
 
-**New: `src/lib/engine/batch-optimiser.ts`**
+**New modules**
+- `src/lib/planning/capacity-data.ts` — loader for the spreadsheet → typed records
+- `src/lib/engine/changeover.ts` — pure `costToSwitch(prevBatch, nextBatch, station)` using the family / extended-family / size hierarchy
+- `src/lib/engine/batch-optimiser.ts` — the optimiser itself
+
+**Type sketch**
 
 ```typescript
-export interface BatchOptimiserInput {
+type Station = 'hand-packing' | 'elephant' | 'dust' | 'bottlo';
+type ExtendedFamily =
+  | 'FAM Fungi' | 'FAM MF - Clusters' | 'FAM MF - Granola'
+  | 'FAM MF - Munchies' | 'FAM MF - Nuts' | 'FAM MF - Tea';
+
+interface ProductMeta {
   productCode: string;
-  demand: WeeklyDemand[];                      // full horizon, weekly
-  vesselCapacity: number;                      // kg/L per run
-  minBatchSize: number;
-  maxBatchSize: number;
-  shelfLifeDays: number;
-  changeoverHours: number;
-  capacityByDate: Record<string, ResourceCapacity>;   // daily
-  warehouseCapByDate: Record<string, number>;          // daily storage cap
+  family: string;                            // intermediate code, e.g. 'XHBC'
+  extendedFamily: ExtendedFamily | null;     // null for the 108 unmapped SKUs
+  packageSize: 'SML' | 'MED' | 'LRG' | string;
+  station: Station;
+  rateUnitsPerHour: number;                  // station default, or per-product override
 }
-export interface BatchOptimiserOutput {
+
+interface ChangeoverCostMatrix {
+  // Per station, in minutes. Direct from Packaging Line Capacity sheet.
+  [station: string]: {
+    sizeSwitch: number;
+    familySameSize: number;
+    extendedFamily: number;
+    fullClean: number;
+  };
+}
+
+interface BatchOptimiserInput {
+  productCode: string;
+  meta: ProductMeta;
+  demand: WeeklyDemand[];                    // full horizon, weekly
+  shelfLifeDays: number;
+  capacityByDate: Record<string, ResourceCapacity>;   // daily, per resource
+  warehouseCapByDate: Record<string, number>;          // daily storage cap
+  changeoverMatrix: ChangeoverCostMatrix;
+  // The optimiser sees the *previous* batch on the same station so it can
+  // price the changeover; for cross-product runs this drives the family-
+  // clustering behaviour without any explicit rule.
+  previousBatchOnStation: { meta: ProductMeta; finishDate: string } | null;
+}
+
+interface BatchOptimiserOutput {
   batches: ScheduledBatch[];
-  rationale: string[];                         // "1 run covers 11 weeks; shelf-life 90d permits"
+  rationale: string[];                       // "1 run covers 11 weeks; shelf-life 90d permits"
   unmetDemand: { week: string; qty: number }[];
-  interRunDays: number[];                      // gaps between consecutive runs, for telemetry
+  interRunDays: number[];                    // gaps between consecutive runs, for telemetry
 }
 ```
 
-**Objective: minimise total cost.** Cost terms (start simple, add as needed):
-- `+ changeoverHours × num_batches` — set high enough that the optimiser naturally clusters demand into fewer, longer-spaced runs
-- `+ storage_overflow_penalty` — per-day, per-unit over the warehouse cap
+**Objective: minimise total cost.** Cost terms:
+- `+ changeoverMinutes(prev, curr, station)` — variable per (prev, curr, station) using the matrix in `CAPACITY-DATA.md §4`. **This is the lever that drives family-clustering.** Bottlo's 10 / 15 / 40 / 120 gradient is steep enough that the optimiser will reorder runs to keep mates together; Hand packing's 2 / 2 / 2 / 5 won't push much.
+- `+ storage_overflow_penalty` — per-day, per-unit over the warehouse cap (decision #4: daily buckets)
 - `+ shelf_life_violation_penalty` — large; effectively a hard constraint
-- `– price_break_savings` — negative cost = reward; pulls in driven-PO discounts
+- `– price_break_savings` — negative cost = reward
 - (later) `+ peak_storage_penalty` if smoothing becomes necessary
 
-**Hard constraints**: shelf-life ceiling, vessel min/max, daily storage cap, demand coverage by required date.
+**Hard constraints**: shelf-life ceiling, vessel/oven/IBC capacity per day (from `Kitchen capacities` + `Kitchen processes`), demand coverage by required date.
 
-**Tuning the "don't repeat for 3 months" behaviour.** The user's goal — single runs covering ≈3 months of demand for long-shelf-life SKUs — emerges from the cost function, not from a hard rule. The lever is `changeoverHours`. If two runs cost less than one big run + storage holding, the optimiser will pick two; if one big run is cheaper, it picks one. Per-product changeover cost lets short-shelf-life SKUs stay frequent without penalty.
+**Tuning the "don't repeat for 3 months" behaviour.** Same as before — emerges from the cost function via per-station changeover costs, not a hard rule. Long-shelf-life SKUs land at one run/quarter because the changeover cost dominates storage. Short-shelf-life SKUs stay frequent because shelf-life caps coverage.
 
-**Algorithm**: dynamic programming over the daily grid. State = `(day, inventory)`. Start with a greedy seed, then local-search swaps.
+**Family clustering as a free win.** Once `costToSwitch` is wired through, scheduling Bottlo runs by extended family (and within that, by family same-size) emerges automatically — the optimiser sees that switching XHBC → XHBC (same family) costs 10 min, while XHBC → ICW (different extended family) costs 120 min, and prefers the cheap sequence wherever it can without breaking demand-by-date constraints.
+
+**Algorithm**: dynamic programming over the daily grid. State = `(day, inventory, lastBatchMetaOnStation)`. The third dimension is what makes changeover cost path-dependent. Start with a greedy seed (largest demand first, family-clustered), then local-search swaps.
 
 **Acceptance**
 - Two adjacent small demands collapse into one batch when changeover savings > storage cost
