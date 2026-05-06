@@ -31,11 +31,26 @@ import type {
 export type CalendarActivityKind = 'packaging';
 
 export interface CalendarActivity {
-  /** Stable identifier — useful for React keys and selection state. */
+  /** Per-render identifier — fine for React keys, do NOT use for persistence. */
   id: string;
+  /**
+   * Persistence-safe identifier. Survives day-assignment changes and
+   * orchestrator re-orderings as long as the (productCode, weekStart,
+   * orderInWeek) tuple is stable across re-plans. Used by the
+   * client-side mutations store (dismiss, etc.).
+   *
+   * If the engine reroutes a product to a different station between runs,
+   * orderInWeek may change — mutations keyed on the old stableId become
+   * stale. The mutation store surfaces stale entries as warnings.
+   */
+  stableId: string;
   kind: CalendarActivityKind;
-  /** YYYY-MM-DD local. */
+  /** YYYY-MM-DD local — the day this activity is scheduled for. */
   date: string;
+  /** YYYY-MM-DD Monday — week the orchestrator placed this batch in. */
+  weekStart: string;
+  /** Position within the week on this station (0 = first batch of the week). */
+  orderInWeek: number;
   station: Station;
   productCode: string;
   productName: string;
@@ -47,6 +62,15 @@ export interface CalendarActivity {
   /** Optional family info — used for color-coding / family-grouping in UI. */
   family: string | null;
   extendedFamily: string | null;
+}
+
+/** Build the stable identity used by the mutation store. */
+export function stableIdOf(
+  productCode: string,
+  weekStart: string,
+  orderInWeek: number,
+): string {
+  return `${productCode}|${weekStart}|${orderInWeek}`;
 }
 
 /** Per-day per-station load. Calendar uses this to colour-code utilisation. */
@@ -114,8 +138,11 @@ function toActivity(
 ): CalendarActivity {
   return {
     id: `${date}-${station}-${indexWithinDay}-${batch.productCode}`,
+    stableId: stableIdOf(batch.productCode, batch.weekStart, batch.orderInWeek),
     kind: 'packaging',
     date,
+    weekStart: batch.weekStart,
+    orderInWeek: batch.orderInWeek,
     station,
     productCode: batch.productCode,
     productName: batch.productMeta.productName || batch.productCode,

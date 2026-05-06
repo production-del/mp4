@@ -117,6 +117,40 @@ describe('projectToCalendar', () => {
       expect(a.id).toContain('2026-05-04');
       expect(a.id).toContain('bottlo');
       expect(a.id).toContain('FCHAGALG');
+      // Stable identity fields for mutation matching
+      expect(a.stableId).toBe('FCHAGALG|2026-05-04|0');
+      expect(a.weekStart).toBe('2026-05-04');
+      expect(a.orderInWeek).toBe(0);
+    });
+
+    test('stableId stays the same across day-assignment changes', () => {
+      // Same product, same week, same orderInWeek → same stableId, even if
+      // the day-assigner shifted the date.
+      const sameOrder = assignedBatch({
+        productCode: 'X',
+        weekStart: '2026-05-04',
+        scheduledDate: '2026-05-04', // Monday
+        quantity: 100,
+        durationMinutes: 60,
+        changeoverMinutes: 0,
+        orderInWeek: 0,
+      });
+      const movedToTuesday = assignedBatch({
+        productCode: 'X',
+        weekStart: '2026-05-04',
+        scheduledDate: '2026-05-05', // Tuesday — same week, same orderInWeek
+        quantity: 100,
+        durationMinutes: 60,
+        changeoverMinutes: 0,
+        orderInWeek: 0,
+      });
+      const ps1 = new Map<Station, DailyStationTimeline>();
+      ps1.set('bottlo', timeline('bottlo', { '2026-05-04': [sameOrder] }));
+      const ps2 = new Map<Station, DailyStationTimeline>();
+      ps2.set('bottlo', timeline('bottlo', { '2026-05-05': [movedToTuesday] }));
+      const r1 = projectToCalendar(output(ps1));
+      const r2 = projectToCalendar(output(ps2));
+      expect(r1.activities[0].stableId).toBe(r2.activities[0].stableId);
     });
 
     test('produces one dayLoad summary with utilisation', () => {
