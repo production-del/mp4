@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 
 const links = [
+  { href: '/calendar', label: 'Calendar' },
   { href: '/packaging', label: 'Packaging' },
   { href: '/kitchen', label: 'Kitchen' },
   { href: '/purchasing', label: 'Component' },
