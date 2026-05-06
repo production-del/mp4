@@ -71,6 +71,8 @@ interface CalendarAppProps {
   horizon: PlanningHorizon;
   activities: CalendarActivity[];
   dayLoads: DayLoadSummary[];
+  assembliesFetchedAt: string | null;
+  kitchenActivityCount: number;
   /** Per-station daily capacity in minutes. Used for client-side load recompute. */
   stationDailyMinutes: Record<string, number>;
   infeasibleProducts: InfeasibleProduct[];
@@ -116,7 +118,9 @@ interface CalendarAppProps {
 
 const STATIONS: Station[] = ['hand-packing', 'elephant', 'dust', 'bottlo'];
 
-const STATION_COLORS: Record<Station, { bg: string; border: string; text: string; dot: string }> = {
+interface ChipColor { bg: string; border: string; text: string; dot: string }
+
+const STATION_COLORS: Record<Station, ChipColor> = {
   'hand-packing': { bg: '#fef3c7', border: '#f59e0b', text: '#78350f', dot: '#f59e0b' },
   elephant: { bg: '#dbeafe', border: '#3b82f6', text: '#1e3a8a', dot: '#3b82f6' },
   dust: { bg: '#ede9fe', border: '#8b5cf6', text: '#4c1d95', dot: '#8b5cf6' },
@@ -129,6 +133,20 @@ const STATION_LABELS: Record<Station, string> = {
   dust: 'Dust',
   bottlo: 'Bottlo',
 };
+
+/** Distinct colour for kitchen activities — pink/rose, separate from packaging stations. */
+const KITCHEN_COLOR: ChipColor = {
+  bg: '#fce7f3',
+  border: '#ec4899',
+  text: '#831843',
+  dot: '#ec4899',
+};
+
+/** Pick the chip's colour scheme based on kind + station. */
+function colorOf(activity: CalendarActivity): ChipColor {
+  if (activity.kind === 'kitchen') return KITCHEN_COLOR;
+  return activity.station ? STATION_COLORS[activity.station] : KITCHEN_COLOR;
+}
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -196,6 +214,8 @@ export function CalendarApp(props: CalendarAppProps) {
     horizon,
     activities,
     dayLoads,
+    assembliesFetchedAt,
+    kitchenActivityCount,
     stationDailyMinutes,
     infeasibleProducts,
     routingDecisions,
@@ -270,10 +290,35 @@ export function CalendarApp(props: CalendarAppProps) {
     }
   }
 
-  // Layer-toggle state: which stations are visible. Default all on.
+  // Assemblies (kitchen production) refresh.
+  const [refreshingAssemblies, setRefreshingAssemblies] = useState(false);
+  const [assembliesRefreshError, setAssembliesRefreshError] = useState<string | null>(null);
+  async function refreshAssemblies() {
+    setRefreshingAssemblies(true);
+    setAssembliesRefreshError(null);
+    try {
+      const res = await fetch('/api/refresh-assemblies', { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail ?? data.error ?? `HTTP ${res.status}`);
+      }
+      router.refresh();
+    } catch (e) {
+      setAssembliesRefreshError(e instanceof Error ? e.message : 'Refresh failed');
+    } finally {
+      setRefreshingAssemblies(false);
+    }
+  }
+
+  // Layer-toggle state: which packaging stations are visible. Default all on.
   const [visibleStations, setVisibleStations] = useState<Set<Station>>(
     () => new Set(STATIONS),
   );
+  // Top-level category toggles: packaging (chips for the four stations) and
+  // kitchen (chips for Lundberg assemblies). Either off hides ALL activities
+  // of that kind regardless of per-station toggles.
+  const [showPackaging, setShowPackaging] = useState(true);
+  const [showKitchen, setShowKitchen] = useState(true);
 
   // Selected activity for the drawer.
   const [selected, setSelected] = useState<CalendarActivity | null>(null);
@@ -357,11 +402,15 @@ export function CalendarApp(props: CalendarAppProps) {
   // Filter mutated activities through layer toggles + dismissal visibility.
   const visibleActivities = useMemo(() => {
     return mutatedActivities.filter((a) => {
-      if (!visibleStations.has(a.station)) return false;
+      // Category toggle (top-level)
+      if (a.kind === 'packaging' && !showPackaging) return false;
+      if (a.kind === 'kitchen' && !showKitchen) return false;
+      // Per-station toggle within packaging
+      if (a.kind === 'packaging' && a.station && !visibleStations.has(a.station)) return false;
       if (!showDismissed && isDismissed(mutations, a.stableId)) return false;
       return true;
     });
-  }, [mutatedActivities, visibleStations, mutations, showDismissed]);
+  }, [mutatedActivities, visibleStations, showPackaging, showKitchen, mutations, showDismissed]);
   const activitiesByDate = useMemo(
     () => groupByDate(visibleActivities),
     [visibleActivities],
@@ -374,6 +423,10 @@ export function CalendarApp(props: CalendarAppProps) {
     type Bucket = { usedMinutes: number; capacityMinutes: number; station: Station };
     const perDayPerStation = new Map<string, Map<Station, number>>();
     for (const a of mutatedActivities) {
+      // Load is a packaging-station concept; kitchen activities don't have
+      // a station capacity in this model.
+      if (a.kind !== 'packaging' || !a.station) continue;
+      if (!showPackaging) continue;
       if (!visibleStations.has(a.station)) continue;
       if (isDismissed(mutations, a.stableId)) continue;
       let stationMap = perDayPerStation.get(a.date);
@@ -399,10 +452,11 @@ export function CalendarApp(props: CalendarAppProps) {
       if (peak) out.set(date, peak);
     }
     return out;
-  }, [mutatedActivities, visibleStations, mutations, stationDailyMinutes]);
+  }, [mutatedActivities, visibleStations, showPackaging, mutations, stationDailyMinutes]);
 
   // Per-station counts (for the chip labels in the rail) — count BEFORE
-  // filtering so the user can see what they'd un-hide.
+  // filtering so the user can see what they'd un-hide. Kitchen activities
+  // (station=null) don't contribute to packaging-station counts.
   const stationCounts = useMemo(() => {
     const counts: Record<Station, number> = {
       'hand-packing': 0,
@@ -410,7 +464,9 @@ export function CalendarApp(props: CalendarAppProps) {
       dust: 0,
       bottlo: 0,
     };
-    for (const a of activities) counts[a.station] += 1;
+    for (const a of activities) {
+      if (a.kind === 'packaging' && a.station) counts[a.station] += 1;
+    }
     return counts;
   }, [activities]);
 
@@ -429,6 +485,9 @@ export function CalendarApp(props: CalendarAppProps) {
     const usedByDateStation = new Map<string, Map<Station, number>>();
     for (const a of mutatedActivities) {
       if (isDismissed(mutations, a.stableId)) continue;
+      // Heatmap is a packaging-station concept; kitchen activities have
+      // station=null and don't contribute.
+      if (a.kind !== 'packaging' || !a.station) continue;
       let stMap = usedByDateStation.get(a.date);
       if (!stMap) {
         stMap = new Map();
@@ -547,40 +606,112 @@ export function CalendarApp(props: CalendarAppProps) {
         </Section>
 
         <Section title="Layers">
-          {STATIONS.map((s) => {
-            const on = visibleStations.has(s);
-            const colors = STATION_COLORS[s];
-            return (
-              <label
-                key={s}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '6px 0',
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  opacity: on ? 1 : 0.4,
-                  userSelect: 'none',
-                }}
-              >
-                <input type="checkbox" checked={on} onChange={() => toggleStation(s)} />
-                <span
+          {/* Category-level toggles: Packaging master + Kitchen master. */}
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 0',
+              fontSize: 13,
+              cursor: 'pointer',
+              opacity: showPackaging ? 1 : 0.4,
+              userSelect: 'none',
+              fontWeight: 500,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={showPackaging}
+              onChange={() => setShowPackaging((v) => !v)}
+            />
+            <span style={{ flex: 1 }}>Packaging</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+              {Object.values(stationCounts).reduce((s, n) => s + n, 0)}
+            </span>
+          </label>
+
+          {/* Per-station detail toggles within Packaging — indented; greyed
+              when the master Packaging toggle is off. */}
+          <div
+            style={{
+              paddingLeft: 18,
+              opacity: showPackaging ? 1 : 0.5,
+              pointerEvents: showPackaging ? 'auto' : 'none',
+            }}
+          >
+            {STATIONS.map((s) => {
+              const on = visibleStations.has(s);
+              const colors = STATION_COLORS[s];
+              return (
+                <label
+                  key={s}
                   style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    background: colors.dot,
-                    display: 'inline-block',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '4px 0',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    opacity: on ? 1 : 0.4,
+                    userSelect: 'none',
                   }}
-                />
-                <span style={{ flex: 1 }}>{STATION_LABELS[s]}</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-                  {stationCounts[s]}
-                </span>
-              </label>
-            );
-          })}
+                >
+                  <input type="checkbox" checked={on} onChange={() => toggleStation(s)} />
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: colors.dot,
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span style={{ flex: 1 }}>{STATION_LABELS[s]}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                    {stationCounts[s]}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          {/* Kitchen master toggle. No sub-detail yet — all kitchen
+              activities sit under one bucket pending Phase 4j.2 (kitchen
+              equipment breakdown). */}
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 0',
+              marginTop: 4,
+              fontSize: 13,
+              cursor: 'pointer',
+              opacity: showKitchen ? 1 : 0.4,
+              userSelect: 'none',
+              fontWeight: 500,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={showKitchen}
+              onChange={() => setShowKitchen((v) => !v)}
+            />
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                background: KITCHEN_COLOR.dot,
+                display: 'inline-block',
+              }}
+            />
+            <span style={{ flex: 1 }}>Kitchen</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+              {kitchenActivityCount}
+            </span>
+          </label>
           {dismissedCount > 0 && (
             <label
               style={{
@@ -684,6 +815,15 @@ export function CalendarApp(props: CalendarAppProps) {
             }
             tone={salesOrdersFetchedAt ? undefined : 'amber'}
           />
+          <KPIRow
+            label="Kitchen assemblies"
+            value={
+              assembliesFetchedAt
+                ? `${kitchenActivityCount} runs · ${new Date(assembliesFetchedAt).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })}`
+                : 'never'
+            }
+            tone={assembliesFetchedAt ? undefined : 'amber'}
+          />
           {availableWarehouses.length > 0 && (
             <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)' }}>
               <div style={{ marginBottom: 2 }}>Eligible warehouses (sum):</div>
@@ -769,7 +909,7 @@ export function CalendarApp(props: CalendarAppProps) {
             <button
               type="button"
               onClick={refreshSalesOrders}
-              disabled={refreshingSoh || refreshingSO || isReplanning}
+              disabled={refreshingSoh || refreshingSO || refreshingAssemblies || isReplanning}
               style={{
                 padding: '6px 12px',
                 fontSize: 13,
@@ -783,6 +923,24 @@ export function CalendarApp(props: CalendarAppProps) {
               title="Pull active customer sales orders from Unleashed and re-plan"
             >
               {refreshingSO ? 'Refreshing SO…' : 'Refresh SO'}
+            </button>
+            <button
+              type="button"
+              onClick={refreshAssemblies}
+              disabled={refreshingSoh || refreshingSO || refreshingAssemblies || isReplanning}
+              style={{
+                padding: '6px 12px',
+                fontSize: 13,
+                background: 'var(--bg-page)',
+                color: 'inherit',
+                border: '0.5px solid var(--border)',
+                borderRadius: 4,
+                cursor: refreshingAssemblies ? 'wait' : 'pointer',
+                fontFamily: 'inherit',
+              }}
+              title="Pull active kitchen assemblies from Unleashed"
+            >
+              {refreshingAssemblies ? 'Refreshing kitchen…' : 'Refresh kitchen'}
             </button>
             <button
               type="button"
@@ -834,6 +992,21 @@ export function CalendarApp(props: CalendarAppProps) {
             }}
           >
             ⚠ Sales-order refresh failed: {soRefreshError}
+          </div>
+        )}
+        {assembliesRefreshError && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '8px 12px',
+              background: '#fef2f2',
+              border: '0.5px solid #fecaca',
+              borderRadius: 4,
+              fontSize: 12,
+              color: '#991b1b',
+            }}
+          >
+            ⚠ Kitchen-assemblies refresh failed: {assembliesRefreshError}
           </div>
         )}
 
@@ -932,7 +1105,7 @@ export function CalendarApp(props: CalendarAppProps) {
           dismissed={isDismissed(mutations, selected.stableId)}
           rescheduledTo={rescheduledTo(mutations, selected.stableId)}
           editedQuantity={editedQuantityOf(mutations, selected.stableId)}
-          stationDailyMinutes={stationDailyMinutes[selected.station] ?? 480}
+          stationDailyMinutes={selected.station ? stationDailyMinutes[selected.station] ?? 480 : 480}
           productOverride={productOverrides[selected.productCode]}
           stationDailyOutput={productStationDailyOutput[selected.productCode] ?? 0}
           globalShelfLifeDays={globalDefaults.shelfLifeDays}
@@ -1153,7 +1326,7 @@ function ActivityChip({
   dismissed: boolean;
   onClick: () => void;
 }) {
-  const colors = STATION_COLORS[activity.station];
+  const colors = colorOf(activity);
   return (
     <button
       type="button"
@@ -1265,7 +1438,7 @@ function ActivityDrawer({
   onClearEdit: () => void;
   onClose: () => void;
 }) {
-  const colors = STATION_COLORS[activity.station];
+  const colors = colorOf(activity);
 
   // Working days within the activity's week (Mon-Fri) for the reschedule picker.
   const weekDays = useMemo(() => {
@@ -1344,7 +1517,11 @@ function ActivityDrawer({
           textTransform: 'capitalize',
         }}
       >
-        {STATION_LABELS[activity.station]}
+        {activity.kind === 'kitchen'
+          ? 'Kitchen'
+          : activity.station
+          ? STATION_LABELS[activity.station]
+          : '—'}
       </div>
 
       <div style={{ marginBottom: 12 }}>

@@ -27,8 +27,8 @@ import type {
 
 // ─── Public types ────────────────────────────────────────────
 
-/** Future kinds will include 'kitchen', 'po-placed', 'po-receiving'. */
-export type CalendarActivityKind = 'packaging';
+/** Future kinds will include 'po-placed', 'po-receiving'. */
+export type CalendarActivityKind = 'packaging' | 'kitchen';
 
 export interface CalendarActivity {
   /** Per-render identifier — fine for React keys, do NOT use for persistence. */
@@ -47,17 +47,22 @@ export interface CalendarActivity {
   kind: CalendarActivityKind;
   /** YYYY-MM-DD local — the day this activity is scheduled for. */
   date: string;
-  /** YYYY-MM-DD Monday — week the orchestrator placed this batch in. */
+  /**
+   * YYYY-MM-DD Monday for packaging activities (the optimiser places them
+   * weekly). For kitchen activities pulled from Unleashed, set to the
+   * Monday of the assembly's scheduled date.
+   */
   weekStart: string;
   /** Position within the week on this station (0 = first batch of the week). */
   orderInWeek: number;
-  station: Station;
+  /** Packaging station for `kind: 'packaging'` activities; `null` for kitchen. */
+  station: Station | null;
   productCode: string;
   productName: string;
   quantity: number;
-  /** Production minutes (excluding changeover). */
+  /** Production minutes (excluding changeover). 0 when not estimated (kitchen activities). */
   durationMinutes: number;
-  /** Changeover minutes from the previous batch on this station. */
+  /** Changeover minutes from the previous batch on this station. 0 for kitchen. */
   changeoverMinutes: number;
   /** Optional family info — used for color-coding / family-grouping in UI. */
   family: string | null;
@@ -102,10 +107,14 @@ export function projectToCalendar(
   }
 
   // Stable, deterministic order: by date, then station, then within-day order.
+  // (At this point all activities are kind='packaging' with non-null station;
+  // kitchen activities are merged in by the server page after projection.)
   activities.sort((a, b) => {
     if (a.date !== b.date) return a.date.localeCompare(b.date);
-    if (a.station !== b.station) return a.station.localeCompare(b.station);
-    return 0; // Already in within-day order from the source map iteration.
+    const sa = a.station ?? '';
+    const sb = b.station ?? '';
+    if (sa !== sb) return sa.localeCompare(sb);
+    return 0;
   });
   dayLoads.sort((a, b) => {
     if (a.date !== b.date) return a.date.localeCompare(b.date);
