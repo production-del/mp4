@@ -29,6 +29,10 @@ import {
   balanceStationLoads,
   type ProductRouting,
 } from '@/lib/engine/load-balancer';
+import {
+  readProductOverrides,
+  resolveOverride,
+} from '@/lib/planning/product-overrides';
 import { CalendarApp } from './CalendarApp';
 
 export const dynamic = 'force-dynamic'; // Always re-run; calendar reflects latest data
@@ -173,6 +177,11 @@ function buildPayload() {
     routingByProduct.set(r.productCode, { station: r.currentStation, rationale });
   }
 
+  // Per-product overrides — read from data/product-overrides.json on every
+  // render. Operators set these via the drawer's Product overrides section
+  // (Phase 4f); the next Re-plan picks them up.
+  const productOverrides = readProductOverrides();
+
   // Build the ProductPlan list using the balanced routing decisions.
   const products: ProductPlan[] = balanced.routings.map((r) => {
     const baseMeta = capacity.productMetaBySku[r.productCode];
@@ -184,16 +193,20 @@ function buildPayload() {
         capacity.stations[r.currentStation]?.unitsPerHour ?? baseMeta.rateUnitsPerHour,
     };
     const station = capacity.stations[r.currentStation];
-    const maxBatch = station
+    const stationMaxBatch = station
       ? dailyStationOutput(station.unitsPerHour, station.hoursPerDay)
       : 1500;
+    const resolved = resolveOverride(productOverrides, r.productCode, {
+      shelfLifeDays: DEFAULT_SHELF_LIFE_DAYS,
+      maxBatchSize: stationMaxBatch,
+    });
     return {
       meta: chosenMeta,
       weeklyDemand,
       initialInventory: 0,
-      shelfLifeDays: DEFAULT_SHELF_LIFE_DAYS,
+      shelfLifeDays: resolved.shelfLifeDays,
       minBatchSize: DEFAULT_MIN_BATCH,
-      maxBatchSize: maxBatch,
+      maxBatchSize: resolved.maxBatchSize,
       step: STEP,
     };
   });
@@ -254,6 +267,13 @@ function buildPayload() {
     stationDailyMinutes[station] = defaults.hoursPerDay * 60;
   }
 
+  // Per-product station daily output (for drawer's max-batch default helper).
+  const productStationDailyOutput: Record<string, number> = {};
+  for (const r of balanced.routings) {
+    const s = capacity.stations[r.currentStation];
+    if (s) productStationDailyOutput[r.productCode] = dailyStationOutput(s.unitsPerHour, s.hoursPerDay);
+  }
+
   return {
     horizon,
     activities: projection.activities,
@@ -261,6 +281,11 @@ function buildPayload() {
     stationDailyMinutes,
     infeasibleProducts,
     routingDecisions,
+    productOverrides,
+    productStationDailyOutput,
+    globalDefaults: {
+      shelfLifeDays: DEFAULT_SHELF_LIFE_DAYS,
+    },
     summary: {
       productCount,
       feasibleCount,

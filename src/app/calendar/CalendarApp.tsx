@@ -62,6 +62,11 @@ interface InfeasibleProduct {
   reason: string;
 }
 
+interface ProductOverrideShape {
+  shelfLifeDays?: number;
+  maxBatchSize?: number;
+}
+
 interface CalendarAppProps {
   horizon: PlanningHorizon;
   activities: CalendarActivity[];
@@ -71,6 +76,12 @@ interface CalendarAppProps {
   infeasibleProducts: InfeasibleProduct[];
   /** productCode → cost-router rationale string (why this station was chosen). */
   routingDecisions: Record<string, string>;
+  /** Per-product override map currently on disk (server reads on each render). */
+  productOverrides: Record<string, ProductOverrideShape>;
+  /** Per-product station daily output (units), used as default for max-batch override. */
+  productStationDailyOutput: Record<string, number>;
+  /** Global defaults the user can override per product. */
+  globalDefaults: { shelfLifeDays: number };
   summary: SummaryProps;
 }
 
@@ -154,7 +165,18 @@ function fmtDate(iso: string): string {
 // ─── Component ───────────────────────────────────────────────
 
 export function CalendarApp(props: CalendarAppProps) {
-  const { horizon, activities, dayLoads, stationDailyMinutes, infeasibleProducts, routingDecisions, summary } = props;
+  const {
+    horizon,
+    activities,
+    dayLoads,
+    stationDailyMinutes,
+    infeasibleProducts,
+    routingDecisions,
+    productOverrides,
+    productStationDailyOutput,
+    globalDefaults,
+    summary,
+  } = props;
   const [infeasibleOpen, setInfeasibleOpen] = useState(false);
 
   // Re-plan: triggers Next.js to re-fetch the server component, which re-runs
@@ -701,6 +723,9 @@ export function CalendarApp(props: CalendarAppProps) {
           rescheduledTo={rescheduledTo(mutations, selected.stableId)}
           editedQuantity={editedQuantityOf(mutations, selected.stableId)}
           stationDailyMinutes={stationDailyMinutes[selected.station] ?? 480}
+          productOverride={productOverrides[selected.productCode]}
+          stationDailyOutput={productStationDailyOutput[selected.productCode] ?? 0}
+          globalShelfLifeDays={globalDefaults.shelfLifeDays}
           onDismiss={() => dismiss(selected.stableId)}
           onUndismiss={() => undismiss(selected.stableId)}
           onReschedule={(date) => reschedule(selected.stableId, date)}
@@ -975,6 +1000,9 @@ function ActivityDrawer({
   rescheduledTo: rescheduled,
   editedQuantity,
   stationDailyMinutes,
+  productOverride,
+  stationDailyOutput,
+  globalShelfLifeDays,
   onDismiss,
   onUndismiss,
   onReschedule,
@@ -991,6 +1019,9 @@ function ActivityDrawer({
   rescheduledTo: string | null;
   editedQuantity: number | null;
   stationDailyMinutes: number;
+  productOverride: ProductOverrideShape | undefined;
+  stationDailyOutput: number;
+  globalShelfLifeDays: number;
   onDismiss: () => void;
   onUndismiss: () => void;
   onReschedule: (newDate: string) => void;
@@ -1258,8 +1289,15 @@ function ActivityDrawer({
         </div>
       )}
 
-      {/* Action buttons. Dismiss/Undismiss is the only action wired in 4d.1;
-          edit + reschedule come in 4d.2. */}
+      {/* ─── Per-product overrides (Phase 4f) ──────────── */}
+      <ProductOverrideSection
+        productCode={activity.productCode}
+        override={productOverride}
+        stationDailyOutput={stationDailyOutput}
+        globalShelfLifeDays={globalShelfLifeDays}
+      />
+
+      {/* Action buttons. */}
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         {dismissed ? (
           <button
@@ -1316,6 +1354,249 @@ function ActivityDrawer({
       )}
 
     </aside>
+  );
+}
+
+// ─── Per-product override editor (Phase 4f) ─────────────────
+
+function ProductOverrideSection({
+  productCode,
+  override,
+  stationDailyOutput,
+  globalShelfLifeDays,
+}: {
+  productCode: string;
+  override: ProductOverrideShape | undefined;
+  stationDailyOutput: number;
+  globalShelfLifeDays: number;
+}) {
+  // Local form state — committed only when the user clicks Save.
+  // Reset the form when the productCode changes (different SKU selected).
+  const [shelfLifeInput, setShelfLifeInput] = useState<string>('');
+  const [maxBatchInput, setMaxBatchInput] = useState<string>('');
+  const [saving, setSaving] = useState<'shelfLife' | 'maxBatch' | null>(null);
+  const [saved, setSaved] = useState<'shelfLife' | 'maxBatch' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setShelfLifeInput(
+      override?.shelfLifeDays !== undefined ? String(override.shelfLifeDays) : '',
+    );
+    setMaxBatchInput(
+      override?.maxBatchSize !== undefined ? String(override.maxBatchSize) : '',
+    );
+    setSaved(null);
+    setError(null);
+  }, [productCode, override]);
+
+  async function postOverride(field: 'shelfLifeDays' | 'maxBatchSize', value: number | null) {
+    setSaving(field === 'shelfLifeDays' ? 'shelfLife' : 'maxBatch');
+    setError(null);
+    try {
+      // Empty value = clear via DELETE (only when it's the only override).
+      // For partial clear we POST with the field omitted; the server merges
+      // the override map. Since our API merges, posting only the OTHER
+      // field doesn't clear this one — so we need a different mechanism.
+      // For now, post a fresh override and rely on cleanOverride to drop
+      // the missing field. But that's a merge — old value persists.
+      // Simplest robust approach: for "clear single field", send a special
+      // request that overwrites with the remaining fields only.
+      // For MVP we just save what's in the form; explicit "clear" buttons
+      // call DELETE for the whole product.
+      const body = { productCode, override: { [field]: value } };
+      const res = await fetch('/api/product-overrides', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSaved(field === 'shelfLifeDays' ? 'shelfLife' : 'maxBatch');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function clearAllOverrides() {
+    setSaving('shelfLife');
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/product-overrides?productCode=${encodeURIComponent(productCode)}`,
+        { method: 'DELETE' },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setShelfLifeInput('');
+      setMaxBatchInput('');
+      setSaved('shelfLife');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Clear failed');
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  const shelfLifeValue = Number(shelfLifeInput);
+  const shelfLifeValid = !shelfLifeInput || (Number.isFinite(shelfLifeValue) && shelfLifeValue > 0);
+  const shelfLifeChanged =
+    shelfLifeValid &&
+    shelfLifeInput !== '' &&
+    Math.round(shelfLifeValue) !== (override?.shelfLifeDays ?? -1);
+  const maxBatchValue = Number(maxBatchInput);
+  const maxBatchValid = !maxBatchInput || (Number.isFinite(maxBatchValue) && maxBatchValue > 0);
+  const maxBatchChanged =
+    maxBatchValid &&
+    maxBatchInput !== '' &&
+    Math.round(maxBatchValue) !== (override?.maxBatchSize ?? -1);
+
+  const hasAnyOverride =
+    override?.shelfLifeDays !== undefined || override?.maxBatchSize !== undefined;
+
+  return (
+    <div
+      style={{
+        marginBottom: 14,
+        padding: 10,
+        background: hasAnyOverride ? '#eff6ff' : 'var(--bg-page)',
+        border: '0.5px solid var(--border)',
+        borderRadius: 4,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          color: 'var(--text-muted)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          marginBottom: 8,
+        }}
+      >
+        Product overrides
+      </div>
+
+      {/* Shelf life */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 11, marginBottom: 3 }}>
+          <span>Shelf life (days)</span>
+          <span style={{ color: 'var(--text-muted)' }}>
+            default: {globalShelfLifeDays}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            type="number"
+            min={1}
+            placeholder={`${globalShelfLifeDays}`}
+            value={shelfLifeInput}
+            onChange={(e) => setShelfLifeInput(e.target.value)}
+            style={{
+              flex: 1,
+              padding: '5px 8px',
+              fontSize: 12,
+              border: '0.5px solid var(--border)',
+              borderRadius: 3,
+              fontFamily: 'inherit',
+              background: 'var(--bg-page)',
+              color: 'inherit',
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => postOverride('shelfLifeDays', shelfLifeValue)}
+            disabled={!shelfLifeValid || !shelfLifeChanged || saving !== null}
+            style={{
+              padding: '5px 10px',
+              fontSize: 11,
+              border: '0.5px solid var(--border)',
+              borderRadius: 3,
+              background: shelfLifeChanged ? '#dbeafe' : 'var(--bg-page)',
+              color: shelfLifeChanged ? '#1e40af' : 'var(--text-muted)',
+              cursor: shelfLifeChanged && saving === null ? 'pointer' : 'default',
+              fontFamily: 'inherit',
+            }}
+          >
+            {saving === 'shelfLife' ? 'Saving…' : saved === 'shelfLife' ? 'Saved ✓' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      {/* Max batch */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 11, marginBottom: 3 }}>
+          <span>Max batch (units)</span>
+          <span style={{ color: 'var(--text-muted)' }}>
+            default: {stationDailyOutput || '—'} (1 day station output)
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            type="number"
+            min={1}
+            placeholder={stationDailyOutput ? String(stationDailyOutput) : ''}
+            value={maxBatchInput}
+            onChange={(e) => setMaxBatchInput(e.target.value)}
+            style={{
+              flex: 1,
+              padding: '5px 8px',
+              fontSize: 12,
+              border: '0.5px solid var(--border)',
+              borderRadius: 3,
+              fontFamily: 'inherit',
+              background: 'var(--bg-page)',
+              color: 'inherit',
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => postOverride('maxBatchSize', maxBatchValue)}
+            disabled={!maxBatchValid || !maxBatchChanged || saving !== null}
+            style={{
+              padding: '5px 10px',
+              fontSize: 11,
+              border: '0.5px solid var(--border)',
+              borderRadius: 3,
+              background: maxBatchChanged ? '#dbeafe' : 'var(--bg-page)',
+              color: maxBatchChanged ? '#1e40af' : 'var(--text-muted)',
+              cursor: maxBatchChanged && saving === null ? 'pointer' : 'default',
+              fontFamily: 'inherit',
+            }}
+          >
+            {saving === 'maxBatch' ? 'Saving…' : saved === 'maxBatch' ? 'Saved ✓' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ fontSize: 11, color: '#dc2626', marginBottom: 6 }}>⚠ {error}</div>
+      )}
+
+      {saved && !error && (
+        <div style={{ fontSize: 11, color: '#1e40af', marginBottom: 6 }}>
+          Saved. Click <strong>Re-plan</strong> in the header to apply.
+        </div>
+      )}
+
+      {hasAnyOverride && (
+        <button
+          type="button"
+          onClick={clearAllOverrides}
+          disabled={saving !== null}
+          style={{
+            fontSize: 11,
+            color: 'var(--text-muted)',
+            background: 'transparent',
+            border: 'none',
+            cursor: saving !== null ? 'default' : 'pointer',
+            padding: 0,
+            fontFamily: 'inherit',
+            textDecoration: 'underline',
+          }}
+        >
+          Clear all overrides for this product
+        </button>
+      )}
+    </div>
   );
 }
 
