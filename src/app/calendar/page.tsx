@@ -38,6 +38,10 @@ import { CalendarApp } from './CalendarApp';
 
 export const dynamic = 'force-dynamic'; // Always re-run; calendar reflects latest data
 
+/** Horizon options surfaced in the UI picker. 26 weeks ≈ 6 months — the cap. */
+const HORIZON_WEEK_OPTIONS = [12, 16, 20, 26] as const;
+const DEFAULT_HORIZON_WEEKS = 12;
+
 const SPREADSHEET = join(process.cwd(), 'data', 'kitchen capacity and family plans.xlsx');
 /**
  * 18 months — matches typical shelf life for the dry-goods catalogue. This
@@ -58,12 +62,24 @@ function dailyStationOutput(unitsPerHour: number, hoursPerDay: number): number {
   return Math.floor(unitsPerHour * hoursPerDay);
 }
 
-export default function CalendarPage() {
+export default async function CalendarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ horizonWeeks?: string }>;
+}) {
+  // The horizon picker writes ?horizonWeeks=N. We accept any value in
+  // HORIZON_WEEK_OPTIONS; everything else falls back to default. Awaited
+  // because Next.js 15 server components receive searchParams as a promise.
+  const params = await searchParams;
+  const requested = Number(params.horizonWeeks);
+  const horizonWeeks = HORIZON_WEEK_OPTIONS.find((n) => n === requested)
+    ?? DEFAULT_HORIZON_WEEKS;
+
   let pageError: string | null = null;
   let payload: Awaited<ReturnType<typeof buildPayload>> | null = null;
 
   try {
-    payload = buildPayload();
+    payload = buildPayload(horizonWeeks);
   } catch (e) {
     pageError = e instanceof Error ? e.message : 'Unknown error loading calendar data.';
   }
@@ -89,13 +105,13 @@ export default function CalendarPage() {
     );
   }
 
-  return <CalendarApp {...payload} />;
+  return <CalendarApp {...payload} horizonOptions={[...HORIZON_WEEK_OPTIONS]} />;
 }
 
-function buildPayload() {
+function buildPayload(horizonWeeks: number) {
   const capacity = loadCapacityDataFromPath(SPREADSHEET);
   const demandData = loadMonthlyDemand();
-  const horizon = defaultHorizon(12, new Date());
+  const horizon = defaultHorizon(horizonWeeks, new Date());
 
   // Limit to SKUs that have BOTH a demand rate AND a productMeta we can route
   // to a station. Avoids cluttering the calendar with SKUs we can't actually
