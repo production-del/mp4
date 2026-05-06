@@ -37,10 +37,19 @@ interface SummaryProps {
   demandSourceMtime: string | null;
 }
 
+interface InfeasibleProduct {
+  productCode: string;
+  productName: string;
+  station: string;
+  unmetUnits: number;
+  reason: string;
+}
+
 interface CalendarAppProps {
   horizon: PlanningHorizon;
   activities: CalendarActivity[];
   dayLoads: DayLoadSummary[];
+  infeasibleProducts: InfeasibleProduct[];
   summary: SummaryProps;
 }
 
@@ -124,7 +133,8 @@ function fmtDate(iso: string): string {
 // ─── Component ───────────────────────────────────────────────
 
 export function CalendarApp(props: CalendarAppProps) {
-  const { horizon, activities, dayLoads, summary } = props;
+  const { horizon, activities, dayLoads, infeasibleProducts, summary } = props;
+  const [infeasibleOpen, setInfeasibleOpen] = useState(false);
 
   // Layer-toggle state: which stations are visible. Default all on.
   const [visibleStations, setVisibleStations] = useState<Set<Station>>(
@@ -143,6 +153,25 @@ export function CalendarApp(props: CalendarAppProps) {
     () => groupByDate(visibleActivities),
     [visibleActivities],
   );
+
+  // Aggregate per-day load across visible stations: peak utilisation per day.
+  // Used to render the per-cell load indicator.
+  const peakLoadByDate = useMemo(() => {
+    const out = new Map<string, { utilisation: number; usedMinutes: number; capacityMinutes: number; station: Station }>();
+    for (const dl of dayLoads) {
+      if (!visibleStations.has(dl.station)) continue;
+      const existing = out.get(dl.date);
+      if (!existing || dl.utilisation > existing.utilisation) {
+        out.set(dl.date, {
+          utilisation: dl.utilisation,
+          usedMinutes: dl.usedMinutes,
+          capacityMinutes: dl.capacityMinutes,
+          station: dl.station,
+        });
+      }
+    }
+    return out;
+  }, [dayLoads, visibleStations]);
 
   // Per-station counts (for the chip labels in the rail) — count BEFORE
   // filtering so the user can see what they'd un-hide.
@@ -258,6 +287,58 @@ export function CalendarApp(props: CalendarAppProps) {
           })}
         </Section>
 
+        {infeasibleProducts.length > 0 && (
+          <Section title={`Infeasible (${infeasibleProducts.length})`}>
+            <button
+              type="button"
+              onClick={() => setInfeasibleOpen((v) => !v)}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 8px',
+                fontSize: 12,
+                background: '#fef2f2',
+                color: '#991b1b',
+                border: '0.5px solid #fecaca',
+                borderRadius: 4,
+                cursor: 'pointer',
+                marginBottom: 6,
+                fontFamily: 'inherit',
+              }}
+            >
+              {infeasibleOpen ? '▾' : '▸'} {infeasibleProducts.length} products couldn't be scheduled
+            </button>
+            {infeasibleOpen && (
+              <ul
+                style={{
+                  listStyle: 'none',
+                  padding: 0,
+                  margin: 0,
+                  maxHeight: 280,
+                  overflowY: 'auto',
+                  fontSize: 11,
+                }}
+              >
+                {infeasibleProducts.map((p) => (
+                  <li
+                    key={p.productCode}
+                    style={{
+                      padding: '6px 0',
+                      borderBottom: '0.5px solid var(--border)',
+                    }}
+                    title={p.reason}
+                  >
+                    <div style={{ fontWeight: 500 }}>{p.productCode}</div>
+                    <div style={{ color: 'var(--text-muted)' }}>
+                      {p.station} • unmet ≈ {p.unmetUnits} units
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+        )}
+
         <Section title="Data">
           <KPIRow
             label="Demand source"
@@ -288,6 +369,7 @@ export function CalendarApp(props: CalendarAppProps) {
             label={group.label}
             dates={group.dates}
             activitiesByDate={activitiesByDate}
+            peakLoadByDate={peakLoadByDate}
             onSelect={setSelected}
             selectedId={selected?.id ?? null}
           />
@@ -364,12 +446,14 @@ function MonthBlock({
   label,
   dates,
   activitiesByDate,
+  peakLoadByDate,
   onSelect,
   selectedId,
 }: {
   label: string;
   dates: string[];
   activitiesByDate: Map<string, CalendarActivity[]>;
+  peakLoadByDate: Map<string, { utilisation: number; usedMinutes: number; capacityMinutes: number; station: Station }>;
   onSelect: (a: CalendarActivity) => void;
   selectedId: string | null;
 }) {
@@ -422,6 +506,8 @@ function MonthBlock({
           const dayActivities = activitiesByDate.get(cell.date) ?? [];
           const dow = (fromISO(cell.date).getDay() + 6) % 7;
           const isWeekend = dow >= 5;
+          const peakLoad = peakLoadByDate.get(cell.date);
+          const overrun = peakLoad ? peakLoad.utilisation > 1 : false;
           return (
             <div
               key={cell.date}
@@ -432,10 +518,34 @@ function MonthBlock({
                 borderBottom: '0.5px solid var(--border)',
                 background: isWeekend ? 'var(--bg-page)' : 'transparent',
                 opacity: isWeekend ? 0.5 : 1,
+                position: 'relative',
+                outline: overrun ? '1.5px solid #dc2626' : 'none',
+                outlineOffset: -1,
               }}
             >
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
-                {fmtDayShort(cell.date)}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                  marginBottom: 4,
+                }}
+              >
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {fmtDayShort(cell.date)}
+                </span>
+                {peakLoad && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      color: overrun ? '#dc2626' : peakLoad.utilisation > 0.85 ? '#d97706' : 'var(--text-muted)',
+                      fontWeight: overrun ? 600 : 400,
+                    }}
+                    title={`Peak load: ${peakLoad.station} at ${peakLoad.usedMinutes}/${peakLoad.capacityMinutes} min`}
+                  >
+                    {Math.round(peakLoad.utilisation * 100)}%
+                  </span>
+                )}
               </div>
               {dayActivities.map((a) => (
                 <ActivityChip
@@ -445,6 +555,30 @@ function MonthBlock({
                   onClick={() => onSelect(a)}
                 />
               ))}
+              {peakLoad && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 3,
+                    background: 'var(--border)',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.min(100, peakLoad.utilisation * 100)}%`,
+                      height: '100%',
+                      background: overrun
+                        ? '#dc2626'
+                        : peakLoad.utilisation > 0.85
+                        ? '#d97706'
+                        : '#10b981',
+                    }}
+                  />
+                </div>
+              )}
             </div>
           );
         })}
