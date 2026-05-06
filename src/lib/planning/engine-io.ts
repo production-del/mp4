@@ -40,7 +40,17 @@ export interface KitchenBatch {
 export interface BOMComponent {
   productCode: string;
   productName: string;
+  /** Combined clean + wastage figure (matches the BOMS sheet's `Quantity + Wastage` column). */
   quantityPerParent: number;
+  /**
+   * Optional per-edge clean quantity, sourced from the `wastage rates` sheet
+   * (decision #3). When present, `cleanQuantityPerParent + wastageQuantityPerParent`
+   * equals `quantityPerParent`. When absent, callers should treat
+   * `quantityPerParent` as clean and wastage as unknown.
+   */
+  cleanQuantityPerParent?: number;
+  /** Optional per-edge wastage quantity. See `cleanQuantityPerParent`. */
+  wastageQuantityPerParent?: number;
   /** 1 for direct components, 2 for intermediates, etc. */
   level: number;
   parentProductCode: string;

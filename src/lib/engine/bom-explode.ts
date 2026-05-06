@@ -162,10 +162,28 @@ export function explodeBom(input: BomExplodeInput): BomExplodeResult {
       }
 
       const childTotal = parentTotalQuantity * child.quantityPerParent;
-      const wastageRate = wastageRates[child.productCode];
-      const hasWastage = typeof wastageRate === 'number' && wastageRate >= 0;
-      const cleanQuantity = hasWastage ? childTotal / (1 + wastageRate) : childTotal;
-      const wastageQuantity = hasWastage ? childTotal - cleanQuantity : null;
+      // Two sources of wastage info, in priority order:
+      //   1. Per-edge split on the BOMComponent itself (from the loader's
+      //      `wastage rates` tab). Carries absolute clean + wastage values
+      //      for THIS edge, so we scale them by the parent quantity.
+      //   2. Per-component multiplicative rate via the `wastageRates`
+      //      parameter. Older API; useful when the per-edge data is
+      //      unavailable.
+      // If neither, wastage stays null and cleanQuantity = childTotal.
+      let cleanQuantity: number;
+      let wastageQuantity: number | null;
+      if (
+        typeof child.cleanQuantityPerParent === 'number' &&
+        typeof child.wastageQuantityPerParent === 'number'
+      ) {
+        cleanQuantity = parentTotalQuantity * child.cleanQuantityPerParent;
+        wastageQuantity = parentTotalQuantity * child.wastageQuantityPerParent;
+      } else {
+        const wastageRate = wastageRates[child.productCode];
+        const hasRate = typeof wastageRate === 'number' && wastageRate >= 0;
+        cleanQuantity = hasRate ? childTotal / (1 + wastageRate) : childTotal;
+        wastageQuantity = hasRate ? childTotal - cleanQuantity : null;
+      }
 
       const fam = familyMap[child.productCode];
       const childPath = [...ancestorPath, child.productCode];

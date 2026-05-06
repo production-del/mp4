@@ -251,6 +251,85 @@ describe('explodeBom', () => {
     });
   });
 
+  describe('per-edge wastage from BOMComponent (loader-attached, decision #3)', () => {
+    test('uses cleanQuantityPerParent + wastageQuantityPerParent when both present', () => {
+      // Mirrors the spreadsheet: MFBLCUMSM/BLCUM has clean 0.12, wastage 0.02
+      // (combined 0.14). Asking for 100 units of MFBLCUMSM should produce
+      // clean 12 and wastage 2 of BLCUM.
+      const bom: BOMComponent[] = [
+        {
+          parentProductCode: 'MFBLCUMSM',
+          productCode: 'BLCUM',
+          productName: 'BLCUM',
+          quantityPerParent: 0.14,
+          cleanQuantityPerParent: 0.12,
+          wastageQuantityPerParent: 0.02,
+          level: 1,
+        },
+      ];
+      const r = explodeBom({ rootProductCode: 'MFBLCUMSM', rootQuantity: 100, bom });
+      expect(r.components[0].cleanQuantity).toBeCloseTo(12, 6);
+      expect(r.components[0].wastageQuantity).toBeCloseTo(2, 6);
+    });
+
+    test('per-edge split takes priority over wastageRates parameter', () => {
+      // Per-edge says clean 0.12 / wastage 0.02. wastageRates says rate 0.5
+      // (which would give clean ≈ 0.0933 / wastage ≈ 0.047). Per-edge wins.
+      const bom: BOMComponent[] = [
+        {
+          parentProductCode: 'A',
+          productCode: 'B',
+          productName: 'B',
+          quantityPerParent: 0.14,
+          cleanQuantityPerParent: 0.12,
+          wastageQuantityPerParent: 0.02,
+          level: 1,
+        },
+      ];
+      const r = explodeBom({
+        rootProductCode: 'A',
+        rootQuantity: 1,
+        bom,
+        wastageRates: { B: 0.5 }, // would give clean ≈ 0.0933 if used
+      });
+      expect(r.components[0].cleanQuantity).toBeCloseTo(0.12, 6);
+      expect(r.components[0].wastageQuantity).toBeCloseTo(0.02, 6);
+    });
+
+    test('per-edge split propagates correctly through cascading BOMs', () => {
+      // ROOT (qty 100) → INT (clean 0.5/wastage 0.05 per ROOT) → RAW (clean 2.0 per INT)
+      // Total INT consumed: 100 × 0.55 = 55 (clean 50 + wastage 5)
+      // Total RAW consumed: 55 × 2 = 110 clean (RAW has no wastage entry)
+      const bom: BOMComponent[] = [
+        {
+          parentProductCode: 'ROOT',
+          productCode: 'INT',
+          productName: 'INT',
+          quantityPerParent: 0.55,
+          cleanQuantityPerParent: 0.5,
+          wastageQuantityPerParent: 0.05,
+          level: 1,
+        },
+        {
+          parentProductCode: 'INT',
+          productCode: 'RAW',
+          productName: 'RAW',
+          quantityPerParent: 2.0,
+          level: 2,
+          // no wastage split for this edge
+        },
+      ];
+      const r = explodeBom({ rootProductCode: 'ROOT', rootQuantity: 100, bom });
+      const intRow = r.components.find((c) => c.productCode === 'INT')!;
+      expect(intRow.cleanQuantity).toBeCloseTo(50, 6);
+      expect(intRow.wastageQuantity).toBeCloseTo(5, 6);
+      const rawRow = r.components.find((c) => c.productCode === 'RAW')!;
+      // RAW totalQuantity uses combined INT (55) × 2.0 = 110, propagating wastage downstream
+      expect(rawRow.totalQuantity).toBeCloseTo(110, 6);
+      expect(rawRow.wastageQuantity).toBeNull(); // no per-edge split, no wastageRates → unknown
+    });
+  });
+
   describe('family annotation (Phase 3 input)', () => {
     test('annotates family + extendedFamily from familyMap', () => {
       const bom: BOMComponent[] = [row('FCHAGALG', 'XHBC', 0.45)];

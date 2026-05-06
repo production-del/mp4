@@ -45,6 +45,7 @@ const SHEETS = {
   family: 'family',
   kitchenProcesses: 'Kitchen processes',
   kitchenCapacities: 'Kitchen capacities',
+  wastageRates: 'wastage rates',
 } as const;
 
 const KNOWN_EXTENDED_FAMILIES: ReadonlySet<string> = new Set([
@@ -85,7 +86,15 @@ export type LoadWarning =
   | { kind: 'unknown_extended_family'; sheet: string; productCode: string; value: string; message: string }
   | { kind: 'unknown_station'; sheet: string; productCode: string; value: string; message: string }
   | { kind: 'missing_sheet'; sheet: string; message: string }
-  | { kind: 'malformed_row'; sheet: string; rowIndex: number; message: string };
+  | { kind: 'malformed_row'; sheet: string; rowIndex: number; message: string }
+  | {
+      kind: 'wastage_combined_mismatch';
+      parentProductCode: string;
+      componentProductCode: string;
+      bomsCombined: number;
+      wastageCombined: number;
+      message: string;
+    };
 
 export interface CapacityData {
   stations: Record<Station, StationDefaults>;
@@ -328,7 +337,14 @@ function parseKitchenProcessesSheet(
   return out;
 }
 
-function parseBomsSheet(sheet: XLSX.WorkSheet): BOMComponent[] {
+/** Tolerance for matching BOMS "Quantity + Wastage" against wastage-tab "clean + wastage". */
+const WASTAGE_MISMATCH_TOLERANCE = 0.001;
+
+function parseBomsSheet(
+  sheet: XLSX.WorkSheet,
+  wastageByEdge: Map<string, { clean: number; wastage: number }>,
+  warnings: LoadWarning[],
+): BOMComponent[] {
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
   // Column layout:
   //   0 Assembled Product Code (= parent), 1 Component Product Code,
@@ -342,13 +358,88 @@ function parseBomsSheet(sheet: XLSX.WorkSheet): BOMComponent[] {
     if (!parent || !code) continue;
     const qty = asNumber(row[4]);
     if (qty === null) continue;
+    const split = wastageByEdge.get(`${parent}|${code}`);
+
+    // When both sheets have an entry, their combined values should agree.
+    // When they don't (data drift between the operator-maintained BOMS and
+    // the wastage tab), trust BOMS as the canonical quantity but rescale
+    // the split to match — preserves the wastage proportion while keeping
+    // the engine's plan consistent with the BOMS sheet.
+    let cleanQuantityPerParent: number | undefined;
+    let wastageQuantityPerParent: number | undefined;
+    if (split) {
+      const wastageCombined = split.clean + split.wastage;
+      if (Math.abs(wastageCombined - qty) > WASTAGE_MISMATCH_TOLERANCE) {
+        warnings.push({
+          kind: 'wastage_combined_mismatch',
+          parentProductCode: parent,
+          componentProductCode: code,
+          bomsCombined: qty,
+          wastageCombined,
+          message: `BOMS sheet says ${qty} for ${parent}/${code}; wastage tab says ${split.clean} + ${split.wastage} = ${wastageCombined}. Rescaling split to match BOMS.`,
+        });
+        // Rescale: keep the wastage tab's PROPORTION but anchor to BOMS total.
+        if (wastageCombined > 0) {
+          cleanQuantityPerParent = (split.clean / wastageCombined) * qty;
+          wastageQuantityPerParent = (split.wastage / wastageCombined) * qty;
+        }
+      } else {
+        cleanQuantityPerParent = split.clean;
+        wastageQuantityPerParent = split.wastage;
+      }
+    }
+
     out.push({
       parentProductCode: parent,
       productCode: code,
       productName: asString(row[2]) || code,
       quantityPerParent: qty,
+      cleanQuantityPerParent,
+      wastageQuantityPerParent,
       level: 1, // sheet doesn't carry depth; exploder computes path-based depth
     });
+  }
+  return out;
+}
+
+/**
+ * Parse the `wastage rates` sheet into a Map keyed by `parent|component`.
+ *
+ * Sheet layout:
+ *   0 SKU, 1 Assembled Product Code, 2 Component Product Code, 3 Quantity, 4 Wastage Quantity
+ *
+ * The SKU column is populated on every row (acts as the parent code), while
+ * the Assembled Product Code column is only populated on the first row of
+ * each parent. We use the SKU column as the canonical parent reference.
+ *
+ * The `Quantity` column here is the CLEAN quantity (before wastage); add the
+ * Wastage Quantity to get the combined figure that lives in the BOMS sheet.
+ */
+function parseWastageRatesSheet(
+  sheet: XLSX.WorkSheet,
+  warnings: LoadWarning[],
+): Map<string, { clean: number; wastage: number }> {
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
+  const out = new Map<string, { clean: number; wastage: number }>();
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const parent = asString(row[0]); // SKU column = parent
+    const component = asString(row[2]);
+    if (!parent || !component) continue;
+    const clean = asNumber(row[3]);
+    const wastage = asNumber(row[4]);
+    if (clean === null) {
+      warnings.push({
+        kind: 'malformed_row',
+        sheet: SHEETS.wastageRates,
+        rowIndex: i,
+        message: `Wastage row for ${parent}/${component} has no quantity`,
+      });
+      continue;
+    }
+    // Wastage defaults to 0 when the cell is blank — that's the common case
+    // (only ~17 of 2568 rows carry non-zero wastage).
+    out.set(`${parent}|${component}`, { clean, wastage: wastage ?? 0 });
   }
   return out;
 }
@@ -388,7 +479,13 @@ export function loadCapacityDataFromBuffer(buffer: Buffer | ArrayBuffer): Capaci
     getSheet(SHEETS.kitchenProcesses),
     warnings,
   );
-  const bom = parseBomsSheet(getSheet(SHEETS.bom));
+  // Wastage tab is optional; not having it means BOM rows carry only the
+  // combined figure (clean unknown). When present, every BOM row that has
+  // an entry in the map gets its split attached.
+  const wastageByEdge = wb.Sheets[SHEETS.wastageRates]
+    ? parseWastageRatesSheet(wb.Sheets[SHEETS.wastageRates], warnings)
+    : new Map();
+  const bom = parseBomsSheet(getSheet(SHEETS.bom), wastageByEdge, warnings);
 
   // Derive ProductMeta for every SKU in the family sheet. Station comes
   // from the intermediate's primary packing station (resolved via the
