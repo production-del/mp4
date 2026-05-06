@@ -21,20 +21,32 @@ Anything new in this roadmap that violates these gets reworked, not merged.
 
 ---
 
-## Phase 1 — Forecast horizon (week 1)
+## Phase 1 — Forward demand projection (week 1)
 
-Extend the planning engine from single-period to a 12-week rolling window.
+The existing engines (`analyzeKitchenBatches`, `projectComponentSOH`) already iterate over arbitrary date ranges — there's no horizon cap to remove. What's actually missing is a **forward demand forecaster** that turns the daily-refreshed Unleashed sales rate (`data/demand.csv`'s `AVE` column → monthly demand per product) plus any dated `Demand` events into a `WeeklyDemand[]` covering the configured horizon. That structure becomes the input to Phase 3's batch optimiser.
 
-**Files to touch**
-- `src/lib/engine/serialization.ts` — add `horizonWeeks` to `EngineRequest`, default 12
-- `src/lib/engine/kitchen-projection.ts` — iterate week-by-week, carry SOH forward
-- `src/lib/engine/purchasing-projection.ts` — same
-- `src/__tests__/engine/horizon.test.ts` — new
+The `data/demand.csv` is a daily-refreshed Unleashed export — a *rate per product* across rolling windows, not a time series. It does not need migrating.
+
+**Files to add / touch**
+- `src/lib/planning/engine-io.ts` — add `WeeklyDemand` and `PlanningHorizon` types
+- `src/lib/planning/forecast-demand.ts` — new pure function `forecastWeeklyDemand(rates, datedEvents, horizon) → WeeklyDemand[]`
+- `src/__tests__/engine/forecast-demand.test.ts` — new
+
+**Behaviour**
+- Monthly rate spreads across the horizon: per-week qty = `monthlyRate × 12 / 52`
+- Dated `Demand` events bucket into the week containing `needByDate` (Monday-anchored)
+- A week's `quantity` = rate-derived + event-derived; `sources` records which contributed
+- Horizon length and start-week come from a `PlanningHorizon` config (default 12 weeks, anchored on the upcoming Monday)
 
 **Acceptance**
-- Engine returns `PlanItem[]` spanning ≥84 days from `today`
-- SOH carry-forward is correct across week boundaries (test: known fixture)
-- No regressions in existing `kitchen-projection.test.ts` / `serialization.test.ts`
+- Forecaster returns exactly `horizon.weeks` rows per product code
+- A product with no rate and no events still produces a row per week with `quantity: 0`
+- Rate-only product distributes evenly across weeks (within rounding)
+- An event mid-horizon adds to that week's quantity without inflating others
+- `sources` array is correct: `['rate']`, `['event']`, or `['rate','event']`
+
+**Operational follow-up (not in Phase 1)**
+- `/api/demand-data` caches until restart — should check CSV mtime so a fresh daily export is picked up without manual `?refresh=true`
 
 ## Phase 2 — Cascading BOM explosion (week 1–2)
 

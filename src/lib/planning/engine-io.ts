@@ -164,6 +164,42 @@ export interface StockRisk {
   projectedSOH: number;
 }
 
+// ─── Forward demand projection (3-month planner, Phase 1) ───
+
+/**
+ * Configuration for the forward planning horizon.
+ *
+ * `startWeek` is the ISO local date (`YYYY-MM-DD`) of the Monday that anchors
+ * week 0. Forecaster output produces exactly `weeks` rows per product code,
+ * indexed from `startWeek`. Default horizon is 12 weeks (≈3 months).
+ *
+ * Anchoring on Monday is deliberate: it matches the working-week semantics in
+ * `working-day.ts` and makes weekly buckets stable across timezone-sensitive
+ * conversions. Always pass strings; never `Date`.
+ */
+export interface PlanningHorizon {
+  startWeek: string; // YYYY-MM-DD, must be a Monday
+  weeks: number;
+}
+
+/**
+ * Demand for a single product in a single week of the horizon.
+ *
+ * `quantity` is the total expected demand for that week, summed from all
+ * contributing sources. `sources` records which inputs fed this row — useful
+ * for the optimiser's `rationale[]` output and for UI tooltips that explain
+ * "this week's demand came from monthly rate + 2 packaging events."
+ *
+ * Quantities are real-valued (rate-derived contributions are typically
+ * fractional). Round only at presentation time, never inside the engine.
+ */
+export interface WeeklyDemand {
+  productCode: string;
+  weekStart: string; // YYYY-MM-DD, Monday-anchored
+  quantity: number;
+  sources: Array<'rate' | 'event'>;
+}
+
 // ─── Advanced/auxiliary ──────────────────────────────────────
 
 /** Intermediate component dependency for two-level production chaining. */
