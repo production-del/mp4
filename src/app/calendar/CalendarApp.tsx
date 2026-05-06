@@ -1149,6 +1149,12 @@ export function CalendarApp(props: CalendarAppProps) {
             onSelect={setSelected}
             selectedId={selected?.id ?? null}
             mutations={mutations}
+            onDropOnDate={(stableId, date) => {
+              // No-op when dropped on the same day the activity is already on.
+              const found = mutatedActivities.find((a) => a.stableId === stableId);
+              if (!found || found.date === date) return;
+              reschedule(stableId, date);
+            }}
           />
         ))}
 
@@ -1264,6 +1270,7 @@ function MonthBlock({
   onSelect,
   selectedId,
   mutations,
+  onDropOnDate,
 }: {
   label: string;
   dates: string[];
@@ -1272,7 +1279,13 @@ function MonthBlock({
   onSelect: (a: CalendarActivity) => void;
   selectedId: string | null;
   mutations: MutationsMap;
+  /** Called when a chip is dropped onto a day cell. Skip same-day drops upstream. */
+  onDropOnDate: (stableId: string, date: string) => void;
 }) {
+  // Local state: which day is currently drag-over, for visual highlighting.
+  // Per-month — the user can only drag one thing at a time, so it's enough to
+  // track inside this component without a ref.
+  const [hoverDate, setHoverDate] = useState<string | null>(null);
   // Pad the front of the first week so calendar columns align with day-of-week.
   const first = fromISO(dates[0]);
   const dowOfFirst = (first.getDay() + 6) % 7; // Mon = 0
@@ -1324,19 +1337,48 @@ function MonthBlock({
           const isWeekend = dow >= 5;
           const peakLoad = peakLoadByDate.get(cell.date);
           const overrun = peakLoad ? peakLoad.utilisation > 1 : false;
+          const isHover = hoverDate === cell.date;
+          // We need a deterministic cellKey so the drop-state computation
+          // closes over the right date. Captured below.
+          const dropDate = cell.date;
           return (
             <div
               key={cell.date}
+              onDragOver={(e) => {
+                // preventDefault is what makes the cell a valid drop target;
+                // without it the browser rejects the drop with cursor=no-drop.
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (hoverDate !== dropDate) setHoverDate(dropDate);
+              }}
+              onDragLeave={() => {
+                if (hoverDate === dropDate) setHoverDate(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setHoverDate(null);
+                const stableId = e.dataTransfer.getData('text/plain');
+                if (stableId) onDropOnDate(stableId, dropDate);
+              }}
               style={{
                 minHeight: 110,
                 padding: 4,
                 borderRight: '0.5px solid var(--border)',
                 borderBottom: '0.5px solid var(--border)',
-                background: isWeekend ? 'var(--bg-page)' : 'transparent',
-                opacity: isWeekend ? 0.5 : 1,
+                background: isHover
+                  ? '#eff6ff'
+                  : isWeekend
+                  ? 'var(--bg-page)'
+                  : 'transparent',
+                opacity: isWeekend && !isHover ? 0.5 : 1,
                 position: 'relative',
-                outline: overrun ? '1.5px solid #dc2626' : 'none',
+                outline: isHover
+                  ? '1.5px dashed #3b82f6'
+                  : overrun
+                  ? '1.5px solid #dc2626'
+                  : 'none',
                 outlineOffset: -1,
+                transition: 'background 80ms ease',
               }}
             >
               <div
@@ -1416,10 +1458,22 @@ function ActivityChip({
   onClick: () => void;
 }) {
   const colors = colorOf(activity);
+  // Local "is dragging" state controls opacity feedback. Reset on dragend.
+  const [isDragging, setIsDragging] = useState(false);
   return (
     <button
       type="button"
       onClick={onClick}
+      // Dragging the chip writes its stableId to the dataTransfer; day cells
+      // read that to apply a reschedule mutation. Native HTML5 DnD —
+      // browsers handle the visual movement; we just opacity-fade the source.
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', activity.stableId);
+        e.dataTransfer.effectAllowed = 'move';
+        setIsDragging(true);
+      }}
+      onDragEnd={() => setIsDragging(false)}
       style={{
         display: 'block',
         width: '100%',
@@ -1433,12 +1487,12 @@ function ActivityChip({
         border: 'none',
         borderLeft: `3px solid ${colors.border}`,
         outline: selected ? `1.5px solid ${colors.border}` : 'none',
-        cursor: 'pointer',
+        cursor: isDragging ? 'grabbing' : 'grab',
         fontFamily: 'inherit',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        opacity: dismissed ? 0.35 : 1,
+        opacity: isDragging ? 0.4 : dismissed ? 0.35 : 1,
         textDecoration: dismissed ? 'line-through' : 'none',
       }}
       title={
@@ -1533,21 +1587,6 @@ function ActivityDrawer({
   onClose: () => void;
 }) {
   const colors = colorOf(activity);
-
-  // Working days within the activity's week (Mon-Fri) for the reschedule picker.
-  const weekDays = useMemo(() => {
-    const out: { iso: string; label: string }[] = [];
-    const monday = fromISO(original.weekStart);
-    for (let i = 0; i < 5; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      out.push({
-        iso: toISO(d),
-        label: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][i],
-      });
-    }
-    return out;
-  }, [original.weekStart]);
 
   // Edit-quantity input local state — only commits to the mutation store on Apply.
   const [qtyInput, setQtyInput] = useState<string>('');
@@ -1717,46 +1756,60 @@ function ActivityDrawer({
         </div>
       </div>
 
-      {/* ─── Reschedule picker ─────────────────────────── */}
+      {/* ─── Reschedule (any date) ────────────────────── */}
       <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-          Reschedule (within week)
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            fontSize: 11,
+            color: 'var(--text-muted)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            marginBottom: 6,
+          }}
+        >
+          <span>Reschedule</span>
+          {original.date !== activity.date && (
+            <span
+              style={{
+                textTransform: 'none',
+                letterSpacing: 0,
+                fontSize: 10,
+                color: 'var(--text-muted)',
+              }}
+            >
+              original: {original.date}
+            </span>
+          )}
         </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {weekDays.map((d) => {
-            const isCurrent = d.iso === activity.date;
-            const isOriginal = d.iso === original.date;
-            return (
-              <button
-                key={d.iso}
-                type="button"
-                onClick={() => onReschedule(d.iso)}
-                disabled={isCurrent}
-                style={{
-                  flex: 1,
-                  padding: '6px 4px',
-                  fontSize: 11,
-                  border: `0.5px solid ${isCurrent ? colors.border : 'var(--border)'}`,
-                  borderRadius: 3,
-                  background: isCurrent ? colors.bg : 'var(--bg-page)',
-                  color: isCurrent ? colors.text : 'var(--text-secondary)',
-                  fontWeight: isCurrent ? 500 : 400,
-                  cursor: isCurrent ? 'default' : 'pointer',
-                  fontFamily: 'inherit',
-                }}
-                title={
-                  isCurrent
-                    ? 'Currently scheduled here'
-                    : isOriginal
-                    ? `Original: ${d.label}`
-                    : `Move to ${d.label}`
-                }
-              >
-                {d.label}
-                {isOriginal && !isCurrent && <span style={{ opacity: 0.5 }}> *</span>}
-              </button>
-            );
-          })}
+        <input
+          type="date"
+          value={activity.date}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v && v !== activity.date) onReschedule(v);
+          }}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            fontSize: 13,
+            border: '0.5px solid var(--border)',
+            borderRadius: 3,
+            background: 'var(--bg-page)',
+            color: 'inherit',
+            fontFamily: 'inherit',
+          }}
+        />
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 10,
+            color: 'var(--text-muted)',
+          }}
+        >
+          Tip: drag the chip to a day on the calendar to reschedule visually.
         </div>
         {rescheduled && (
           <button
