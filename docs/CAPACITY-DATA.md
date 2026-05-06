@@ -132,27 +132,41 @@ This is the BOM Phase 2's recursive exploder will consume. Two concerns:
 
 ---
 
-## 8. Open questions for the user
+## 8. Resolved decisions (data semantics)
 
-These came out of the data and need answers before Phase 3:
+1. **108 SKUs without extended family** → switching into or out of them costs **`fullClean`**. No partial-credit treatment. The optimiser will avoid mixing these into family-clustered runs unless demand forces it.
 
-1. **108 SKUs without extended family.** What's the rule? Options:
-   - (a) Treat every switch into/out of these as a full clean (conservative, expensive).
-   - (b) Treat each unmapped SKU as its own singleton extended family (no penalty within itself, full clean to anything else).
-   - (c) These are products that don't go through Bottlo, so the distinction never matters — leave the field optional and only enforce when scheduling on Bottlo.
+2. **Combined product + size switch is non-cumulative.** The cost of a switch is the **maximum of the applicable individual costs**, never the sum. A size switch is considered to *include* the cleaning needed for an extended-family switch — so changing both family *and* size on Bottlo costs `max(40, 15) = 40` minutes, not `55`.
 
-2. **Combined product + size switch cost.** When changing both family *and* size (e.g. Chaga 600g → Cordyceps 100g, both `FAM Fungi`), is the cost:
-   - (a) `max(sizeSwitch, extendedFamilySwitch)` — pessimistic
-   - (b) `sizeSwitch + extendedFamilySwitch` — additive
-   - (c) Just `sizeSwitch` because the size-switch already includes a clean
-   - The spreadsheet doesn't disambiguate.
+   Implementation rule (`changeover.ts`):
+   ```
+   if prev.extendedFamily !== curr.extendedFamily
+      OR either is null: → fullClean
+   else (same extended family):
+     candidates = []
+     if prev.family !== curr.family:  candidates.push(extendedFamily)
+     if prev.size   !== curr.size:    candidates.push(sizeSwitch)
+     if prev.family === curr.family
+        AND prev.size === curr.size:  candidates.push(familySameSize)
+     → max(candidates)  // 0 if list is empty (truly identical SKU back-to-back)
+   ```
 
-3. **Wastage in BOMS.** `Quantity + Wastage` is a single column. Keep baked in, or split? Splitting helps with cost visibility ("we throw away 8% of walnuts in soak") but adds engine complexity.
+3. **Wastage is split out for visibility.** The BOM exploder produces two parallel quantities per component: `quantityClean` (theoretical use) and `wastage` (the implicit overage in the spreadsheet's `Quantity + Wastage` column). The loader does the split — this is a derived figure, so the loader infers `wastage` by comparing to a separately-maintained clean BOM if one exists, or initially treats the whole figure as `quantityClean` with `wastage: null` until a wastage rate per component is provided. **Follow-up:** confirm whether a clean-BOM source exists separate from this spreadsheet.
 
-4. **Per-product rate overrides.** "Hand packing beetroot powder" runs at 75 u/hr instead of 200. Are there other product-specific rate overrides not in the file, or is this the only one? Need to confirm the exhaustive list before the optimiser uses station-level rates blindly.
+4. **Per-product rate overrides need to be supported as a first-class concept.** The "Hand packing beetroot powder" row is a worked example, not the only one — overrides may be added over time. Model:
+   ```typescript
+   interface RateOverride {
+     productCode: string;
+     station: Station;
+     unitsPerHour: number;
+     reason?: string;          // optional human note
+   }
+   ```
+   Stored alongside the station-level defaults; the optimiser looks up overrides first, then falls back to the station default. UI exposes an editor in settings for adding/removing them.
 
-5. **Unit semantics on `Kitchen processes`.** `max /soak ibc` shows `500` for walnuts but `Kitchen capacities` says IBCs hold `200-300 kg`. Is the 500 a unit count (eggs, kilos pre-soak before the swelling, something else)? Wiring the number in without confirming the unit will land bad capacity constraints.
+5. **IBC capacity** → **300 kg** as the working assumption. The `max /soak ibc = 500` field in `Kitchen processes` is currently treated as 300 kg (lower of the spreadsheet's stated 200–300 range) for capacity calculations. Single-source-of-truth field will be the loader's `IBC_CAPACITY_KG` constant; revisit once the units are confirmed.
 
-6. **`dehydrate` listed as packing equipment.** Likely a data-entry typo for one or more rows in `Kitchen processes`. Should the loader treat it as an error, ignore the row, or coerce silently? My instinct: surface a load-time warning, ignore the bad value.
+6. **`dehydrate` in packing-equipment column is a typo.** It's a process step, not a packing station. The loader **emits a warning** at load time naming the offending product code(s), then **drops the bad value** (treats the row as having no packing equipment if `dehydrate` was the only entry, otherwise keeps the valid alternates). Hard-fail would be too aggressive given this is real production data.
 
-Resolve these before Phase 3 is implemented; deferring them won't make them go away and the optimiser's behaviour depends on each one.
+These shape the loader and the changeover function. Follow-up to track:
+- Where does the *clean* BOM live (for the wastage split)? If nowhere yet, we may need to capture wastage rates as a separate manual config.
