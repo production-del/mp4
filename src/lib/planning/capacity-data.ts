@@ -161,6 +161,36 @@ export function inferPackageSize(productCode: string): PackageSize {
   return 'OTHER';
 }
 
+/**
+ * Clean the family-sheet description for display:
+ *   - Strip leading "Label - " (or "Label -")
+ *   - Strip parenthesised volume like " (600g)", " (1.5kg)", " (250 ml)"
+ *   - Strip trailing "DISCONTINUED" tag
+ *   - Collapse internal whitespace
+ *
+ * Examples:
+ *   "Label - Chaga (600g)"                   → "Chaga"
+ *   "Label - Almonds LRG (500g)"             → "Almonds LRG"
+ *   "Label - Ginger Ground MED (240g) DISCONTINUED" → "Ginger Ground MED"
+ *   "Label - Yummy Beans Intermediate"       → "Yummy Beans Intermediate"
+ *
+ * The raw description is preserved on `FamilyMeta.description`; this
+ * cleaned form lands on `ProductMeta.productName` for UI rendering.
+ */
+export function cleanProductName(raw: string): string {
+  let s = raw;
+  s = s.replace(/^\s*Label\s*-\s*/i, '');
+  // Parenthesised volume: "(600g)", "(1.5 kg)", "(250 ml)", "(1L)"
+  s = s.replace(/\s*\(\s*[0-9.]+\s*(?:g|kg|ml|l)\s*\)\s*/gi, ' ');
+  // Strip trailing DISCONTINUED first so the volume regex below can anchor
+  // to the (now real) end-of-string.
+  s = s.replace(/\s+DISCONTINUED\s*$/i, '');
+  // Trailing non-parenthesised volume: "Organic 100g", "X 1.5kg"
+  s = s.replace(/\s+[0-9.]+\s*(?:g|kg|ml|l)\s*$/i, '');
+  s = s.replace(/\s+/g, ' ').trim();
+  return s;
+}
+
 function parseExtendedFamily(
   raw: unknown,
 ): { value: ExtendedFamily | null; unknown: string | null } {
@@ -502,7 +532,7 @@ export function loadCapacityDataFromBuffer(buffer: Buffer | ArrayBuffer): Capaci
     const stationDefaults = stations[station];
     productMetaBySku[productCode] = {
       productCode,
-      productName: fam.description ?? '',
+      productName: fam.description ? cleanProductName(fam.description) : '',
       family: fam.family,
       extendedFamily: fam.extendedFamily as ExtendedFamily | null,
       packageSize: inferPackageSize(productCode),
