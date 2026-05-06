@@ -62,9 +62,13 @@ export function detectScheduleConflicts(
   const dismissed = input.dismissedStableIds ?? new Set<string>();
 
   // Index suppliers by productCode for O(1) lookup. Skip dismissed.
+  // `po-placed` chips are NOT suppliers — they're action-moment markers
+  // sharing the productCode of their `po-receiving` sister. The receiving
+  // chip is the canonical delivery event.
   const suppliersByCode = new Map<string, CalendarActivity[]>();
   for (const a of input.activities) {
     if (dismissed.has(a.stableId)) continue;
+    if (a.kind === 'po-placed') continue;
     let arr = suppliersByCode.get(a.productCode);
     if (!arr) {
       arr = [];

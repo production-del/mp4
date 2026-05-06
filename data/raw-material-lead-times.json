@@ -1,0 +1,3 @@
+{
+  "_comment": "Per-raw-material lead times (calendar days from PO placement to delivery). Each entry: { leadTimeDays: number, vendor?: string }. Codes not present here use the default 14 days. The user can override per-PO in the drawer (transient, localStorage-backed); edit this file for permanent vendor-level changes."
+}
