@@ -26,6 +26,15 @@ export interface ActivityMutation {
   /** `productCode|weekStart|orderInWeek` — see `stableIdOf` in calendar-projection. */
   stableId: string;
   dismissed?: boolean;
+  /**
+   * If set, the activity has been moved to this date (must be a working day
+   * in the same week as the activity's weekStart — caller validates).
+   * `null`-able mutation slots aren't useful here; we just delete the field
+   * to "clear" the reschedule.
+   */
+  rescheduledTo?: string;
+  /** If set, the activity's quantity has been overridden by the user. */
+  editedQuantity?: number;
   /** ISO timestamp of last write — useful for "stale mutation" warnings. */
   updatedAt: string;
 }
@@ -74,6 +83,118 @@ export function applyUndismiss(
 
 export function isDismissed(map: MutationsMap, stableId: string): boolean {
   return map[stableId]?.dismissed === true;
+}
+
+// ─── Reschedule + Edit ───────────────────────────────────────
+
+/** Returns a NEW map with the activity rescheduled to `newDate`. Caller validates the date. */
+export function applyReschedule(
+  map: MutationsMap,
+  stableId: string,
+  newDate: string,
+): MutationsMap {
+  const existing = map[stableId];
+  return {
+    ...map,
+    [stableId]: {
+      ...(existing ?? { stableId, updatedAt: '' }),
+      stableId,
+      rescheduledTo: newDate,
+      updatedAt: new Date().toISOString(),
+    },
+  };
+}
+
+/** Returns a NEW map without a reschedule (clears just that field). */
+export function applyClearReschedule(
+  map: MutationsMap,
+  stableId: string,
+): MutationsMap {
+  const existing = map[stableId];
+  if (!existing || existing.rescheduledTo === undefined) return map;
+  const { rescheduledTo: _r, ...rest } = existing;
+  // If only stableId+updatedAt remain, drop the entry.
+  const remainingFields = Object.keys(rest).filter(
+    (k) => k !== 'stableId' && k !== 'updatedAt',
+  );
+  if (remainingFields.length === 0) {
+    const out = { ...map };
+    delete out[stableId];
+    return out;
+  }
+  return {
+    ...map,
+    [stableId]: { ...rest, stableId, updatedAt: new Date().toISOString() },
+  };
+}
+
+export function rescheduledTo(
+  map: MutationsMap,
+  stableId: string,
+): string | null {
+  return map[stableId]?.rescheduledTo ?? null;
+}
+
+/** Returns a NEW map with the activity quantity edited. */
+export function applyEditQuantity(
+  map: MutationsMap,
+  stableId: string,
+  newQuantity: number,
+): MutationsMap {
+  if (!Number.isFinite(newQuantity) || newQuantity <= 0) return map;
+  const existing = map[stableId];
+  return {
+    ...map,
+    [stableId]: {
+      ...(existing ?? { stableId, updatedAt: '' }),
+      stableId,
+      editedQuantity: newQuantity,
+      updatedAt: new Date().toISOString(),
+    },
+  };
+}
+
+/** Returns a NEW map without a quantity override. */
+export function applyClearEdit(
+  map: MutationsMap,
+  stableId: string,
+): MutationsMap {
+  const existing = map[stableId];
+  if (!existing || existing.editedQuantity === undefined) return map;
+  const { editedQuantity: _q, ...rest } = existing;
+  const remainingFields = Object.keys(rest).filter(
+    (k) => k !== 'stableId' && k !== 'updatedAt',
+  );
+  if (remainingFields.length === 0) {
+    const out = { ...map };
+    delete out[stableId];
+    return out;
+  }
+  return {
+    ...map,
+    [stableId]: { ...rest, stableId, updatedAt: new Date().toISOString() },
+  };
+}
+
+export function editedQuantityOf(
+  map: MutationsMap,
+  stableId: string,
+): number | null {
+  return map[stableId]?.editedQuantity ?? null;
+}
+
+// ─── Bulk operations ─────────────────────────────────────────
+
+/** Drop all mutation entries whose stableIds are not in `validIds`. */
+export function clearStale(
+  map: MutationsMap,
+  validIds: ReadonlySet<string>,
+): MutationsMap {
+  const out: MutationsMap = {};
+  for (const [id, mut] of Object.entries(map)) {
+    if (validIds.has(id)) out[id] = mut;
+  }
+  return out;
 }
 
 // ─── Storage I/O (localStorage-backed, server-safe) ─────────

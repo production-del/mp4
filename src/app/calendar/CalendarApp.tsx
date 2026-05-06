@@ -17,7 +17,7 @@
  * them entirely.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import type {
   CalendarActivity,
   DayLoadSummary,
@@ -26,6 +26,14 @@ import {
   applyDismiss,
   applyUndismiss,
   isDismissed,
+  applyReschedule,
+  applyClearReschedule,
+  rescheduledTo,
+  applyEditQuantity,
+  applyClearEdit,
+  editedQuantityOf,
+  clearStale,
+  staleStableIds,
   readMutationsFromStorage,
   writeMutationsToStorage,
   type MutationsMap,
@@ -165,20 +173,66 @@ export function CalendarApp(props: CalendarAppProps) {
     setMutations(readMutationsFromStorage());
   }, []);
 
+  // Mutation actions — every one writes through to localStorage immediately.
+  function persist(next: MutationsMap) {
+    writeMutationsToStorage(next);
+    return next;
+  }
   function dismiss(stableId: string) {
-    setMutations((curr) => {
-      const next = applyDismiss(curr, stableId);
-      writeMutationsToStorage(next);
-      return next;
-    });
+    setMutations((curr) => persist(applyDismiss(curr, stableId)));
   }
   function undismiss(stableId: string) {
-    setMutations((curr) => {
-      const next = applyUndismiss(curr, stableId);
-      writeMutationsToStorage(next);
-      return next;
-    });
+    setMutations((curr) => persist(applyUndismiss(curr, stableId)));
   }
+  function reschedule(stableId: string, newDate: string) {
+    setMutations((curr) => persist(applyReschedule(curr, stableId, newDate)));
+  }
+  function clearReschedule(stableId: string) {
+    setMutations((curr) => persist(applyClearReschedule(curr, stableId)));
+  }
+  function editQuantity(stableId: string, qty: number) {
+    setMutations((curr) => persist(applyEditQuantity(curr, stableId, qty)));
+  }
+  function clearEdit(stableId: string) {
+    setMutations((curr) => persist(applyClearEdit(curr, stableId)));
+  }
+  function clearStaleMutations() {
+    setMutations((curr) => persist(clearStale(curr, validStableIds)));
+  }
+
+  // Set of stable IDs in the current engine output — used to detect stale
+  // mutation entries (entries whose activity no longer exists in the plan).
+  const validStableIds = useMemo(
+    () => new Set(activities.map((a) => a.stableId)),
+    [activities],
+  );
+
+  const staleIds = useMemo(
+    () => staleStableIds(mutations, validStableIds),
+    [mutations, validStableIds],
+  );
+
+  // Apply mutations to each activity: override date if rescheduled, override
+  // quantity if edited (with proportional duration adjustment). Dismiss is
+  // applied later by the visibility filter.
+  const mutatedActivities = useMemo(() => {
+    return activities.map((a) => {
+      const mut = mutations[a.stableId];
+      if (!mut || (mut.rescheduledTo === undefined && mut.editedQuantity === undefined)) {
+        return a;
+      }
+      const newQty = mut.editedQuantity ?? a.quantity;
+      const newDate = mut.rescheduledTo ?? a.date;
+      const durationScale = a.quantity > 0 ? newQty / a.quantity : 1;
+      return {
+        ...a,
+        quantity: newQty,
+        date: newDate,
+        durationMinutes: a.durationMinutes * durationScale,
+        // changeoverMinutes is product+neighbour-dependent, not quantity-dependent
+      };
+    });
+  }, [activities, mutations]);
 
   // Number of dismissed activities present in the current plan.
   const dismissedCount = useMemo(
@@ -186,28 +240,26 @@ export function CalendarApp(props: CalendarAppProps) {
     [activities, mutations],
   );
 
-  // Filter activities through layer toggles + dismissal visibility.
+  // Filter mutated activities through layer toggles + dismissal visibility.
   const visibleActivities = useMemo(() => {
-    return activities.filter((a) => {
+    return mutatedActivities.filter((a) => {
       if (!visibleStations.has(a.station)) return false;
       if (!showDismissed && isDismissed(mutations, a.stableId)) return false;
       return true;
     });
-  }, [activities, visibleStations, mutations, showDismissed]);
+  }, [mutatedActivities, visibleStations, mutations, showDismissed]);
   const activitiesByDate = useMemo(
     () => groupByDate(visibleActivities),
     [visibleActivities],
   );
 
   // Aggregate per-day load across visible stations, EXCLUDING dismissed
-  // activities (since the user has opted out of running them, they shouldn't
-  // contribute to capacity load). Recomputed client-side from activities +
-  // station capacity defaults — the server's pre-rendered dayLoads no longer
-  // match once mutations are applied.
+  // activities and using the MUTATED activities (so reschedule and edit
+  // both flow through to the badges).
   const peakLoadByDate = useMemo(() => {
     type Bucket = { usedMinutes: number; capacityMinutes: number; station: Station };
     const perDayPerStation = new Map<string, Map<Station, number>>();
-    for (const a of activities) {
+    for (const a of mutatedActivities) {
       if (!visibleStations.has(a.station)) continue;
       if (isDismissed(mutations, a.stableId)) continue;
       let stationMap = perDayPerStation.get(a.date);
@@ -233,8 +285,7 @@ export function CalendarApp(props: CalendarAppProps) {
       if (peak) out.set(date, peak);
     }
     return out;
-    // dayLoads is intentionally NOT a dep — client recomputes from activities.
-  }, [activities, visibleStations, mutations, stationDailyMinutes]);
+  }, [mutatedActivities, visibleStations, mutations, stationDailyMinutes]);
 
   // Per-station counts (for the chip labels in the rail) — count BEFORE
   // filtering so the user can see what they'd un-hide.
@@ -254,6 +305,58 @@ export function CalendarApp(props: CalendarAppProps) {
     () => horizonDates(horizon.startWeek, horizon.weeks),
     [horizon],
   );
+
+  // Per-week per-station utilisation, from mutated activities. Used by the
+  // capacity heatmap panel below the calendar. For each (week, station)
+  // we surface the PEAK day utilisation in that week (overruns are what
+  // matter most operationally); the tooltip shows the weekly total minutes.
+  const heatmapByWeek = useMemo(() => {
+    type Cell = { peakUtilisation: number; totalMinutes: number };
+    const usedByDateStation = new Map<string, Map<Station, number>>();
+    for (const a of mutatedActivities) {
+      if (isDismissed(mutations, a.stableId)) continue;
+      let stMap = usedByDateStation.get(a.date);
+      if (!stMap) {
+        stMap = new Map();
+        usedByDateStation.set(a.date, stMap);
+      }
+      stMap.set(a.station, (stMap.get(a.station) ?? 0) + a.durationMinutes + a.changeoverMinutes);
+    }
+    const weekStarts: string[] = [];
+    {
+      const start = fromISO(horizon.startWeek);
+      for (let i = 0; i < horizon.weeks; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i * 7);
+        weekStarts.push(toISO(d));
+      }
+    }
+    const out = new Map<string, Map<Station, Cell>>();
+    for (const ws of weekStarts) {
+      const stationMap = new Map<Station, Cell>();
+      const days: string[] = [];
+      const monday = fromISO(ws);
+      for (let i = 0; i < 5; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        days.push(toISO(d));
+      }
+      for (const station of STATIONS) {
+        let peakUtil = 0;
+        let totalMin = 0;
+        const cap = stationDailyMinutes[station] ?? 480;
+        for (const d of days) {
+          const used = usedByDateStation.get(d)?.get(station) ?? 0;
+          totalMin += used;
+          const util = cap > 0 ? used / cap : 0;
+          if (util > peakUtil) peakUtil = util;
+        }
+        stationMap.set(station, { peakUtilisation: peakUtil, totalMinutes: totalMin });
+      }
+      out.set(ws, stationMap);
+    }
+    return { weekStarts, byWeek: out };
+  }, [mutatedActivities, mutations, horizon, stationDailyMinutes]);
 
   // Group dates into months for section headers.
   const monthGroups = useMemo(() => {
@@ -468,6 +571,46 @@ export function CalendarApp(props: CalendarAppProps) {
           </span>
         </div>
 
+        {staleIds.length > 0 && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '10px 12px',
+              background: '#fffbeb',
+              border: '0.5px solid #fcd34d',
+              borderRadius: 4,
+              fontSize: 12,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              color: '#78350f',
+            }}
+          >
+            <span style={{ flex: 1 }}>
+              ⚠ {staleIds.length} stale mutation{staleIds.length === 1 ? '' : 's'} —
+              the underlying activities are no longer in the plan (data changed since
+              the mutation was made).
+            </span>
+            <button
+              type="button"
+              onClick={clearStaleMutations}
+              style={{
+                padding: '4px 10px',
+                fontSize: 11,
+                background: '#fef3c7',
+                color: '#78350f',
+                border: '0.5px solid #fcd34d',
+                borderRadius: 3,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontWeight: 500,
+              }}
+            >
+              Clear stale
+            </button>
+          </div>
+        )}
+
         {monthGroups.map((group) => (
           <MonthBlock
             key={group.monthKey}
@@ -495,16 +638,41 @@ export function CalendarApp(props: CalendarAppProps) {
             No activities to show. Toggle a layer back on, or check that your demand data is loaded.
           </div>
         )}
+
+        {/* ─── Bottom strip: heatmap + stockout risk ────── */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '2fr 1fr',
+            gap: 16,
+            marginTop: 24,
+          }}
+        >
+          <CapacityHeatmap data={heatmapByWeek} />
+          <StockoutPanel infeasibleProducts={infeasibleProducts} />
+        </div>
       </main>
 
       {/* ─── Right drawer ──────────────────────────────── */}
       {selected && (
         <ActivityDrawer
+          // We always render the drawer against the LATEST data: look up the
+          // original activity in `activities` (the server-rendered list) and
+          // overlay any current mutation. Selected gets stale when mutations
+          // happen otherwise.
           activity={selected}
+          original={activities.find((a) => a.stableId === selected.stableId) ?? selected}
           routingRationale={routingDecisions[selected.productCode] ?? null}
           dismissed={isDismissed(mutations, selected.stableId)}
+          rescheduledTo={rescheduledTo(mutations, selected.stableId)}
+          editedQuantity={editedQuantityOf(mutations, selected.stableId)}
+          stationDailyMinutes={stationDailyMinutes[selected.station] ?? 480}
           onDismiss={() => dismiss(selected.stableId)}
           onUndismiss={() => undismiss(selected.stableId)}
+          onReschedule={(date) => reschedule(selected.stableId, date)}
+          onClearReschedule={() => clearReschedule(selected.stableId)}
+          onEditQuantity={(qty) => editQuantity(selected.stableId, qty)}
+          onClearEdit={() => clearEdit(selected.stableId)}
           onClose={() => setSelected(null)}
         />
       )}
@@ -767,20 +935,69 @@ function ActivityChip({
 
 function ActivityDrawer({
   activity,
+  original,
   routingRationale,
   dismissed,
+  rescheduledTo: rescheduled,
+  editedQuantity,
+  stationDailyMinutes,
   onDismiss,
   onUndismiss,
+  onReschedule,
+  onClearReschedule,
+  onEditQuantity,
+  onClearEdit,
   onClose,
 }: {
   activity: CalendarActivity;
+  /** The unmutated activity from the server output — used to display "original" values. */
+  original: CalendarActivity;
   routingRationale: string | null;
   dismissed: boolean;
+  rescheduledTo: string | null;
+  editedQuantity: number | null;
+  stationDailyMinutes: number;
   onDismiss: () => void;
   onUndismiss: () => void;
+  onReschedule: (newDate: string) => void;
+  onClearReschedule: () => void;
+  onEditQuantity: (qty: number) => void;
+  onClearEdit: () => void;
   onClose: () => void;
 }) {
   const colors = STATION_COLORS[activity.station];
+
+  // Working days within the activity's week (Mon-Fri) for the reschedule picker.
+  const weekDays = useMemo(() => {
+    const out: { iso: string; label: string }[] = [];
+    const monday = fromISO(original.weekStart);
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      out.push({
+        iso: toISO(d),
+        label: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][i],
+      });
+    }
+    return out;
+  }, [original.weekStart]);
+
+  // Edit-quantity input local state — only commits to the mutation store on Apply.
+  const [qtyInput, setQtyInput] = useState<string>('');
+  useEffect(() => {
+    setQtyInput(String(activity.quantity));
+  }, [activity.quantity, activity.stableId]);
+
+  const parsedQty = Number(qtyInput);
+  const qtyValid = Number.isFinite(parsedQty) && parsedQty > 0;
+  const qtyChanged = qtyValid && Math.round(parsedQty) !== Math.round(activity.quantity);
+
+  // Warn if the edited batch would exceed station daily capacity in minutes.
+  // Conservative: scale duration proportionally from current.
+  const wouldOversize =
+    qtyValid &&
+    activity.quantity > 0 &&
+    (activity.durationMinutes * (parsedQty / activity.quantity)) > stationDailyMinutes;
   return (
     <aside
       style={{
@@ -841,8 +1058,18 @@ function ActivityDrawer({
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13, marginBottom: 16 }}>
-        <Field label="Date" value={fmtDate(activity.date)} />
-        <Field label="Quantity" value={`${activity.quantity}`} />
+        <Field
+          label="Date"
+          value={fmtDate(activity.date)}
+          modified={rescheduled !== null}
+          originalValue={rescheduled ? fmtDate(original.date) : undefined}
+        />
+        <Field
+          label="Quantity"
+          value={`${Math.round(activity.quantity)}`}
+          modified={editedQuantity !== null}
+          originalValue={editedQuantity !== null ? `${Math.round(original.quantity)}` : undefined}
+        />
         <Field label="Production" value={`${Math.round(activity.durationMinutes)} min`} />
         <Field
           label="Changeover"
@@ -850,6 +1077,134 @@ function ActivityDrawer({
         />
         <Field label="Family" value={activity.family ?? '—'} />
         <Field label="Extended family" value={activity.extendedFamily ?? '—'} />
+      </div>
+
+      {/* ─── Reschedule picker ─────────────────────────── */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+          Reschedule (within week)
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {weekDays.map((d) => {
+            const isCurrent = d.iso === activity.date;
+            const isOriginal = d.iso === original.date;
+            return (
+              <button
+                key={d.iso}
+                type="button"
+                onClick={() => onReschedule(d.iso)}
+                disabled={isCurrent}
+                style={{
+                  flex: 1,
+                  padding: '6px 4px',
+                  fontSize: 11,
+                  border: `0.5px solid ${isCurrent ? colors.border : 'var(--border)'}`,
+                  borderRadius: 3,
+                  background: isCurrent ? colors.bg : 'var(--bg-page)',
+                  color: isCurrent ? colors.text : 'var(--text-secondary)',
+                  fontWeight: isCurrent ? 500 : 400,
+                  cursor: isCurrent ? 'default' : 'pointer',
+                  fontFamily: 'inherit',
+                }}
+                title={
+                  isCurrent
+                    ? 'Currently scheduled here'
+                    : isOriginal
+                    ? `Original: ${d.label}`
+                    : `Move to ${d.label}`
+                }
+              >
+                {d.label}
+                {isOriginal && !isCurrent && <span style={{ opacity: 0.5 }}> *</span>}
+              </button>
+            );
+          })}
+        </div>
+        {rescheduled && (
+          <button
+            type="button"
+            onClick={onClearReschedule}
+            style={{
+              marginTop: 6,
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              fontFamily: 'inherit',
+              textDecoration: 'underline',
+            }}
+          >
+            Reset to original day
+          </button>
+        )}
+      </div>
+
+      {/* ─── Edit quantity ─────────────────────────────── */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+          Edit quantity
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            type="number"
+            min={1}
+            value={qtyInput}
+            onChange={(e) => setQtyInput(e.target.value)}
+            style={{
+              flex: 1,
+              padding: '6px 8px',
+              fontSize: 13,
+              border: '0.5px solid var(--border)',
+              borderRadius: 3,
+              fontFamily: 'inherit',
+              background: 'var(--bg-page)',
+              color: 'inherit',
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => qtyValid && onEditQuantity(parsedQty)}
+            disabled={!qtyValid || !qtyChanged}
+            style={{
+              padding: '6px 12px',
+              fontSize: 12,
+              border: '0.5px solid var(--border)',
+              borderRadius: 3,
+              background: qtyValid && qtyChanged ? colors.bg : 'var(--bg-page)',
+              color: qtyValid && qtyChanged ? colors.text : 'var(--text-muted)',
+              cursor: qtyValid && qtyChanged ? 'pointer' : 'default',
+              fontFamily: 'inherit',
+            }}
+          >
+            Apply
+          </button>
+        </div>
+        {wouldOversize && qtyChanged && (
+          <div style={{ marginTop: 6, fontSize: 11, color: '#d97706' }}>
+            ⚠ This quantity would exceed the station's daily capacity ({stationDailyMinutes} min).
+          </div>
+        )}
+        {editedQuantity !== null && (
+          <button
+            type="button"
+            onClick={onClearEdit}
+            style={{
+              marginTop: 6,
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              fontFamily: 'inherit',
+              textDecoration: 'underline',
+            }}
+          >
+            Reset to original quantity
+          </button>
+        )}
       </div>
 
       {routingRationale && (
@@ -926,29 +1281,200 @@ function ActivityDrawer({
         </div>
       )}
 
-      <div
-        style={{
-          marginTop: 12,
-          padding: 10,
-          background: 'var(--bg-page)',
-          borderRadius: 4,
-          fontSize: 11,
-          color: 'var(--text-muted)',
-        }}
-      >
-        Edit / reschedule come in 4d.2.
-      </div>
     </aside>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+// ─── Bottom-strip panels (Phase 4e) ──────────────────────────
+
+function CapacityHeatmap({
+  data,
+}: {
+  data: {
+    weekStarts: string[];
+    byWeek: Map<string, Map<Station, { peakUtilisation: number; totalMinutes: number }>>;
+  };
+}) {
+  function color(util: number): string {
+    if (util <= 0) return 'var(--bg-page)';
+    if (util > 1) return '#dc2626';
+    if (util > 0.85) return '#d97706';
+    if (util > 0.5) return '#10b981';
+    if (util > 0.2) return '#86efac';
+    return '#d1fae5';
+  }
+
+  return (
+    <section
+      style={{
+        background: 'var(--bg-surface)',
+        border: '0.5px solid var(--border)',
+        borderRadius: 6,
+        padding: 14,
+      }}
+    >
+      <h3 style={{ fontSize: 12, fontWeight: 500, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+        Capacity heatmap (peak day per week)
+      </h3>
+      <div style={{ display: 'grid', gridTemplateColumns: `auto repeat(${data.weekStarts.length}, 1fr)`, gap: 1, fontSize: 10 }}>
+        {/* Header row: week labels */}
+        <div />
+        {data.weekStarts.map((ws, i) => (
+          <div
+            key={ws}
+            style={{
+              textAlign: 'center',
+              padding: '2px 0',
+              color: 'var(--text-muted)',
+            }}
+            title={`Week of ${ws}`}
+          >
+            W{i + 1}
+          </div>
+        ))}
+        {STATIONS.map((s) => (
+          <Fragment key={s}>
+            <div
+              style={{
+                fontSize: 11,
+                paddingRight: 10,
+                color: 'var(--text-secondary)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {STATION_LABELS[s]}
+            </div>
+            {data.weekStarts.map((ws) => {
+              const cell = data.byWeek.get(ws)?.get(s);
+              const util = cell?.peakUtilisation ?? 0;
+              return (
+                <div
+                  key={ws + s}
+                  style={{
+                    height: 18,
+                    background: color(util),
+                    borderRadius: 1,
+                  }}
+                  title={`${STATION_LABELS[s]} · week of ${ws}: peak ${Math.round(util * 100)}%, total ${Math.round(cell?.totalMinutes ?? 0)} min`}
+                />
+              );
+            })}
+          </Fragment>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 10, color: 'var(--text-muted)', alignItems: 'center' }}>
+        <span>Idle</span>
+        <span style={{ width: 12, height: 8, background: '#d1fae5', display: 'inline-block', borderRadius: 1 }} />
+        <span style={{ width: 12, height: 8, background: '#86efac', display: 'inline-block', borderRadius: 1 }} />
+        <span style={{ width: 12, height: 8, background: '#10b981', display: 'inline-block', borderRadius: 1 }} />
+        <span style={{ width: 12, height: 8, background: '#d97706', display: 'inline-block', borderRadius: 1 }} />
+        <span style={{ width: 12, height: 8, background: '#dc2626', display: 'inline-block', borderRadius: 1 }} />
+        <span>Overrun</span>
+      </div>
+    </section>
+  );
+}
+
+function StockoutPanel({
+  infeasibleProducts,
+}: {
+  infeasibleProducts: InfeasibleProduct[];
+}) {
+  const top = infeasibleProducts.slice(0, 8);
+  const maxUnmet = top.length > 0 ? Math.max(...top.map((p) => p.unmetUnits)) : 1;
+  return (
+    <section
+      style={{
+        background: 'var(--bg-surface)',
+        border: '0.5px solid var(--border)',
+        borderRadius: 6,
+        padding: 14,
+      }}
+    >
+      <h3 style={{ fontSize: 12, fontWeight: 500, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+        Stockout risk
+      </h3>
+      {top.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          No infeasible products — every SKU has a workable plan.
+        </div>
+      ) : (
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          {top.map((p) => {
+            const pct = (p.unmetUnits / maxUnmet) * 100;
+            return (
+              <li
+                key={p.productCode}
+                style={{
+                  marginBottom: 6,
+                  fontSize: 11,
+                }}
+                title={p.reason}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <span style={{ fontWeight: 500 }}>{p.productCode}</span>
+                  <span style={{ color: '#991b1b' }}>{p.unmetUnits.toLocaleString()} units</span>
+                </div>
+                <div
+                  style={{
+                    height: 4,
+                    background: 'var(--bg-page)',
+                    borderRadius: 1,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${pct}%`,
+                      height: '100%',
+                      background: '#dc2626',
+                      borderRadius: 1,
+                    }}
+                  />
+                </div>
+              </li>
+            );
+          })}
+          {infeasibleProducts.length > top.length && (
+            <li style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+              + {infeasibleProducts.length - top.length} more in left-rail panel
+            </li>
+          )}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function Field({
+  label,
+  value,
+  modified,
+  originalValue,
+}: {
+  label: string;
+  value: string;
+  modified?: boolean;
+  originalValue?: string;
+}) {
   return (
     <div>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         {label}
       </div>
-      <div style={{ marginTop: 2 }}>{value}</div>
+      <div
+        style={{
+          marginTop: 2,
+          color: modified ? '#1e40af' : 'inherit',
+          fontWeight: modified ? 500 : 400,
+        }}
+      >
+        {value}
+      </div>
+      {modified && originalValue && (
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+          {originalValue}
+        </div>
+      )}
     </div>
   );
 }
