@@ -71,6 +71,23 @@ export interface CalendarActivity {
   durationMinutes: number;
   /** Changeover minutes from the previous batch on this station. 0 for kitchen. */
   changeoverMinutes: number;
+  /**
+   * Calendar-day duration for kitchen activities. The chip is anchored on
+   * `date` (= start day) and the run runs through `date + durationDays - 1`.
+   * 1 for packaging activities (a packaging batch fits in one day).
+   */
+  durationDays?: number;
+  /**
+   * For `kind: 'kitchen-required'` only — the day the run finishes (last
+   * day of production). Output is usable downstream the day after.
+   */
+  finishDate?: string;
+  /**
+   * For `kind: 'kitchen-required'` only — the date the run was originally
+   * required-by (= what packaging or another recipe needed). Useful for the
+   * drawer to show the user the planning chain.
+   */
+  requiredByDate?: string;
   /** Optional family info — used for color-coding / family-grouping in UI. */
   family: string | null;
   extendedFamily: string | null;

@@ -88,8 +88,10 @@ describe('deriveIntermediateDemand', () => {
     expect(events.map((e) => e.requiredByDate)).toEqual(['2026-05-15', '2026-05-22']);
   });
 
-  test('handles cascading BOMs — finished good → intermediate → sub-intermediate', () => {
-    // A 3-level BOM: FG → IGB (intermediate) → IAW (sub-intermediate) → raw
+  test('returns ONLY direct-child intermediates (depth 1)', () => {
+    // FG → IGB (depth 1) → IAW (depth 2) → raw
+    // Only IGB (the direct child) should appear here. The cascading planner
+    // walks deeper levels with proper lead-time backoff.
     const cascading: BOMComponent[] = [
       bomRow('FG', 'IGB', 1.0),
       bomRow('IGB', 'IAW', 0.5),
@@ -102,12 +104,9 @@ describe('deriveIntermediateDemand', () => {
       bom: cascading,
       intermediateCodes: new Set(['IGB', 'IAW']),
     });
-    // BOTH intermediates should appear: IGB at 100, IAW at 100×1×0.5=50
-    expect(events).toHaveLength(2);
-    const igb = events.find((e) => e.intermediateCode === 'IGB');
-    const iaw = events.find((e) => e.intermediateCode === 'IAW');
-    expect(igb?.quantity).toBe(100);
-    expect(iaw?.quantity).toBe(50);
+    expect(events).toHaveLength(1);
+    expect(events[0].intermediateCode).toBe('IGB');
+    expect(events[0].quantity).toBe(100);
   });
 
   test('empty inputs → empty output', () => {

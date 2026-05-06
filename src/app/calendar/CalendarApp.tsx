@@ -1442,13 +1442,18 @@ function ActivityChip({
         textDecoration: dismissed ? 'line-through' : 'none',
       }}
       title={
-        dismissed
+        activity.kind === 'kitchen-required'
+          ? `${activity.productCode} — ${activity.productName} — REQUIRED ${activity.quantity} units · starts ${activity.date}, finishes ${activity.finishDate ?? '?'}, available ${activity.requiredByDate ?? '?'}`
+          : dismissed
           ? `${activity.productCode} — ${activity.productName} — DISMISSED (${activity.quantity} units, ${Math.round(activity.durationMinutes)} min)`
           : `${activity.productCode} — ${activity.productName} (${activity.quantity} units, ${Math.round(activity.durationMinutes)} min)`
       }
     >
       <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {activity.productCode} <span style={{ opacity: 0.7 }}>×{activity.quantity}</span>
+        {activity.kind === 'kitchen-required' && activity.durationDays && activity.durationDays > 1 && (
+          <span style={{ opacity: 0.7 }}> · {activity.durationDays}d</span>
+        )}
       </div>
       {activity.productName && activity.productName !== activity.productCode && (
         <div
@@ -1627,7 +1632,7 @@ function ActivityDrawer({
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13, marginBottom: 16 }}>
         <Field
-          label="Date"
+          label={activity.kind === 'kitchen-required' ? 'Start' : 'Date'}
           value={fmtDate(activity.date)}
           modified={rescheduled !== null}
           originalValue={rescheduled ? fmtDate(original.date) : undefined}
@@ -1638,11 +1643,27 @@ function ActivityDrawer({
           modified={editedQuantity !== null}
           originalValue={editedQuantity !== null ? `${Math.round(original.quantity)}` : undefined}
         />
-        <Field label="Production" value={`${Math.round(activity.durationMinutes)} min`} />
-        <Field
-          label="Changeover"
-          value={`${Math.round(activity.changeoverMinutes)} min`}
-        />
+        {activity.kind === 'kitchen-required' && activity.finishDate && (
+          <>
+            <Field label="Finish" value={fmtDate(activity.finishDate)} />
+            <Field label="Duration" value={`${activity.durationDays ?? 1} days`} />
+          </>
+        )}
+        {activity.kind === 'kitchen-required' && activity.requiredByDate && (
+          <Field
+            label="Available for use"
+            value={fmtDate(activity.requiredByDate)}
+          />
+        )}
+        {activity.kind === 'packaging' && (
+          <>
+            <Field label="Production" value={`${Math.round(activity.durationMinutes)} min`} />
+            <Field
+              label="Changeover"
+              value={`${Math.round(activity.changeoverMinutes)} min`}
+            />
+          </>
+        )}
         <Field label="Family" value={activity.family ?? '—'} />
         <Field label="Extended family" value={activity.extendedFamily ?? '—'} />
       </div>

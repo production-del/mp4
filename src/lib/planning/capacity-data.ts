@@ -162,6 +162,53 @@ export function inferPackageSize(productCode: string): PackageSize {
 }
 
 /**
+ * Calendar-day duration of a kitchen production run for an intermediate.
+ *
+ * Derived from the `Kitchen processes` sheet:
+ *   soak step (if present)         → 1 calendar day  (overnight soaking is the norm)
+ *   dehyd hours / 24 (rounded up)  → N calendar days for dehydration
+ *   cook step (if present)         → 1 calendar day
+ *   mix step                       → assumed same-day with adjacent step
+ *
+ * Total is at least 1 day. The downstream caller adds one further day of
+ * buffer between the finish date and any consumption (packaging or as input
+ * to another recipe), per operator's "preferably one day before" rule.
+ *
+ * Scope notes / known approximations:
+ *   - Some intermediates have soak in trays/tubs but the spreadsheet's
+ *     soak/cook/dehyd hours aren't always populated. We default to 1
+ *     calendar day for any process step with unknown duration.
+ *   - We don't model parallel steps yet; a cooking + dehydrating product
+ *     will count both days serially even if reality overlaps them.
+ *   - Holidays and weekends aren't subtracted — `startDate` arithmetic
+ *     uses calendar days, not working days. Fine until we model the
+ *     kitchen working calendar (separate phase).
+ */
+export function productionDaysFor(intermediate: KitchenIntermediate): number {
+  let days = 0;
+  const steps = intermediate.processSteps.map((s) => s.toLowerCase().trim());
+  if (steps.some((s) => s === 'soak' || s.includes('soak'))) days += 1;
+  if (intermediate.dehydHours && intermediate.dehydHours > 0) {
+    days += Math.ceil(intermediate.dehydHours / 24);
+  }
+  if (steps.some((s) => s === 'cook' || s.includes('cook'))) days += 1;
+  return Math.max(1, days);
+}
+
+/**
+ * Subtract `days` calendar days from `iso` (YYYY-MM-DD) and return the
+ * resulting ISO date. Local-time arithmetic to avoid UTC drift.
+ */
+export function shiftDateBackwards(iso: string, days: number): string {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() - days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
  * Clean the family-sheet description for display:
  *   - Strip leading "Label - " (or "Label -")
  *   - Strip parenthesised volume like " (600g)", " (1.5kg)", " (250 ml)"
