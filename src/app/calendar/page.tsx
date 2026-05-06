@@ -25,12 +25,20 @@ import {
 import { assignBatchesToDays } from '@/lib/engine/day-assigner';
 import { projectToCalendar } from '@/lib/planning/calendar-projection';
 import { chooseEfficientStation } from '@/lib/engine/station-router';
+import {
+  balanceStationLoads,
+  type ProductRouting,
+} from '@/lib/engine/load-balancer';
 import { CalendarApp } from './CalendarApp';
 
 export const dynamic = 'force-dynamic'; // Always re-run; calendar reflects latest data
 
 const SPREADSHEET = join(process.cwd(), 'data', 'kitchen capacity and family plans.xlsx');
-const DEFAULT_SHELF_LIFE_DAYS = 90; // Conservative default; per-product overrides come later
+/**
+ * 18 months — matches typical shelf life for the dry-goods catalogue. This
+ * is still a single global default; per-product overrides are Phase 4f.
+ */
+const DEFAULT_SHELF_LIFE_DAYS = 540;
 const DEFAULT_MIN_BATCH = 50;
 const STEP = 10;
 /**
@@ -101,29 +109,31 @@ function buildPayload() {
     horizon,
   });
 
-  // Per-product routing decisions, keyed by productCode → routed-station + rationale.
-  // Surfaced in the activity drawer so the user can see WHY each product
-  // landed where it did.
-  const routingByProduct = new Map<string, { station: string; rationale: string }>();
+  // ─── Pass 1: per-product cost-efficient routing ──────────
+  // For each SKU, pick the lowest-cost station from its candidate set
+  // (primary + alternate, per the spreadsheet's Kitchen processes sheet).
+  // The router is per-product independent — the load balancer (pass 2)
+  // refines based on cross-product station load.
+  const initialRoutings: ProductRouting[] = [];
+  const initialRationales = new Map<string, string>();
+  const weeklyDemandByProduct = new Map<string, { weekStart: string; quantity: number }[]>();
 
-  const products: ProductPlan[] = Object.keys(monthlyRates).map((code) => {
+  for (const code of Object.keys(monthlyRates)) {
     const baseMeta = capacity.productMetaBySku[code];
     const weeklyDemand = forecast
       .filter((r) => r.productCode === code)
       .map((r) => ({ weekStart: r.weekStart, quantity: r.quantity }));
+    weeklyDemandByProduct.set(code, weeklyDemand);
     const totalDemand = weeklyDemand.reduce((s, w) => s + w.quantity, 0);
 
-    // Build candidate set from spreadsheet's primary + alternate. The
-    // station-router picks the cost-efficient choice — so a product with
-    // bottlo as alternate may land on bottlo if its volume × throughput
-    // beats the primary's slower-but-cheaper-to-switch option.
     const intermediate = capacity.intermediates.get(baseMeta.family ?? '');
     const candidates: string[] = [];
     if (intermediate?.packingStation) candidates.push(intermediate.packingStation);
     if (intermediate?.alternateStation && intermediate.alternateStation !== intermediate.packingStation) {
       candidates.push(intermediate.alternateStation);
     }
-    if (candidates.length === 0) candidates.push(baseMeta.station); // fallback
+    if (candidates.length === 0) candidates.push(baseMeta.station);
+
     const decision = chooseEfficientStation({
       productCode: code,
       candidateStations: candidates as Parameters<typeof chooseEfficientStation>[0]['candidateStations'],
@@ -132,16 +142,48 @@ function buildPayload() {
       stationDefaults: capacity.stations,
       changeoverMatrix: capacity.changeoverMatrix,
     });
-    routingByProduct.set(code, { station: decision.station, rationale: decision.rationale });
+    initialRationales.set(code, decision.rationale);
+    initialRoutings.push({
+      productCode: code,
+      currentStation: decision.station,
+      evaluations: decision.evaluations,
+    });
+  }
 
-    // Re-derive station defaults from the chosen station (may differ from primary).
+  // ─── Pass 2: cross-product load balancing ────────────────
+  // Detect stations whose horizon-total minutes exceed 85% of capacity
+  // and move marginal products to their alternates. Single pass — no
+  // iterative convergence yet (Phase 4c.3 if needed).
+  const balanced = balanceStationLoads({
+    routings: initialRoutings,
+    stationDefaults: capacity.stations,
+    horizonWeeks: horizon.weeks,
+    threshold: 0.85,
+  });
+
+  // Combine per-product routing rationale: initial + balancer redistribution note.
+  const routingByProduct = new Map<string, { station: string; rationale: string }>();
+  const redistributedSet = new Set(balanced.redistributions.map((r) => r.productCode));
+  for (const r of balanced.routings) {
+    const initial = initialRationales.get(r.productCode) ?? '';
+    const redist = balanced.redistributions.find((x) => x.productCode === r.productCode);
+    const rationale = redist
+      ? `${initial} Re-routed to ${redist.toStation} after load balancing — ${redist.reason}`
+      : initial;
+    routingByProduct.set(r.productCode, { station: r.currentStation, rationale });
+  }
+
+  // Build the ProductPlan list using the balanced routing decisions.
+  const products: ProductPlan[] = balanced.routings.map((r) => {
+    const baseMeta = capacity.productMetaBySku[r.productCode];
+    const weeklyDemand = weeklyDemandByProduct.get(r.productCode) ?? [];
     const chosenMeta = {
       ...baseMeta,
-      station: decision.station,
+      station: r.currentStation,
       rateUnitsPerHour:
-        capacity.stations[decision.station]?.unitsPerHour ?? baseMeta.rateUnitsPerHour,
+        capacity.stations[r.currentStation]?.unitsPerHour ?? baseMeta.rateUnitsPerHour,
     };
-    const station = capacity.stations[decision.station];
+    const station = capacity.stations[r.currentStation];
     const maxBatch = station
       ? dailyStationOutput(station.unitsPerHour, station.hoursPerDay)
       : 1500;
@@ -155,6 +197,9 @@ function buildPayload() {
       step: STEP,
     };
   });
+  // Suppress unused-variable warning on redistributedSet — used implicitly via
+  // routingByProduct above. Kept here for future "Re-routed" badge in the UI.
+  void redistributedSet;
 
   const orchestratorOutput = orchestrateBatchPlan({
     products,
