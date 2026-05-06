@@ -1,0 +1,30 @@
+﻿Product	process steps	process steps	process steps	PACKING EQUIPMENT	PACKING EQUIPMENT Alternate	max /soak ibc	max soak /basin	max mix /tub	oven capacity/day	kilos per tray	max dehydrate mama	max dehydrate papa	max dehydrate midgy	dehyd hours
+GFF	mix 							30						
+IGC	mix 		cook	elephant				270	270					
+ITC	mix 			hand 	bottlo			30						
+IAB	soak		dehydrate	elephant	bottlo		125				500	600	400	
+IAS	soak		dehydrate	elephant	bottlo	500					500	600	400	
+ITF	mix 			hand 	bottlo			20						
+IGG	mix 		cook	elephant	bottlo			60	260					
+IGE	mix 		cook	elephant				60	225					
+IRC	mix 		dehydrate					96			96	96	96	
+ITT	mix 			hand 				30						
+IABR	soak		dehydrate	elephant	bottlo	500					500	600	400	
+IAC	soak		dehydrate	elephant	bottlo	500					500	600	400	
+IAPC	soak		dehydrate	elephant	bottlo	500					500	600	400	
+IAM	mix 			elephant	bottlo	500		50			500	600	400	
+IAW	soak		dehydrate	elephant	bottlo	500					500	600	400	
+IAH	soak		dehydrate	elephant	bottlo	500					500	600	400	
+IMK	soak	mix	dehydrate	elephant	bottlo	300					300	300	300	
+IMM	SOAK	MIX	dehydrate	elephant	bottlo	300		60			500	600	400	
+ICW	SOAK	MIX	dehydrate	elephant	bottlo	300		60	320		500	600	400	
+IMS	mix 							60						
+IMT	soak	mix	dehydrate	elephant	bottlo	500		100		2.53164557	500	600	400	
+IYB	mix 		cook	elephant	bottlo			60	250					
+IGB	mix 		cook	elephant	bottlo			60	240					
+ITD	mix 			hand 	bottlo			30						
+ISR	mix 			dust	bottlo			50						
+ISG	mix 			dust	bottlo			50						
+ISY	mix 			dust	bottlo			50						
+ISPO	mix 			dust	bottlo			50						
+ISPCH	mix 			dust	bottlo			50						
