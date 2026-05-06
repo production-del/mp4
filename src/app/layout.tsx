@@ -3,6 +3,8 @@ import "./globals.css";
 import { ThemeProvider } from './components/ThemeProvider';
 import { ThemeToggle } from './components/ThemeToggle';
 import { NavLinks } from './components/NavLinks';
+import { UserMenu } from './components/UserMenu';
+import { PlanStoreInit } from './components/PlanStoreInit';
 
 export const metadata: Metadata = {
   title: "Byron Planner | Production Planning System",
@@ -26,6 +28,7 @@ export default function RootLayout({
       </head>
       <body style={{ background: 'var(--bg-page)', color: 'var(--text-primary)' }}>
         <ThemeProvider>
+          <PlanStoreInit />
           <div className="min-h-screen flex flex-col">
             <header style={{ position: 'sticky', top: 0, zIndex: 40, borderBottom: '0.5px solid var(--border)', background: 'var(--bg-page)' }}>
               {/* Full-width nav bar: no max-width constraint so the tabs can
@@ -33,7 +36,10 @@ export default function RootLayout({
                   removed per operator request — the tabs are the identity. */}
               <nav className="w-full px-6 py-3 flex items-center justify-between gap-4">
                 <NavLinks />
-                <ThemeToggle />
+                <div className="flex items-center gap-3">
+                  <UserMenu />
+                  <ThemeToggle />
+                </div>
               </nav>
             </header>
             <main className="flex-1 w-full">
