@@ -76,11 +76,12 @@ describe('loadCapacityDataFromPath — real spreadsheet', () => {
     });
 
     test('knows Chaga products (FCHAGALG, FCHAGASM) → XHBC → FAM Fungi', () => {
-      expect(loaded.familyMap.FCHAGALG).toEqual({
+      expect(loaded.familyMap.FCHAGALG).toMatchObject({
         family: 'XHBC',
         extendedFamily: 'FAM Fungi',
       });
-      expect(loaded.familyMap.FCHAGASM).toEqual({
+      expect(loaded.familyMap.FCHAGALG.description).toMatch(/Chaga/i);
+      expect(loaded.familyMap.FCHAGASM).toMatchObject({
         family: 'XHBC',
         extendedFamily: 'FAM Fungi',
       });
@@ -184,6 +185,12 @@ describe('loadCapacityDataFromPath — real spreadsheet', () => {
       expect(meta.packageSize).toBe('LRG');
       expect(meta.family).toBe('XHBC');
       expect(meta.extendedFamily).toBe('FAM Fungi');
+    });
+
+    test('productName is populated from the family sheet description (not empty)', () => {
+      const meta = loaded.productMetaBySku.FCHAGALG;
+      expect(meta.productName).toBeTruthy();
+      expect(meta.productName).toMatch(/Chaga/i);
     });
 
     test('rateUnitsPerHour is sourced from the assigned station defaults', () => {

@@ -739,11 +739,28 @@ function ActivityChip({
       }}
       title={
         dismissed
-          ? `${activity.productCode} — DISMISSED (${activity.quantity} units, ${Math.round(activity.durationMinutes)} min)`
-          : `${activity.productCode} — ${activity.quantity} units (${Math.round(activity.durationMinutes)} min)`
+          ? `${activity.productCode} — ${activity.productName} — DISMISSED (${activity.quantity} units, ${Math.round(activity.durationMinutes)} min)`
+          : `${activity.productCode} — ${activity.productName} (${activity.quantity} units, ${Math.round(activity.durationMinutes)} min)`
       }
     >
-      {activity.productCode} <span style={{ opacity: 0.7 }}>×{activity.quantity}</span>
+      <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {activity.productCode} <span style={{ opacity: 0.7 }}>×{activity.quantity}</span>
+      </div>
+      {activity.productName && activity.productName !== activity.productCode && (
+        <div
+          style={{
+            fontSize: 9,
+            opacity: 0.65,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            marginTop: 1,
+            lineHeight: 1.2,
+          }}
+        >
+          {activity.productName}
+        </div>
+      )}
     </button>
   );
 }
