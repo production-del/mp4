@@ -394,6 +394,22 @@ function buildPayload(horizonWeeks: number) {
       source: a.assemblyNumber,
     }));
 
+  // ─── Consumes map (Phase 4l.2) ────────────────────────────
+  // For each productCode that has BOM entries, list its depth-1
+  // intermediate dependencies. Client uses this with the current mutated
+  // activity dates to detect schedule conflicts (e.g. dragged a kitchen
+  // run too late, breaks 1-day buffer for downstream packaging).
+  const consumesMap: Record<string, string[]> = {};
+  for (const row of capacity.bom) {
+    if (!intermediateCodes.has(row.productCode)) continue;
+    let arr = consumesMap[row.parentProductCode];
+    if (!arr) {
+      arr = [];
+      consumesMap[row.parentProductCode] = arr;
+    }
+    if (!arr.includes(row.productCode)) arr.push(row.productCode);
+  }
+
   const kitchenRuns = planKitchenRuns({
     packagingActivities: packagingForDemand,
     bom: capacity.bom,
@@ -557,6 +573,7 @@ function buildPayload(horizonWeeks: number) {
     assembliesFetchedAt,
     kitchenActivityCount,
     kitchenRequiredCount,
+    consumesMap,
     stationDailyMinutes,
     infeasibleProducts,
     routingDecisions,
