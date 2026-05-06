@@ -1,0 +1,8289 @@
+{
+  "fetchedAt": "2026-05-04T01:21:45.309Z",
+  "byProductCode": {
+    "[BLKBAG5]": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 649,
+      "TBC": 0
+    },
+    "[BOXMED6]": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 994.6840000000002,
+      "MF Operations": 148.02800000000002,
+      "TBC Height": 0
+    },
+    "[SILVBAG3]": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 856,
+      "MF Operations": 0,
+      "TBC": 1
+    },
+    "[SILVBAG5]": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 19,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "ABACVIN": {
+      "Lundberg Storeroom": 180.72,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "ABARNPO": {
+      "Lundberg Storeroom": 978.925,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "ABBCS": {
+      "Lundberg Storeroom": 13.9,
+      "TBC": 13
+    },
+    "ABBNR": {
+      "Lundberg Storeroom": 2540.9399999999996,
+      "MF Packaging": 0,
+      "MF Operations": 0
+    },
+    "ABBRSPPO": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 2
+    },
+    "ABCMPO": {
+      "Lundberg Storeroom": 22.57,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "ABCNO": {
+      "Lundberg Storeroom": 55.356,
+      "MF Packaging": 39.317,
+      "MF Operations": 0
+    },
+    "ABCOVO": {
+      "Lundberg Storeroom": 58.11300000000001,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "ABCSCS": {
+      "Lundberg Storeroom": 852.1099999999999,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ABCSG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 7.5,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "ABCTCO": {
+      "Lundberg Storeroom": 513.9072,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0.063,
+      "TBC Height": 0
+    },
+    "ABCWOAJ": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "ABHPP": {
+      "Lundberg Storeroom": 15.5,
+      "MF Packaging": 0.4,
+      "TBC": 0
+    },
+    "ABHRO": {
+      "Lundberg Storeroom": 162.5,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ABMRS4O": {
+      "Lundberg Storeroom": 26.3365,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 10
+    },
+    "ABPPPO": {
+      "Lundberg Storeroom": 11,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ABPSO": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "ABRSORG": {
+      "Lundberg Storeroom": 108.163,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "ABSKO": {
+      "Lundberg Storeroom": 200,
+      "MF Packaging": 12.5,
+      "TBC": 0
+    },
+    "ABWAIF": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ABWAO": {
+      "Lundberg Storeroom": 0,
+      "TBC": 0
+    },
+    "ABWC": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ABWCBD": {
+      "Lundberg Storeroom": 0,
+      "TBC": 0
+    },
+    "ABWCS": {
+      "Lundberg Storeroom": 0,
+      "TBC": 0
+    },
+    "ABWH": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ABWP": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ABWP10": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 57.2123,
+      "TBC Height": 0
+    },
+    "ABWPC": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ABWPST": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ABWTPO5%": {
+      "Lundberg Storeroom": 347.6,
+      "MF Packaging": 0.09999999999999432,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "ABWTSTA": {
+      "Lundberg Storeroom": 0.26,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "ABWW": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AE-ACDFSP": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "AE-ACDPOS": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "AFCB": {
+      "Lundberg Storeroom": 15.615000000000002,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AFMP": {
+      "Lundberg Storeroom": 78.346,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "AHASR": {
+      "Lundberg Storeroom": 36.25,
+      "MF Packaging": 0
+    },
+    "AHBBP": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHBBPF": {
+      "Lundberg Storeroom": 24.4,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "AHBIRLF": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0.5,
+      "TBC": 0
+    },
+    "AHBO": {
+      "Lundberg Storeroom": 22.849999999999998,
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "AHCCCO": {
+      "Lundberg Storeroom": 1.5500000000000007,
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "AHCFO": {
+      "Lundberg Storeroom": 19,
+      "MF Packaging": 2,
+      "TBC Height": 0
+    },
+    "AHCHFO": {
+      "Lundberg Storeroom": 23.4,
+      "MF Packaging": 1.6
+    },
+    "AHCP": {
+      "Lundberg Storeroom": 1.5,
+      "MF Packaging": 6.21
+    },
+    "AHCPO": {
+      "Lundberg Storeroom": 4.5715,
+      "MF Packaging": 4.5,
+      "TBC": 0
+    },
+    "AHDDYRSTR": {
+      "Lundberg Storeroom": 10,
+      "MF Packaging": 20,
+      "TBC": 0
+    },
+    "AHDL": {
+      "Lundberg Storeroom": 9.4,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHENBR": {
+      "Lundberg Storeroom": 5,
+      "MF Packaging": 16.4
+    },
+    "AHEO": {
+      "Lundberg Storeroom": 0.4,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHFENGK": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "AHFSO": {
+      "Lundberg Storeroom": 37.1,
+      "MF Packaging": 10.9,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "AHGARPOW": {
+      "Lundberg Storeroom": 2.1849999999999996,
+      "MF Packaging": 0.05,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "AHGLO": {
+      "Lundberg Storeroom": 30.3,
+      "MF Packaging": 4.485,
+      "TBC": 0
+    },
+    "AHGRO": {
+      "Lundberg Storeroom": 35.75,
+      "MF Packaging": 5.3
+    },
+    "AHHRFCO": {
+      "Lundberg Storeroom": 172,
+      "MF Packaging": 207.15
+    },
+    "AHJSBO": {
+      "Lundberg Storeroom": 12.15,
+      "MF Packaging": 6.81,
+      "TBC": 16.195,
+      "TBC Height": 0
+    },
+    "AHJUNB": {
+      "Lundberg Storeroom": 5.4,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHLBO": {
+      "Lundberg Storeroom": 10,
+      "MF Packaging": 3.5,
+      "MF Operations": 0
+    },
+    "AHLFO": {
+      "Lundberg Storeroom": 35,
+      "MF Packaging": 14.34,
+      "MF Operations": 0
+    },
+    "AHMAT": {
+      "Lundberg Storeroom": 1,
+      "MF Packaging": 113.53,
+      "TBC": 0
+    },
+    "AHMRO": {
+      "Lundberg Storeroom": 54.650000000000006,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHNUTCHIP": {
+      "Lundberg Storeroom": 0.07699999999999996,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHNUTMEG": {
+      "Lundberg Storeroom": 10
+    },
+    "AHOLLO": {
+      "Lundberg Storeroom": 2.58,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHOLO": {
+      "Lundberg Storeroom": 16.58,
+      "MF Packaging": 1.77,
+      "TBC": 0
+    },
+    "AHOPSO": {
+      "Lundberg Storeroom": 9.42,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHPHO": {
+      "Lundberg Storeroom": 20.1,
+      "MF Packaging": 0.34
+    },
+    "AHPLOK": {
+      "Lundberg Storeroom": 3.375,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHPOMP": {
+      "Lundberg Storeroom": 1.97,
+      "MF Packaging": 1,
+      "TBC": 0
+    },
+    "AHRASPL": {
+      "Lundberg Storeroom": 10,
+      "MF Packaging": 10
+    },
+    "AHRESL": {
+      "Lundberg Storeroom": 7.54,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHRHB": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 8.925,
+      "TBC": 0
+    },
+    "AHRO": {
+      "Lundberg Storeroom": 30.85,
+      "MF Packaging": 8.8,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "AHROAG": {
+      "Lundberg Storeroom": 22.9,
+      "MF Packaging": 0
+    },
+    "AHROSE": {
+      "Lundberg Storeroom": 62.595000000000006,
+      "MF Packaging": 4.699999999999999,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "AHSAFF": {
+      "Lundberg Storeroom": 0.9199999999999999,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHSAO": {
+      "Lundberg Storeroom": 4.43,
+      "MF Packaging": 5.12,
+      "TBC": 0
+    },
+    "AHSB": {
+      "Lundberg Storeroom": 9.7,
+      "MF Packaging": 1.25,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "AHSBP": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHSCHO": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHSGRO": {
+      "Lundberg Storeroom": 7.1,
+      "MF Packaging": 11
+    },
+    "AHSHIC": {
+      "Lundberg Storeroom": 8,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "AHSHO": {
+      "Lundberg Storeroom": 5.26,
+      "MF Packaging": 0.8
+    },
+    "AHSTAC": {
+      "Lundberg Storeroom": 2.1715000000000004,
+      "MF Packaging": 7.25,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "AHTHDO": {
+      "Lundberg Storeroom": 14.841,
+      "MF Packaging": 2.8,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "AHTHYM": {
+      "Lundberg Storeroom": 10,
+      "TBC": 0
+    },
+    "AHTWOFO": {
+      "Lundberg Storeroom": 2,
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "AHVRO": {
+      "Lundberg Storeroom": 8.5,
+      "MF Packaging": 0.25,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "AHYERBO": {
+      "Lundberg Storeroom": 0.6000000000000001,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "ALMFLAC": {
+      "Lundberg Storeroom": 3,
+      "MF Packaging": 0,
+      "TBC": 8
+    },
+    "AMHNY22": {
+      "Lundberg Storeroom": 23.855999999999995,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "APRICDIC": {
+      "Lundberg Storeroom": 1000
+    },
+    "APRICWH": {
+      "Lundberg Storeroom": 1000
+    },
+    "ASHARO": {
+      "Lundberg Storeroom": 2.2,
+      "MF Packaging": 7.6,
+      "TBC": 0
+    },
+    "ASHRAWPOW": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 14.95,
+      "MF Operations": 0
+    },
+    "BAGLARGE": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "barbaraoneill-selfheal": {
+      "Lundberg Storeroom": 0,
+      "TBC": 760
+    },
+    "barbaraoneill-sustainme": {
+      "Lundberg Storeroom": 0,
+      "TBC": 87
+    },
+    "BLCUM": {
+      "Lundberg Storeroom": 21.549999999999997,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "BLUELOTUS": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0.004000000000001336,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "BOXSML": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1391.1158,
+      "MF Operations": 0,
+      "TBC": 936.6781,
+      "TBC Height": 0
+    },
+    "BPPS": {
+      "Lundberg Storeroom": 24.5,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "B-RAWWALNUT": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 1,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BROWNRICE": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1.5,
+      "TBC": 0
+    },
+    "BUCKET10L": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 63,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "BUCKET20L": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 237,
+      "TBC": 0
+    },
+    "BUCKET20LTR": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 262,
+      "TBC": 0
+    },
+    "BULK-ABARA-BOX": {
+      "Lundberg Storeroom": 1,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 12,
+      "TBC Height": 0
+    },
+    "BULK-ABCTC-BOX": {
+      "Lundberg Storeroom": 1,
+      "TBC": 0
+    },
+    "BULK-ABCWO-BOX": {
+      "Lundberg Storeroom": 1,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 1,
+      "TBC Height": 0
+    },
+    "BULK-AFMAPSYR3x4L": {
+      "Lundberg Storeroom": 0
+    },
+    "BULK-AHGRO-1KG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BULK-CACPO-5KG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 10,
+      "TBC Height": 0
+    },
+    "BULK-CAYENNE-3KG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BULK-CELTFINE-BOX": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BULK-HTGY-BOX": {
+      "Lundberg Storeroom": 0,
+      "TBC": 1
+    },
+    "BULK-MACA-BOX": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 16,
+      "TBC Height": 0
+    },
+    "BULK-PECAN-BOX": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 17,
+      "TBC Height": 0
+    },
+    "BULK-RAWCA-BOX": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 4,
+      "TBC Height": 0
+    },
+    "CACPASTE": {
+      "Lundberg Storeroom": 12.069999999999999,
+      "MF Packaging": 0,
+      "TBC": 0.05
+    },
+    "CACPOW": {
+      "Lundberg Storeroom": 250.67200000000003,
+      "MF Packaging": 48.62,
+      "MF Operations": 0
+    },
+    "CASHSML": {
+      "Lundberg Storeroom": 9.075,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "CAYENPEP": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 37.5
+    },
+    "CELTICSALT": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 459.25000000000006,
+      "MF Operations": 0
+    },
+    "CELTSALTFINE": {
+      "Lundberg Storeroom": 650.13,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "CHIASEEDC": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "CMIUG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "COCOCHIPC": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 21.68
+    },
+    "COCOFLRO": {
+      "Lundberg Storeroom": 3.5,
+      "MF Packaging": 0,
+      "TBC": 2.5
+    },
+    "COCONECTO": {
+      "Lundberg Storeroom": 82.8,
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "COCOSUG": {
+      "Lundberg Storeroom": 495.65,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "CORIANDERSEEDS": {
+      "Lundberg Storeroom": 21.5,
+      "MF Packaging": 1.95,
+      "TBC": 0
+    },
+    "CP-LIPHANG-4x4SKU-BUNDLE": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "CP-LIPHANG-6x4SKU-BUNDLE": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "Currants": {
+      "Lundberg Storeroom": 223.35750000000002,
+      "TBC": 0
+    },
+    "DATESDICED": {
+      "Lundberg Storeroom": 160.01999999999998,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "DATESPITTED": {
+      "Lundberg Storeroom": 10,
+      "MF Packaging": 5.6
+    },
+    "DCAMANP": {
+      "Lundberg Storeroom": 0,
+      "TBC": 0
+    },
+    "DCCS": {
+      "Lundberg Storeroom": 15,
+      "MF Packaging": 18.6,
+      "TBC": 0
+    },
+    "DCPSO": {
+      "Lundberg Storeroom": 46,
+      "MF Packaging": 1
+    },
+    "EABPP": {
+      "Lundberg Storeroom": 37.9321,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "EABPW": {
+      "Lundberg Storeroom": 40,
+      "MF Packaging": 0
+    },
+    "EABRAMC": {
+      "Lundberg Storeroom": 6.614,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "EACINPOW": {
+      "Lundberg Storeroom": 154.36,
+      "MF Packaging": 1.1,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "EACINQO": {
+      "Lundberg Storeroom": 3,
+      "MF Packaging": 1,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "EAGRG": {
+      "Lundberg Storeroom": 373.913,
+      "MF Packaging": 0,
+      "MF Operations": 0
+    },
+    "EAMCP": {
+      "Lundberg Storeroom": 6,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "EC-HAZCHOC200": {
+      "Lundberg Storeroom": 0,
+      "TBC": 146
+    },
+    "EHBLW120": {
+      "Lundberg Storeroom": 0,
+      "TBC": 17
+    },
+    "EHMC200": {
+      "Lundberg Storeroom": 0,
+      "TBC": 23
+    },
+    "EHNG1kg": {
+      "Lundberg Storeroom": 0,
+      "TBC": 10
+    },
+    "EHNG400": {
+      "Lundberg Storeroom": 0
+    },
+    "FCHAGASM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 174,
+      "TBC Height": 0
+    },
+    "FCORDYLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 4,
+      "TBC Height": 0
+    },
+    "FCORDYSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 32,
+      "TBC Height": 0
+    },
+    "FLAMECURRANT": {
+      "Lundberg Storeroom": 2.25,
+      "TBC": 467.25
+    },
+    "FLIONMLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 17,
+      "TBC Height": 0
+    },
+    "FLIONMSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 331,
+      "TBC Height": 0
+    },
+    "FREISHLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 7,
+      "TBC Height": 0
+    },
+    "FREISHSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "FSHROBLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 3,
+      "TBC Height": 0
+    },
+    "FSHROBSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 172,
+      "TBC Height": 0
+    },
+    "GBPIS": {
+      "Lundberg Storeroom": 919.56,
+      "MF Packaging": 0,
+      "TBC": 13
+    },
+    "GMPBUCK": {
+      "Lundberg Storeroom": 26.199999999999996,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "GMPSORG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "GOCHUGARU": {
+      "Lundberg Storeroom": 27.185,
+      "MF Packaging": 6.2,
+      "MF Operations": 0
+    },
+    "GOJIBERYO": {
+      "Lundberg Storeroom": 13.8,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "GREENLENTIL": {
+      "Lundberg Storeroom": 225,
+      "MF Packaging": 8.99,
+      "TBC": 0
+    },
+    "HEMPSEEDS": {
+      "Lundberg Storeroom": 10,
+      "MF Packaging": 28.7529,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "HTGY": {
+      "Lundberg Storeroom": 36.44,
+      "MF Packaging": 12.100000000000001
+    },
+    "HT-StandBundle-Mini": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "HT-StandBundle-STANDARDx1-8": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "HT-StandBundle-STANDARDx9-16": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "HT-TESTERS-BUNDLE": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "IAA": {
+      "Lundberg Storeroom": 12.967999999999996,
+      "MF Packaging": 222.49,
+      "MF Operations": 0
+    },
+    "IAAB": {
+      "Lundberg Storeroom": 5.806,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "IABKBR": {
+      "Lundberg Storeroom": 0.2,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IABKBRTSBF": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "IABKCH": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IABKCL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IABL": {
+      "Lundberg Storeroom": 99.825,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "IABR": {
+      "Lundberg Storeroom": 16.9,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IABWAIF": {
+      "Lundberg Storeroom": 478.5,
+      "TBC": 0
+    },
+    "IABWAO": {
+      "Lundberg Storeroom": 77.8,
+      "TBC": 0
+    },
+    "IABWC": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "IABWH": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "IABWP": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "IABWPC": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "IABWPST": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "IABWW": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "IAC": {
+      "Lundberg Storeroom": 166.8,
+      "MF Operations": 0
+    },
+    "IAC45O": {
+      "Lundberg Storeroom": 204.5,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "IAM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 301.1,
+      "TBC Height": 0
+    },
+    "IAP": {
+      "Lundberg Storeroom": 190.15,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "IAPC": {
+      "Lundberg Storeroom": 70.75,
+      "MF Packaging": 74.36000000000001,
+      "MF Operations": 0
+    },
+    "IAPIST": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 22.8,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "IASB": {
+      "Lundberg Storeroom": 0
+    },
+    "IAW": {
+      "Lundberg Storeroom": 605.5,
+      "MF Packaging": 139.24,
+      "MF Operations": 177.49,
+      "TBC Height": 0
+    },
+    "IAWB": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ICC": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "ICW": {
+      "Lundberg Storeroom": 0.05,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IGB": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IGC": {
+      "Lundberg Storeroom": 264.4,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IGE": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IGG": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IGGS": {
+      "Lundberg Storeroom": 0.44799999999999995,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "IMK": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "IMM": {
+      "Lundberg Storeroom": 104.45,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IMS": {
+      "Lundberg Storeroom": 30,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IMT": {
+      "Lundberg Storeroom": 290.5,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IRA": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 2.6601
+    },
+    "IRM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 3.5,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "IRMAC": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "IRP": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "IRPIS": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "IRPLOCO": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "ISBR": {
+      "Lundberg Storeroom": 60,
+      "MF Packaging": 45.25,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "ISG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 9.8,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "ISPCA": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ISPCH": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 143.8,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "ISPO": {
+      "Lundberg Storeroom": 245,
+      "MF Packaging": 22.7,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "ISR": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 30.27000000000001,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "ISWC": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "ISY": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 70.95,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "ITC": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 20.950000000000003,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "ITD": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 66.75,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "ITF": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "ITI": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 60.15,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "ITT": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 15.6,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IYB": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 158.5,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "JAR2000": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 92,
+      "MF Operations": 0
+    },
+    "JAR250SD": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 8226,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "JAR555": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 6600,
+      "TBC Height": 0
+    },
+    "KOMBUCHA": {
+      "Lundberg Storeroom": 0,
+      "TBC": 0
+    },
+    "LFCHAGASM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 409,
+      "TBC": 0
+    },
+    "LFCORDYSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 269
+    },
+    "LFLIONMSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1305,
+      "TBC": 0
+    },
+    "LFREISHSM": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 200,
+      "TBC": 0
+    },
+    "LFSHROBLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 61,
+      "TBC": 0
+    },
+    "LFSHROBSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 414,
+      "TBC": 0
+    },
+    "LICROOT": {
+      "Lundberg Storeroom": 27.5,
+      "MF Packaging": 7.5,
+      "TBC": 0
+    },
+    "LID100": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 75,
+      "MF Operations": 0
+    },
+    "LIDBUCKET10L": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 56,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "LINSEEDRAW": {
+      "Lundberg Storeroom": 99.33400000000002,
+      "MF Packaging": 18.5,
+      "MF Operations": 0
+    },
+    "LMFALMONLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 507
+    },
+    "LMFALMONME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 497,
+      "MF Operations": 1400
+    },
+    "LMFALMONSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 702
+    },
+    "LMFASHWAME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 113
+    },
+    "LMFASHWPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1540,
+      "TBC": 0
+    },
+    "LMFASHWPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 500
+    },
+    "LMFASTRAME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 191,
+      "TBC": 0
+    },
+    "LMFBEETPME": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 1600,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "LMFBEETPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 493,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "LMFBLCUMSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 268,
+      "TBC": 0
+    },
+    "LMFBLPEPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 22
+    },
+    "LMFBLUBUSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 514,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFBRAZNLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 90,
+      "MF Operations": 600,
+      "TBC": 0
+    },
+    "LMFBRAZNME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1326,
+      "MF Operations": 394,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "LMFBRAZNSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 491
+    },
+    "LMFBUCKWLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 371,
+      "MF Operations": 600
+    },
+    "LMFCACAPLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 390
+    },
+    "LMFCACAPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 370
+    },
+    "LMFCACBPLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1998
+    },
+    "LMFCANIBME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 400
+    },
+    "LMFCANIBSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 74,
+      "TBC": 0
+    },
+    "LMFCARCLLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 164.20000000000005,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFCARDASM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 200,
+      "TBC": 0
+    },
+    "LMFCASHELG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 176,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFCASHEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 600,
+      "MF Operations": 900
+    },
+    "LMFCASHESM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 400
+    },
+    "LMFCELFINSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 700
+    },
+    "LMFCELTSME": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFCHAMOME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 83,
+      "MF Operations": 500
+    },
+    "LMFCHERRME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 21,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFCHIASLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0
+    },
+    "LMFCHIASME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 206,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "LMFCHILBME": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 1200,
+      "TBC": 0
+    },
+    "LMFCHILBSM": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 900,
+      "TBC": 0
+    },
+    "LMFCHILFME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 134
+    },
+    "LMFCHOCLLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 1700
+    },
+    "LMFCINNPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 702,
+      "MF Operations": 451,
+      "TBC": 0
+    },
+    "LMFCINNPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1704,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "LMFCORNFME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 255
+    },
+    "LMFCORSGSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 100,
+      "MF Operations": 100,
+      "TBC": 0
+    },
+    "LMFCUMSWSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 17,
+      "TBC": 0
+    },
+    "LMFCURNTME": {
+      "Lundberg Storeroom": 0,
+      "TBC": 0
+    },
+    "LMFCYNPEPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 695
+    },
+    "LMFDATESLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 49
+    },
+    "LMFDMTEAME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 761,
+      "TBC": 0
+    },
+    "LMFDMTEASM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 200,
+      "TBC": 0
+    },
+    "LMFENGLBME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 246
+    },
+    "LMFEROLVLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 548,
+      "MF Operations": 1600
+    },
+    "LMFFENNSSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFFENUWSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 95,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "LMFGARLPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 149,
+      "TBC": 0
+    },
+    "LMFGINGGSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 270
+    },
+    "LMFGINGRME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 183
+    },
+    "LMFGINKLME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFGINSEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 24,
+      "MF Operations": 100
+    },
+    "LMFGOCHUME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 329,
+      "MF Operations": 0
+    },
+    "LMFGOLDGLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 7,
+      "MF Operations": 700,
+      "TBC": 0
+    },
+    "LMFGOTUKME": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFHAZELME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 300,
+      "MF Operations": 600,
+      "TBC Height": 0
+    },
+    "LMFHEMPSME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFHIBISME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 15
+    },
+    "LMFIMMUNME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 351,
+      "MF Operations": 700
+    },
+    "LMFJASMIME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 200,
+      "MF Operations": 100
+    },
+    "LMFKBBQMME": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 1100,
+      "TBC": 0
+    },
+    "LMFKBBQMSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFKELPMME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 148,
+      "MF Operations": 600
+    },
+    "LMFLAVENME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 200
+    },
+    "LMFLBALMME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 347,
+      "MF Operations": 200
+    },
+    "LMFLEMMPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 58,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFLINSEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 163
+    },
+    "LMFLIQUOME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFLOTUSME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 342,
+      "MF Operations": 600,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "LMFMACAPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 145,
+      "MF Operations": 200,
+      "TBC": 0
+    },
+    "LMFMACAPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 500,
+      "TBC": 0
+    },
+    "LMFMACARME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 200,
+      "MF Operations": 0
+    },
+    "LMFMACARSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 172,
+      "TBC": 0
+    },
+    "LMFMAPLELG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 595,
+      "MF Operations": 0
+    },
+    "LMFMAPLEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 385,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFMAPLESM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1210
+    },
+    "LMFMATCHSM": {
+      "Lundberg Storeroom": 0,
+      "TBC": 0
+    },
+    "LMFMESQPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 221
+    },
+    "LMFMIXENINFYME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 99,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFMIXENINFYSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFMIXENLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1495,
+      "MF Operations": 1215,
+      "TBC": 0
+    },
+    "LMFMIXENME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1893,
+      "MF Operations": 1600
+    },
+    "LMFMORINME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 386,
+      "TBC": 0
+    },
+    "LMFMORINSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 292,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFMULLEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFOOLONME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 40,
+      "TBC": 0
+    },
+    "LMFOREGAME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 190,
+      "TBC": 0
+    },
+    "LMFPAPRSSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 255
+    },
+    "LMFPASSIME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 400
+    },
+    "LMFPECANLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 353,
+      "MF Operations": 400
+    },
+    "LMFPECANME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 56,
+      "MF Operations": 1200,
+      "TBC": 0
+    },
+    "LMFPEPITLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFPEPITME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 424,
+      "MF Operations": 575,
+      "TBC": 0
+    },
+    "LMFPEPPEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0
+    },
+    "LMFRASFDME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 410,
+      "MF Operations": 500
+    },
+    "LMFRASLFME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 261
+    },
+    "LMFROOIBME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 57,
+      "TBC": 0
+    },
+    "LMFROSEMME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 200
+    },
+    "LMFROSEPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 415,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "LMFROSHBME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 334,
+      "TBC": 0
+    },
+    "LMFSEEDMLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 345,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "LMFSEEDMME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 404,
+      "MF Operations": 1100
+    },
+    "LMFSESASSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFSLIPPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "LMFSPEARME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 111
+    },
+    "LMFSTARASM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 114,
+      "TBC": 0
+    },
+    "LMFSUNFSME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 517,
+      "MF Operations": 500
+    },
+    "LMFTERIMLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 300,
+      "MF Operations": 0
+    },
+    "LMFTERIMME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 320,
+      "MF Operations": 0
+    },
+    "LMFTULSIME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFTUMMTME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 274,
+      "MF Operations": 1000,
+      "TBC Height": 0
+    },
+    "LMFTUMMTSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 347
+    },
+    "LMFTURMEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFTURMESM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1793,
+      "MF Operations": 0
+    },
+    "LMFVALERSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 3,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "LMFWALNULG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 657,
+      "MF Operations": 1700,
+      "TBC Height": 0
+    },
+    "LMFWALNUME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 2280,
+      "MF Operations": 306,
+      "TBC": 0
+    },
+    "LMFWALNUSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 126,
+      "TBC": 0
+    },
+    "LMFWILDCLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 724
+    },
+    "LMFWILDCME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 71,
+      "TBC": 0
+    },
+    "LMFYEASTME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 232,
+      "MF Operations": 200
+    },
+    "LMFYERBAME": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 200,
+      "TBC": 0
+    },
+    "LSDCACAOSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 2124
+    },
+    "LSDCREATME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 800,
+      "MF Operations": 3000
+    },
+    "LSDGREENSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1772,
+      "TBC": 0
+    },
+    "LSDPCARALG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 373,
+      "TBC": 0
+    },
+    "LSDPCHOCLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 56,
+      "MF Operations": 600
+    },
+    "LSDPORIGLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 78,
+      "MF Operations": 700
+    },
+    "LSDREDLOSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 2702,
+      "TBC": 0
+    },
+    "LSDRHODISM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 190,
+      "TBC": 0
+    },
+    "LSDYELLOSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 5329
+    },
+    "M6FOAM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 8849.262,
+      "MF Operations": 267.028,
+      "TBC Height": 0
+    },
+    "MAPSYRO": {
+      "Lundberg Storeroom": 212.40700000000004,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MATCHGEN": {
+      "Lundberg Storeroom": 8,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFALMONME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 694,
+      "TBC Height": 0
+    },
+    "MFALMONXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 181,
+      "TBC Height": 0
+    },
+    "MFASHWAME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 24,
+      "TBC Height": 0
+    },
+    "MFASHWPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 230,
+      "TBC Height": 0
+    },
+    "MFASHWPXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 6,
+      "TBC Height": 0
+    },
+    "MFASTRAME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFBEETPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 243,
+      "TBC Height": 0
+    },
+    "MFBIRCHME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFBIRPBXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 17,
+      "TBC Height": 0
+    },
+    "MFBKBRYBG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC Height": 0
+    },
+    "MFBKCARAB9": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 3,
+      "TBC Height": 0
+    },
+    "MFBKCHOCBG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 125,
+      "TBC Height": 0
+    },
+    "MFBLUBUSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0
+    },
+    "MFBRAZNME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 1308,
+      "TBC Height": 0
+    },
+    "MFBRAZNXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 10,
+      "TBC Height": 0
+    },
+    "MFBUCKWB12": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 7,
+      "MF Operations": 0,
+      "TBC": 1,
+      "TBC Height": 0
+    },
+    "MFCACAPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 226,
+      "TBC Height": 0
+    },
+    "MFCACBPB5": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 4
+    },
+    "MFCACBPLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 58,
+      "TBC Height": 0
+    },
+    "MFCACBPXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 42,
+      "TBC Height": 0
+    },
+    "MFCANIBME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 59,
+      "TBC Height": 0
+    },
+    "MFCASHEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 296,
+      "TBC Height": 0
+    },
+    "MFCASHEXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 73,
+      "TBC Height": 0
+    },
+    "MFCECACLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFCECACME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFCECACSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFCECACXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFCELFINME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFCELFINSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFCELTSME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFCELTSSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 235,
+      "TBC Height": 0
+    },
+    "MFCHAMOME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 58,
+      "TBC Height": 180
+    },
+    "MFCHERRME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 255,
+      "TBC Height": 0
+    },
+    "MFCHIASME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFCHICPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFCHILBME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 437,
+      "TBC Height": 0
+    },
+    "MFCHILBSM": {
+      "Lundberg Storeroom": 0,
+      "TBC": 416,
+      "TBC Height": 0
+    },
+    "MFCHILFME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFCHOCLLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 259,
+      "TBC Height": 0
+    },
+    "MFCINNPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 224,
+      "TBC Height": 0
+    },
+    "MFCLOVWXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFCORNFME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 12,
+      "TBC Height": 0
+    },
+    "MFCURNTME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFDATESME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFDMTEAME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 381,
+      "TBC Height": 0
+    },
+    "MFENGLBME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 29,
+      "TBC Height": 0
+    },
+    "MFEROLVXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 66,
+      "TBC Height": 0
+    },
+    "MFFIRESME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 80,
+      "TBC Height": 0
+    },
+    "MFGINGRME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 46,
+      "TBC Height": 0
+    },
+    "MFGINKLME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 74,
+      "TBC Height": 30
+    },
+    "MFGINSEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 22,
+      "TBC Height": 0
+    },
+    "MFGOCHUME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 66,
+      "TBC Height": 0
+    },
+    "MFGOLDGXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 12,
+      "TBC Height": 0
+    },
+    "MFGOTUKME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 69,
+      "TBC Height": 120
+    },
+    "MFHAZELME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 268,
+      "TBC Height": 0
+    },
+    "MFHEMPSME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 18,
+      "TBC Height": 150
+    },
+    "MFHIBISME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 504,
+      "TBC Height": 0
+    },
+    "MFIAPIST": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFIMMUNME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 159,
+      "TBC Height": 0
+    },
+    "MFIRPIS": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFJASMIME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 19,
+      "TBC Height": 0
+    },
+    "MFJUNIPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFKBBQMME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 295,
+      "TBC Height": 0
+    },
+    "MFKELPMME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 95,
+      "TBC Height": 0
+    },
+    "MFLAVENME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFLBALMME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 140,
+      "TBC Height": 0
+    },
+    "MFLEMMPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 331
+    },
+    "MFLINSEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 68,
+      "TBC Height": 0
+    },
+    "MFLIQUOME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 59,
+      "TBC Height": 144
+    },
+    "MFLOTUSME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFLOTUSSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFMACADB10": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 1,
+      "TBC": 1,
+      "TBC Height": 0
+    },
+    "MFMACADXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFMACAPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 248,
+      "TBC Height": 0
+    },
+    "MFMACARME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 39,
+      "TBC Height": 0
+    },
+    "MFMAPLEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 539,
+      "TBC Height": 0
+    },
+    "MFMAPLESM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 345,
+      "TBC Height": 180
+    },
+    "MFMAPLEXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 24,
+      "TBC Height": 0
+    },
+    "MFMATCHSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 22,
+      "TBC Height": 0
+    },
+    "MFMESQPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFMIXENINFYME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 250,
+      "TBC Height": 0
+    },
+    "MFMIXENME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 700,
+      "TBC Height": 560
+    },
+    "MFMIXENXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 151,
+      "TBC Height": 0
+    },
+    "MFMORINME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 50,
+      "TBC Height": 240
+    },
+    "MFMULLEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFOOLONME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 42,
+      "TBC Height": 0
+    },
+    "MFOREGAME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFPASSIME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 58,
+      "TBC Height": 0
+    },
+    "MFPECANME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 50,
+      "TBC Height": 0
+    },
+    "MFPECANXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 51,
+      "TBC Height": 0
+    },
+    "MFPEPITME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 926,
+      "TBC Height": 0
+    },
+    "MFPEPPEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 59,
+      "TBC Height": 0
+    },
+    "MF-POS-1StickerLRG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MF-POS-MunchiesKit01": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFPSYHUME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 78,
+      "TBC Height": 150
+    },
+    "MFRASFDME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 1,
+      "TBC": 257,
+      "TBC Height": 0
+    },
+    "MFRASLFME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 29,
+      "TBC Height": 0
+    },
+    "MFRMIXNB11": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFROOIBME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 69,
+      "TBC Height": 0
+    },
+    "MFROSEMME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 23,
+      "TBC Height": 0
+    },
+    "MFROSHBME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFSEEDMME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 150,
+      "TBC Height": 0
+    },
+    "MFSLIPPME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFSLIPPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 195,
+      "TBC Height": 0
+    },
+    "MFSPEARME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 61,
+      "TBC Height": 0
+    },
+    "MFSUNFSB12": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFSUNFSB6": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 1,
+      "TBC Height": 0
+    },
+    "MFSUNFSME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 33,
+      "TBC Height": 0
+    },
+    "MFTAMARME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 184,
+      "TBC Height": 0
+    },
+    "MFTAMARSMJAR": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFTERIMME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 523,
+      "TBC Height": 0
+    },
+    "MFTULSIME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 112,
+      "TBC Height": 0
+    },
+    "MFTUMMTME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 396,
+      "TBC Height": 0
+    },
+    "MFTUMMTSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 36,
+      "TBC Height": 0
+    },
+    "MFTURMEME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFWALNUME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 76,
+      "TBC Height": 0
+    },
+    "MFWALNUXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 66,
+      "TBC Height": 0
+    },
+    "MFWILDCME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 71,
+      "TBC Height": 558
+    },
+    "MFWILDCSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFWILDCSMJAR": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFYEASTME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 58,
+      "TBC Height": 0
+    },
+    "MFYERBAME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFYUMMBME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 205,
+      "TBC Height": 0
+    },
+    "MIX3RED": {
+      "Lundberg Storeroom": 264,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MORINGA": {
+      "Lundberg Storeroom": 0.5,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "MPCMAC1": {
+      "Lundberg Storeroom": 1474.614,
+      "MF Packaging": 14.14,
+      "MF Operations": 0
+    },
+    "MULLEAF": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 3.5,
+      "TBC": 0
+    },
+    "NDTP": {
+      "Lundberg Storeroom": 1,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "NT-AFTERSUN100": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 102
+    },
+    "NT-BABYBALM-45": {
+      "Lundberg Storeroom": 0,
+      "TBC": 23
+    },
+    "NT-BARRAWMILK": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 112
+    },
+    "NT-BARUNSCENT": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 100
+    },
+    "NT-CB50": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 38
+    },
+    "NT-FRANKFACE-45": {
+      "Lundberg Storeroom": 0,
+      "TBC": 46
+    },
+    "NT-KONJAC1": {
+      "Lundberg Storeroom": 0,
+      "TBC": 36
+    },
+    "NT-LEMON100": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 108
+    },
+    "NT-LIP10": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 20
+    },
+    "NT-LOVE100": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 67
+    },
+    "NT-SLEEP100": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 89
+    },
+    "OH-LEM-GT375-SAMPLE": {
+      "Lundberg Storeroom": 3,
+      "TBC": 0
+    },
+    "OLIVOIL": {
+      "Lundberg Storeroom": 12,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "PBMFALMONXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PBMFBIRPBXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 128,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "PBMFBKBRYSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 574,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "PBMFBKCARASM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 225,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "PBMFBKCHOCSM": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "PBMFBRAZNXL": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PBMFCACBPSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 23,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PBMFCACBPXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "PBMFCARCLSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 100,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "PBMFCASHEXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PBMFCHIASXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PBMFCHOCLSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 35,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PBMFEROLVSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PBMFEROLVXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PBMFGOLDGXL": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PBMFHAZELXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 7,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PBMFMAPLMXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "PBMFMIXENXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 303,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PBMFPECANXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PBMFTAMARSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1446,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "PBMFWALNUXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "PBMFWILDCSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 1141,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PECANS": {
+      "Lundberg Storeroom": 159.411,
+      "MF Packaging": 8.5,
+      "TBC": 0
+    },
+    "PECANSB": {
+      "Lundberg Storeroom": 576,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PEPSEEDC": {
+      "Lundberg Storeroom": 73.51800000000001,
+      "MF Packaging": 3,
+      "MF Operations": 0,
+      "TBC": 20
+    },
+    "PHYTCINN": {
+      "Lundberg Storeroom": 646.931,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "PHYTCRTN": {
+      "Lundberg Storeroom": 425,
+      "MF Packaging": 15
+    },
+    "PWDSGL": {
+      "Lundberg Storeroom": 0,
+      "TBC": 0
+    },
+    "PWFDP": {
+      "Lundberg Storeroom": 18.6688,
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "QUINOATRI": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 142,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "RASPBERRIES": {
+      "Lundberg Storeroom": 57.6,
+      "MF Packaging": 8.6,
+      "MF Operations": 0
+    },
+    "RAWCASH": {
+      "Lundberg Storeroom": 1757.2799999999997,
+      "MF Packaging": 0
+    },
+    "RAWMESQ": {
+      "Lundberg Storeroom": 23.669,
+      "MF Packaging": 20.4,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "RHODPOW": {
+      "Lundberg Storeroom": 0.5,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "RHOROO": {
+      "Lundberg Storeroom": 0.6,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "RNCBB": {
+      "Lundberg Storeroom": 0.19999999999999996,
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "SBLOOM": {
+      "Lundberg Storeroom": 8,
+      "TBC": 0
+    },
+    "SDASTRASM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "SDCACAOLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 7,
+      "TBC Height": 0
+    },
+    "SDCACAOSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 359,
+      "TBC Height": 0
+    },
+    "SDCREATME": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "SDLID53": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 19489,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "SDPCHOCLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 17,
+      "TBC Height": 0
+    },
+    "SDREDLOB3": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 4,
+      "TBC Height": 0
+    },
+    "SDREDLOLG": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 10,
+      "TBC Height": 0
+    },
+    "SDREDLOSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 98,
+      "TBC Height": 0
+    },
+    "SDREDLOXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "SDRHODISM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 136,
+      "TBC Height": 0
+    },
+    "SDSCHISSM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "SDYELLOXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 15,
+      "TBC Height": 0
+    },
+    "SE250G": {
+      "Lundberg Storeroom": 0
+    },
+    "SESAMESEED": {
+      "Lundberg Storeroom": 111.71499999999999,
+      "MF Packaging": 21.51,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "SFSSOIL": {
+      "Lundberg Storeroom": 2.15,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "SLIPPERYELM": {
+      "Lundberg Storeroom": 20,
+      "MF Packaging": 6.62,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "SPTTM": {
+      "Lundberg Storeroom": 0,
+      "TBC": 0
+    },
+    "SSBSP": {
+      "Lundberg Storeroom": 5,
+      "MF Packaging": 0,
+      "TBC": 0.9
+    },
+    "SUNSEEDC": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "TCOCOCHIPC": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 2
+    },
+    "TKELP": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 47
+    },
+    "VANILLA": {
+      "Lundberg Storeroom": 2.066,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "W450CASH": {
+      "Lundberg Storeroom": 766.3,
+      "MF Packaging": 1180,
+      "TBC": 9
+    },
+    "WATTLESEED": {
+      "Lundberg Storeroom": 0.09999999999999987,
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "XHBA": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "XHBC": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 13.15,
+      "TBC": 0
+    },
+    "XHBRE": {
+      "Lundberg Storeroom": 50,
+      "MF Packaging": 12.5,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "XHCP": {
+      "Lundberg Storeroom": 27,
+      "MF Packaging": 79
+    },
+    "XHLM": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 20.25,
+      "TBC": 0
+    },
+    "XMM": {
+      "Lundberg Storeroom": 60,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ZWFMISOWAK10": {
+      "Lundberg Storeroom": 11.08,
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "[[BOXLRG6]": {
+      "MF Packaging": 530.5913,
+      "MF Operations": 283.794,
+      "TBC Height": 0
+    },
+    "ABCTS": {
+      "MF Packaging": 3.8,
+      "MF Operations": 0,
+      "TBC": 910.76
+    },
+    "ABSBO": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ABWAIF10": {
+      "MF Packaging": 0,
+      "TBC": 241.105
+    },
+    "ABWAO10": {
+      "MF Packaging": 0,
+      "TBC": 30.9
+    },
+    "ABWC10": {
+      "MF Packaging": 0,
+      "TBC": 67.53
+    },
+    "ABWH10": {
+      "MF Packaging": 0,
+      "TBC": 49.9235
+    },
+    "ABWPC10": {
+      "MF Packaging": 0,
+      "TBC": 48.493
+    },
+    "ABWPST10": {
+      "MF Packaging": 0,
+      "TBC": 128
+    },
+    "ABWROAT": {
+      "MF Packaging": 2,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "ABWTPO": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ABWW10": {
+      "MF Packaging": 0,
+      "TBC": 123.23
+    },
+    "AHCALPET": {
+      "MF Packaging": 10,
+      "TBC": 0
+    },
+    "AHDULSE": {
+      "MF Packaging": 20.65,
+      "TBC": 0
+    },
+    "AHFRANK": {
+      "MF Packaging": 1.2
+    },
+    "AHGKLO": {
+      "MF Packaging": 0.32000000000000006,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "AHIMFO": {
+      "MF Packaging": 5,
+      "TBC": 0
+    },
+    "AHLEMYP": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "AHPLO": {
+      "MF Packaging": 0
+    },
+    "AHSTJWORO": {
+      "MF Packaging": 10,
+      "TBC": 0
+    },
+    "AHWORMO": {
+      "MF Packaging": 10,
+      "TBC": 0
+    },
+    "BAGSMALL": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BAGVACUUM] Vacuum Bags x2": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BOBKGF": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 6,
+      "TBC Height": 0
+    },
+    "BOX1KG": {
+      "MF Packaging": 937.4846,
+      "MF Operations": 0,
+      "TBC": 158.56849999999997,
+      "TBC Height": 0
+    },
+    "BOXMEGA": {
+      "MF Packaging": 1,
+      "MF Operations": 0,
+      "TBC": 471
+    },
+    "BULK-ABCSG-1KG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BULK-ABPSO-1KG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BULK-ABWTP-BOX": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BULK-AHACAI1KG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BULK-AHBBF-1KG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BULK-AHBBP-1KG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BULK-AHCCC-1KG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BULK-AHCHF-1KG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BULK-AHDUL-1KG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BULK-AHEO-1KG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BULK-AHGAR-1KG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BULK-AHHRF-1KG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BULK-AHMAT-1KG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 1,
+      "TBC Height": 0
+    },
+    "BULK-AHMRO-1KG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BULK-AHOPS-1KG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BULK-AHPOM-1KG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BULK-AHROS-1KG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BULK-CACPO-BKT": {
+      "MF Packaging": 0,
+      "TBC": 9
+    },
+    "BULK-EABPW-1KG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BULK-EACIN-1KG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "BULK-EACIN-BOX": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BULK-LICRO-1KG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BULK-RAWWA-BOX": {
+      "MF Packaging": 0,
+      "TBC": 16
+    },
+    "BULK-RAWWACP-BOX": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "BULK-RHODP-1KG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "BULK-SSBSP-1KG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "CECAC": {
+      "MF Packaging": 1,
+      "MF Operations": 0
+    },
+    "CHIASEEDS": {
+      "MF Packaging": 28.900000000000006,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "CHICKPEA": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "CHOCOCOCHIP": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "CM-COtwin": {
+      "MF Packaging": 0,
+      "TBC": 5
+    },
+    "CM-HZtwin": {
+      "MF Packaging": 0,
+      "TBC": 18,
+      "TBC Height": 0
+    },
+    "CM-PBtwin": {
+      "MF Packaging": 0
+    },
+    "CP-CDU-KIDSUN+ZINCLIP": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "CP-LIP-10x5SKU-BUNDLE": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "DCSWP": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "EAAMP": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "EHBLM120": {
+      "MF Packaging": 0,
+      "TBC": 22
+    },
+    "ENKCOG50": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ENKMAL50": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "FCHAGALG": {
+      "MF Packaging": 0,
+      "TBC": 11
+    },
+    "FSHIITLG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "FSHIITSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "HPShil15g": {
+      "MF Packaging": 0,
+      "TBC": 212
+    },
+    "IAB": {
+      "MF Packaging": 130.3,
+      "MF Operations": 0
+    },
+    "IABRF": {
+      "MF Packaging": 0,
+      "TBC": 5.06
+    },
+    "IAH": {
+      "MF Packaging": 85.97,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "IAPB": {
+      "MF Packaging": 16.65,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "IAPCB": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "ICCC": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ICHOCOCO": {
+      "MF Packaging": 5.95,
+      "TBC": 0
+    },
+    "IIFDLP": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "IMMB": {
+      "MF Packaging": 0,
+      "TBC": 68.33
+    },
+    "IRC": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "IRW": {
+      "MF Packaging": 0,
+      "TBC": 24
+    },
+    "ISBL": {
+      "MF Packaging": 271.995
+    },
+    "ISGTSBF": {
+      "MF Packaging": 57.6,
+      "TBC": 0
+    },
+    "ISTA": {
+      "MF Packaging": 205.8,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "JAR1000": {
+      "MF Packaging": 3791,
+      "TBC Height": 0
+    },
+    "JAR250": {
+      "MF Packaging": 2472,
+      "TBC": 0,
+      "TBC Height": 3816
+    },
+    "JAR300": {
+      "MF Packaging": 0,
+      "TBC": 1650
+    },
+    "JARAMBER": {
+      "MF Packaging": 1230,
+      "MF Operations": 0
+    },
+    "LCLMDE60": {
+      "MF Packaging": 0,
+      "TBC": 12
+    },
+    "LDLTAL5087": {
+      "MF Packaging": 0,
+      "TBC": 66
+    },
+    "LFCHAGALG": {
+      "MF Packaging": 100
+    },
+    "LFCORDYLG": {
+      "MF Packaging": 87,
+      "TBC": 0
+    },
+    "LFLIONMLG": {
+      "MF Packaging": 67,
+      "TBC": 0
+    },
+    "LFREISHLG": {
+      "MF Packaging": 94
+    },
+    "LFSHIITSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LID58": {
+      "MF Packaging": 1280,
+      "TBC": 0
+    },
+    "LID82": {
+      "MF Packaging": 11665.2,
+      "MF Operations": 22221,
+      "TBC Height": 0
+    },
+    "LIDAMBER": {
+      "MF Packaging": 1303,
+      "MF Operations": 0
+    },
+    "LMFBARBEME": {
+      "MF Packaging": 207,
+      "TBC": 0
+    },
+    "LMFBIRPBLG": {
+      "MF Packaging": 268,
+      "MF Operations": 700,
+      "TBC": 0
+    },
+    "LMFBIRPBSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFBLCUMME": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFBLUBUME": {
+      "MF Packaging": 337,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFBRAHMME": {
+      "MF Packaging": 714,
+      "TBC": 0
+    },
+    "LMFBRICELG": {
+      "MF Packaging": 180,
+      "TBC": 0
+    },
+    "LMFBUCKFLG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFCACAPSM": {
+      "MF Packaging": 774
+    },
+    "LMFCACBPSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFCARCLSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFCASSPME": {
+      "MF Packaging": 740
+    },
+    "LMFCECACLG": {
+      "MF Packaging": 430
+    },
+    "LMFCECACME": {
+      "MF Packaging": 420
+    },
+    "LMFCECACSM": {
+      "MF Packaging": 420
+    },
+    "LMFCELFINME": {
+      "MF Packaging": 1300
+    },
+    "LMFCELTSSM": {
+      "MF Packaging": 1288
+    },
+    "LMFCHIASSM": {
+      "MF Packaging": 600,
+      "TBC": 0
+    },
+    "LMFCHOCLSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFCINNQUME": {
+      "MF Packaging": 0
+    },
+    "LMFCINNQUSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "LMFCOCOSLG": {
+      "MF Packaging": 773,
+      "TBC": 0
+    },
+    "LMFCOCOSME": {
+      "MF Packaging": 503,
+      "TBC": 0
+    },
+    "LMFCOCOSSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFCORSWSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFCYNPEPME": {
+      "MF Packaging": 397,
+      "TBC": 0
+    },
+    "LMFDATESME": {
+      "MF Packaging": 609,
+      "TBC": 0
+    },
+    "LMFDULSEME": {
+      "MF Packaging": 461,
+      "TBC": 0
+    },
+    "LMFDULSESM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFEROLVSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFFIRESME": {
+      "MF Packaging": 933
+    },
+    "LMFFIRESSM": {
+      "MF Packaging": 200,
+      "TBC": 0
+    },
+    "LMFFRANKSM": {
+      "MF Packaging": 0,
+      "MF Operations": 100
+    },
+    "LMFGINGGME": {
+      "MF Packaging": 260,
+      "TBC": 0
+    },
+    "LMFGOLDGSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFGREELLG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFHAZELLG": {
+      "MF Packaging": 12,
+      "TBC": 0
+    },
+    "LMFHAZELSM": {
+      "MF Packaging": 81,
+      "TBC": 0
+    },
+    "LMFHEMPSLG": {
+      "MF Packaging": 469,
+      "TBC": 0
+    },
+    "LMFHEMPSSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFIMMUNSM": {
+      "MF Packaging": 200,
+      "MF Operations": 300,
+      "TBC": 0
+    },
+    "LMFJUNIPME": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFKELPMSM": {
+      "MF Packaging": 133,
+      "MF Operations": 1100
+    },
+    "LMFLBALMSM": {
+      "MF Packaging": 500,
+      "TBC": 0
+    },
+    "LMFLINSELG": {
+      "MF Packaging": 2162,
+      "TBC": 0
+    },
+    "LMFLOTUSSM": {
+      "MF Packaging": 745
+    },
+    "LMFMACARLG": {
+      "MF Packaging": 281,
+      "TBC": 0
+    },
+    "LMFMESQPME": {
+      "MF Packaging": 215,
+      "TBC": 0
+    },
+    "LMFMIXENSM": {
+      "MF Packaging": 0,
+      "MF Operations": 1300,
+      "TBC": 0
+    },
+    "LMFMULLESM": {
+      "MF Packaging": 84,
+      "TBC": 0
+    },
+    "LMFNUTMESM": {
+      "MF Packaging": 77
+    },
+    "LMFOATSRLG": {
+      "MF Packaging": 254,
+      "TBC": 0
+    },
+    "LMFOLIVLME": {
+      "MF Packaging": 188,
+      "TBC": 0
+    },
+    "LMFORANPME": {
+      "MF Packaging": 236,
+      "TBC": 0
+    },
+    "LMFPECANSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFPSYHULG": {
+      "MF Packaging": 254,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "LMFPSYHUME": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFPSYHUSM": {
+      "MF Packaging": 834,
+      "TBC": 0
+    },
+    "LMFQUANDSM": {
+      "MF Packaging": 200,
+      "TBC": 0
+    },
+    "LMFQUINOLG": {
+      "MF Packaging": 90,
+      "TBC": 0
+    },
+    "LMFREDLELG": {
+      "MF Packaging": 257,
+      "TBC": 0
+    },
+    "LMFREISSSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFRESISLG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFROSHBSM": {
+      "MF Packaging": 177,
+      "TBC": 0
+    },
+    "LMFSAFFPME": {
+      "MF Packaging": 300,
+      "TBC": 0
+    },
+    "LMFSCHIBSM": {
+      "MF Packaging": 100
+    },
+    "LMFSEAMOME": {
+      "MF Packaging": 500,
+      "TBC": 0
+    },
+    "LMFSEAMOSM": {
+      "MF Packaging": 960,
+      "TBC": 0
+    },
+    "LMFSLIPPME": {
+      "MF Packaging": 421
+    },
+    "LMFSOYABLG": {
+      "MF Packaging": 110,
+      "TBC": 0
+    },
+    "LMFSTRGLSM": {
+      "MF Packaging": 100,
+      "TBC": 0
+    },
+    "LMFSUNFSLG": {
+      "MF Packaging": 467,
+      "MF Operations": 120,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "LMFTAMARLG": {
+      "MF Packaging": 1048
+    },
+    "LMFTAMARME": {
+      "MF Packaging": 1562
+    },
+    "LMFTAMARSMJAR": {
+      "MF Packaging": 0
+    },
+    "LMFTERIMSM": {
+      "MF Packaging": 2604
+    },
+    "LMFWATTLSM": {
+      "MF Packaging": 170,
+      "TBC": 0
+    },
+    "LMFWILDCSMJAR": {
+      "MF Packaging": 26
+    },
+    "LMFYERBALG": {
+      "MF Packaging": 1000,
+      "TBC": 0
+    },
+    "LMFYUMMBLG": {
+      "MF Packaging": 6,
+      "TBC": 0
+    },
+    "LMFYUMMBME": {
+      "MF Packaging": 268,
+      "MF Operations": 500
+    },
+    "LSDASHWASM": {
+      "MF Packaging": 1499553,
+      "TBC": 0
+    },
+    "LSDASTRASM": {
+      "MF Packaging": 329,
+      "TBC": 0
+    },
+    "LSDBLUEISM": {
+      "MF Packaging": 991
+    },
+    "LSDSCHISSM": {
+      "MF Packaging": 170,
+      "TBC": 0
+    },
+    "MFALMONB10": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFALMONLG": {
+      "MF Packaging": 0,
+      "TBC": 140,
+      "TBC Height": 0
+    },
+    "MFALMONSM": {
+      "MF Packaging": 0,
+      "TBC": 102,
+      "TBC Height": 0
+    },
+    "MFASHWPSM": {
+      "MF Packaging": 0,
+      "TBC": 114,
+      "TBC Height": 0
+    },
+    "MFBEETPSM": {
+      "MF Packaging": 0
+    },
+    "MFBIRPBB12": {
+      "MF Packaging": 0,
+      "TBC": 1
+    },
+    "MFBIRPBLG": {
+      "MF Packaging": 0,
+      "TBC Height": 0
+    },
+    "MFBIRPBSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFBKBRYB9": {
+      "MF Packaging": 0,
+      "TBC": 5
+    },
+    "MFBKBRYB9SOURCE": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFBKBRYSM": {
+      "MF Packaging": 0,
+      "TBC": 3
+    },
+    "MFBKBRYSMTSBF": {
+      "MF Packaging": 0,
+      "TBC": 46
+    },
+    "MFBKCARABG": {
+      "MF Packaging": 0,
+      "TBC": 66
+    },
+    "MFBKCHOCB9": {
+      "MF Packaging": 0,
+      "TBC Height": 0
+    },
+    "MFBLCUMB6": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFBLPEPB10": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFBRAHMME": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFBRAZNB12": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFBRAZNLG": {
+      "MF Packaging": 0,
+      "TBC": 318,
+      "TBC Height": 0
+    },
+    "MFBRICEB5": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFBRICELG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFBUCKFLG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFBUCKWB6": {
+      "MF Packaging": 0,
+      "TBC": 4
+    },
+    "MFBUCKWLG": {
+      "MF Packaging": 0,
+      "TBC": 100,
+      "TBC Height": 0
+    },
+    "MFCACAPB3.2": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFCACAPSM": {
+      "MF Packaging": 0,
+      "TBC": 133,
+      "TBC Height": 0
+    },
+    "MFCACBPB10": {
+      "MF Packaging": 0
+    },
+    "MFCACBPSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFCANIBB6": {
+      "MF Packaging": 0,
+      "TBC": 1
+    },
+    "MFCANIBLG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFCANIBSM": {
+      "MF Packaging": 0,
+      "TBC": 372,
+      "TBC Height": 0
+    },
+    "MFCARCLB9": {
+      "MF Packaging": 0,
+      "TBC": 5
+    },
+    "MFCARCLLG": {
+      "MF Packaging": 0,
+      "TBC": 92,
+      "TBC Height": 0
+    },
+    "MFCARCLSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 299,
+      "TBC Height": 0
+    },
+    "MFCARDASM": {
+      "MF Packaging": 0,
+      "TBC": 54
+    },
+    "MFCARDAXL": {
+      "MF Packaging": 0,
+      "TBC": 2
+    },
+    "MFCASHEB12": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFCASHELG": {
+      "MF Packaging": 0,
+      "TBC": 11,
+      "TBC Height": 0
+    },
+    "MFCHERRB6.2": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFCHIASLG": {
+      "MF Packaging": 0,
+      "TBC": 39,
+      "TBC Height": 0
+    },
+    "MFCHIASSM": {
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFCHIASXL": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFCHICPB8": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFCHICPLG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFCHOCLB9": {
+      "MF Packaging": 0,
+      "TBC": 1
+    },
+    "MFCHOCLSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "MFCINNPSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 165,
+      "TBC Height": 0
+    },
+    "MFCINNPXL": {
+      "MF Packaging": 0
+    },
+    "MFCOCOSLG": {
+      "MF Packaging": 0
+    },
+    "MFCORSGB4": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFCORSGSM": {
+      "MF Packaging": 0
+    },
+    "MFCORSWB3.2": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFCORSWSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFCUMSWB4.4": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFCYNPEPME": {
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFCYNPEPSM": {
+      "MF Packaging": 0,
+      "TBC": 147,
+      "TBC Height": 0
+    },
+    "MFDATESB6.5": {
+      "MF Packaging": 0,
+      "TBC": 1
+    },
+    "MFDATESLG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 43,
+      "TBC Height": 0
+    },
+    "MFDULSPSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFEROLVB9": {
+      "MF Packaging": 0,
+      "TBC": 8
+    },
+    "MFEROLVLG": {
+      "MF Packaging": 0,
+      "TBC": 507,
+      "TBC Height": 0
+    },
+    "MFEROLVSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 295,
+      "TBC Height": 0
+    },
+    "MFFENNSB4": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFGARLPSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 176,
+      "TBC Height": 0
+    },
+    "MFGINGGME": {
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFGINGGSM": {
+      "MF Packaging": 0,
+      "TBC": 47,
+      "TBC Height": 120
+    },
+    "MFGINGGXL": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFGOLDGB10": {
+      "MF Packaging": 0,
+      "TBC": 3
+    },
+    "MFGOLDGLG": {
+      "MF Packaging": 0,
+      "TBC": 532,
+      "TBC Height": 0
+    },
+    "MFGOLDGSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFGREELLG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFHAZELB12": {
+      "MF Packaging": 0,
+      "TBC": 1
+    },
+    "MFHAZELLG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFHAZELXL": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFHEMPSB5.5": {
+      "MF Packaging": 0
+    },
+    "MFHEMPSLG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFIMMUNB.8": {
+      "MF Packaging": 0,
+      "TBC": 12
+    },
+    "MFIMMUNSM": {
+      "MF Packaging": 0,
+      "TBC Height": 0
+    },
+    "MFIRA": {
+      "MF Packaging": 0,
+      "TBC": 4
+    },
+    "MFIRCASH": {
+      "MF Packaging": 0,
+      "TBC": 4
+    },
+    "MFIRMAC": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0.442,
+      "TBC Height": 0
+    },
+    "MFIRPLOCO": {
+      "MF Packaging": 0
+    },
+    "MFIRW": {
+      "MF Packaging": 0,
+      "TBC": 4
+    },
+    "MFKBBQMB10": {
+      "MF Packaging": 0,
+      "TBC": 1
+    },
+    "MFKBBQMLG": {
+      "MF Packaging": 0,
+      "TBC": 120,
+      "TBC Height": 0
+    },
+    "MFKBBQMSM": {
+      "MF Packaging": 0,
+      "MF Operations": 1,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFKBBQMXL": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFKELPMXL": {
+      "MF Packaging": 0,
+      "TBC": 1
+    },
+    "MFLBALMSM": {
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFLINSEB6.5": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFLINSELG": {
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFMACAPSM": {
+      "MF Packaging": 0,
+      "TBC": 279,
+      "TBC Height": 0
+    },
+    "MFMACARLG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFMACARSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFMAPLEB10": {
+      "MF Packaging": 0,
+      "TBC": 4
+    },
+    "MFMAPLELG": {
+      "MF Packaging": 0,
+      "TBC": 447,
+      "TBC Height": 0
+    },
+    "MFMESQPSM": {
+      "MF Packaging": 0,
+      "TBC": 74,
+      "TBC Height": 0
+    },
+    "MFMIXENB11": {
+      "MF Packaging": 0,
+      "TBC": 7
+    },
+    "MFMIXENINFYSM": {
+      "MF Packaging": 0,
+      "TBC": 168
+    },
+    "MFMIXENLG": {
+      "MF Packaging": 0,
+      "TBC": 722,
+      "TBC Height": 0
+    },
+    "MFMIXENSM": {
+      "MF Packaging": 0,
+      "TBC": 2,
+      "TBC Height": 528
+    },
+    "MFNUTMESM": {
+      "MF Packaging": 0,
+      "TBC": 6
+    },
+    "MFOATSRB5": {
+      "MF Packaging": 0,
+      "TBC": 1
+    },
+    "MFOATSRLG": {
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFOLIVLME": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFOYSTMLG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFPAPRSB4.8": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFPAPRSSM": {
+      "MF Packaging": 0,
+      "TBC": 200,
+      "TBC Height": 0
+    },
+    "MFPECANB9": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFPECANLG": {
+      "MF Packaging": 0,
+      "TBC": 79,
+      "TBC Height": 0
+    },
+    "MFPEPITLG": {
+      "MF Packaging": 0,
+      "TBC": 16,
+      "TBC Height": 0
+    },
+    "MFPEPITXL": {
+      "MF Packaging": 0
+    },
+    "MFQUINO6KG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFQUINOLG": {
+      "MF Packaging": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFRASPBME": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFREDLEB5": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFREDLELG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFROSEPSM": {
+      "MF Packaging": 0,
+      "TBC": 39,
+      "TBC Height": 0
+    },
+    "MFSEAMOME": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFSEAMOSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFSEEDMB12": {
+      "MF Packaging": 0,
+      "TBC": 5
+    },
+    "MFSEEDMB6": {
+      "MF Packaging": 0,
+      "TBC": 4
+    },
+    "MFSEEDMLG": {
+      "MF Packaging": 0,
+      "TBC": 170,
+      "TBC Height": 0
+    },
+    "MFSEEDMXL": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFSOYABLG": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFSTARASM": {
+      "MF Packaging": 0,
+      "TBC": 177
+    },
+    "MFSUNFSLG": {
+      "MF Packaging": 0,
+      "TBC": 48,
+      "TBC Height": 0
+    },
+    "MFTALMSAMPLE": {
+      "MF Packaging": 0,
+      "TBC": 6
+    },
+    "MFTAMALM10": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFTAMARLG": {
+      "MF Packaging": 0,
+      "TBC": 123,
+      "TBC Height": 0
+    },
+    "MFTAMARSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 156,
+      "TBC Height": 0
+    },
+    "MFTERIMB10": {
+      "MF Packaging": 0
+    },
+    "MFTERIMLG": {
+      "MF Packaging": 0,
+      "TBC": 10,
+      "TBC Height": 0
+    },
+    "MFTERIMXL": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFTURMEB5": {
+      "MF Packaging": 0,
+      "TBC": 3
+    },
+    "MFTURMESM": {
+      "MF Packaging": 0,
+      "TBC": 580
+    },
+    "MFVALERSM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 102,
+      "TBC Height": 0
+    },
+    "MFWALNUB9": {
+      "MF Packaging": 0,
+      "TBC": 12
+    },
+    "MFWALNULG": {
+      "MF Packaging": 0,
+      "TBC": 292,
+      "TBC Height": 383
+    },
+    "MFWILDCAS10": {
+      "MF Packaging": 0,
+      "TBC": 7
+    },
+    "MFWILDCASAMPLE": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFWILDCLG": {
+      "MF Packaging": 0,
+      "TBC Height": 0
+    },
+    "MFYUMMBB12": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MFYUMMBLG": {
+      "MF Packaging": 0,
+      "TBC": 38
+    },
+    "MFYUMMBXL": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MMCAROBP8": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MMMOONJ": {
+      "MF Packaging": 0
+    },
+    "MMMOONRJ": {
+      "MF Packaging": 0,
+      "TBC": 7
+    },
+    "MMSPICELIX1kg": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "MYCROCO100": {
+      "MF Packaging": 1,
+      "TBC": 14
+    },
+    "MYCROLM30": {
+      "MF Packaging": 0,
+      "TBC": 146
+    },
+    "MYCRO-POS": {
+      "MF Packaging": 0,
+      "TBC": 4
+    },
+    "NEGBRS": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "NT-AFTERSUN220": {
+      "MF Packaging": 0,
+      "TBC": 42
+    },
+    "NT-FACESERUM-30": {
+      "MF Packaging": 0,
+      "TBC": 38
+    },
+    "NT-LEMON220": {
+      "MF Packaging": 0,
+      "TBC": 12
+    },
+    "NT-LOVE100TESTER": {
+      "MF Packaging": 0,
+      "TBC": 1
+    },
+    "NT-LOVE220": {
+      "MF Packaging": 0,
+      "TBC": 37
+    },
+    "NT-NAKED100": {
+      "MF Packaging": 0,
+      "TBC": 183
+    },
+    "NT-NAKED220": {
+      "MF Packaging": 0,
+      "TBC": 52
+    },
+    "NT-SLEEP220": {
+      "MF Packaging": 0,
+      "TBC": 38
+    },
+    "NUTBUT": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "OMGHEE-ORG300": {
+      "MF Packaging": 0,
+      "TBC": 294
+    },
+    "OSSS": {
+      "MF Packaging": 0,
+      "TBC": 136
+    },
+    "PBMFBIRBPSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "PBMFGOLDGSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "PSY001": {
+      "MF Packaging": 80.89,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "RAWWALNUT": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 16.5
+    },
+    "RE2TierStand": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "REDLENTIL": {
+      "MF Packaging": 24,
+      "TBC": 0
+    },
+    "REMINISTAND": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "SBBBDPAS": {
+      "MF Packaging": 0,
+      "TBC": 660
+    },
+    "SDASHWASM": {
+      "MF Packaging": 0
+    },
+    "SDBLUEIB3": {
+      "MF Packaging": 0
+    },
+    "SDBLUEILG": {
+      "MF Packaging": 0,
+      "TBC": 3
+    },
+    "SDBLUEISM": {
+      "MF Packaging": 0,
+      "TBC": 36,
+      "TBC Height": 0
+    },
+    "SDBLUEIXL": {
+      "MF Packaging": 0,
+      "TBC": 17
+    },
+    "SDCACAOB3": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "SDGREENB3": {
+      "MF Packaging": 0,
+      "TBC": 4
+    },
+    "SDGREENB3SOURCE": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "SDGREENLG": {
+      "MF Packaging": 0,
+      "TBC": 13
+    },
+    "SDGREENSM": {
+      "MF Packaging": 0,
+      "TBC": 405,
+      "TBC Height": 0
+    },
+    "SDGREENXLSOURCE": {
+      "MF Packaging": 0,
+      "TBC": 1
+    },
+    "SDPCARALG": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "SDPCHOCB3.8": {
+      "MF Packaging": 0,
+      "TBC": 1
+    },
+    "SDPORIGLG": {
+      "MF Packaging": 0,
+      "TBC": 114,
+      "TBC Height": 0
+    },
+    "SDYELLOB3": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "SDYELLOLG": {
+      "MF Packaging": 0,
+      "TBC": 62,
+      "TBC Height": 0
+    },
+    "SDYELLOSM": {
+      "MF Packaging": 0,
+      "TBC": 916,
+      "TBC Height": 0
+    },
+    "SFFG06": {
+      "MF Packaging": 0,
+      "TBC": 10.08
+    },
+    "SLTC": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "SOSGCO275G": {
+      "MF Packaging": 0,
+      "TBC": 157
+    },
+    "SPSRTM": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 40
+    },
+    "SSKETX50-1BOX": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "STICKERMFSMALL": {
+      "MF Packaging": 12000
+    },
+    "STRIPMF": {
+      "MF Packaging": 48526,
+      "MF Operations": 14651,
+      "TBC Height": 0
+    },
+    "STRIPSD": {
+      "MF Packaging": 28954,
+      "MF Operations": 0
+    },
+    "Untamed Granola": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "WALNUTRAWB": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "WSMM250": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "XABP": {
+      "MF Packaging": 0,
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "XHBASTRA": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "XHBS": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "XHBSHIS": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "ZWFNETLHS10": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "[BAGVACUUM]": {
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "AFQF": {
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "AHCLOW": {
+      "MF Operations": 0,
+      "TBC": 0
+    },
+    "CERCACPOW": {
+      "MF Operations": 0
+    },
+    "IAS": {
+      "MF Operations": 63.362,
+      "TBC Height": 0
+    },
+    "LMFKBBQMLG": {
+      "MF Operations": 300,
+      "TBC": 0
+    },
+    "NSC-KIDS-100g": {
+      "MF Operations": 0,
+      "TBC": 31
+    },
+    "SWAFSBP": {
+      "MF Operations": 0,
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "5-tier-woodstand": {
+      "TBC": 0
+    },
+    "ABARNPIF": {
+      "TBC": 0
+    },
+    "ABBBB1KG": {
+      "TBC": 0
+    },
+    "ABBBWO": {
+      "TBC": 22.68
+    },
+    "ABBFO": {
+      "TBC": 0
+    },
+    "ABCBB1KG": {
+      "TBC": 0
+    },
+    "ABVB1KG": {
+      "TBC": 0
+    },
+    "ABWAMN": {
+      "TBC": 6.8
+    },
+    "ABWGFF": {
+      "TBC": 10.85
+    },
+    "ABWPEANUTRS": {
+      "TBC": 12
+    },
+    "ABWSORG": {
+      "TBC": 0
+    },
+    "AE-ACDCER001": {
+      "TBC": 0
+    },
+    "AE-ACDFGR001": {
+      "TBC": 5
+    },
+    "AE-ACDFSV001": {
+      "TBC": 23
+    },
+    "AE-BBMAS030T": {
+      "TBC": 9
+    },
+    "AE-BBMAS050": {
+      "TBC": 8
+    },
+    "AE-BCARX005T": {
+      "TBC": 4
+    },
+    "AE-BCARX010": {
+      "TBC": 17
+    },
+    "AE-BCCHE010T": {
+      "TBC": 8
+    },
+    "AE-BCCHE050": {
+      "TBC": 6
+    },
+    "AE-BCHBA005T": {
+      "TBC": 9
+    },
+    "AE-BCHBR005T": {
+      "TBC": 3
+    },
+    "AE-BCHBR010": {
+      "TBC": 1
+    },
+    "AE-BCHCR005T": {
+      "TBC": 2
+    },
+    "AE-BCHCR010": {
+      "TBC": 5
+    },
+    "AE-BCHHE005T": {
+      "TBC": 7
+    },
+    "AE-BCHHE010": {
+      "TBC": 9
+    },
+    "AE-BCHNA005T": {
+      "TBC": 3
+    },
+    "AE-BCHNA010": {
+      "TBC": 2
+    },
+    "AE-BCHS002": {
+      "TBC": 11
+    },
+    "AE-BCHSO005T": {
+      "TBC": 9
+    },
+    "AE-BCHSO010": {
+      "TBC": 8
+    },
+    "AE-BCHTH005T": {
+      "TBC": 1
+    },
+    "AE-BCHTH010": {
+      "TBC": 2
+    },
+    "AE-BCIIP005T": {
+      "TBC": 5
+    },
+    "AE-BCIIP010": {
+      "TBC": 6
+    },
+    "AE-BERG005T": {
+      "TBC": 13
+    },
+    "AE-BERG010": {
+      "TBC": 10
+    },
+    "AE-BHEYE030T": {
+      "TBC": 3
+    },
+    "AE-BHEYE050": {
+      "TBC": 24
+    },
+    "AE-BJASX005T": {
+      "TBC": 4
+    },
+    "AE-BJASX010": {
+      "TBC": 9
+    },
+    "AE-BLCEL050T": {
+      "TBC": 3
+    },
+    "AE-BLCEL100": {
+      "TBC": 8
+    },
+    "AE-BMANT050T": {
+      "TBC": 7
+    },
+    "AE-BMANT100": {
+      "TBC": 9
+    },
+    "AE-BPMST050T": {
+      "TBC": 9
+    },
+    "AE-BPMST100": {
+      "TBC": 9
+    },
+    "AE-BPSBT001T": {
+      "TBC": 10
+    },
+    "AE-BPSBT005": {
+      "TBC": 0
+    },
+    "AE-BROSX005T": {
+      "TBC": 8
+    },
+    "AE-BROSX010": {
+      "TBC": 17
+    },
+    "AE-BSAIR005T": {
+      "TBC": 5
+    },
+    "AE-BSAIR010": {
+      "TBC": 15
+    },
+    "AE-BSAMB005T": {
+      "TBC": 9
+    },
+    "AE-BSAMB010": {
+      "TBC": 8
+    },
+    "AE-BSAST005T": {
+      "TBC": 10
+    },
+    "AE-BSAST010": {
+      "TBC": 1
+    },
+    "AE-BSAST10D": {
+      "TBC": 16
+    },
+    "AE-BSBAB005T": {
+      "TBC": 13
+    },
+    "AE-BSBAB010": {
+      "TBC": 8
+    },
+    "AE-BSBRA005T": {
+      "TBC": 4
+    },
+    "AE-BSBRA010": {
+      "TBC": 12
+    },
+    "AE-BSBUG005T": {
+      "TBC": 10
+    },
+    "AE-BSBUG010": {
+      "TBC": 16
+    },
+    "AE-BSCHR005T": {
+      "TBC": 7
+    },
+    "AE-BSCHR010": {
+      "TBC": 12
+    },
+    "AE-BSCLB005T": {
+      "TBC": 4
+    },
+    "AE-BSCLB010": {
+      "TBC": 9
+    },
+    "AE-BSDEP005T": {
+      "TBC": 16
+    },
+    "AE-BSDEP010": {
+      "TBC": 8
+    },
+    "AE-BSDRT005T": {
+      "TBC": 11
+    },
+    "AE-BSDRT010": {
+      "TBC": 0
+    },
+    "AE-BSFAC005T": {
+      "TBC": 11
+    },
+    "AE-BSFAC010": {
+      "TBC": 8
+    },
+    "AE-BSFEM005T": {
+      "TBC": 12
+    },
+    "AE-BSFEM010": {
+      "TBC": 16
+    },
+    "AE-BSGOF005T": {
+      "TBC": 7
+    },
+    "AE-BSGOF010": {
+      "TBC": 19
+    },
+    "AE-BSHED005T": {
+      "TBC": 12
+    },
+    "AE-BSHED010": {
+      "TBC": 13
+    },
+    "AE-BSIMM005T": {
+      "TBC": 14
+    },
+    "AE-BSIMM010": {
+      "TBC": 32
+    },
+    "AE-BSLIF005T": {
+      "TBC": 11
+    },
+    "AE-BSLIF010": {
+      "TBC": 11
+    },
+    "AE-BSLIF10D": {
+      "TBC": 3
+    },
+    "AE-BSMTR005T": {
+      "TBC": 10
+    },
+    "AE-BSMTR010": {
+      "TBC": 4
+    },
+    "AE-BSPURI005T": {
+      "TBC": 10
+    },
+    "AE-BSPURI010": {
+      "TBC": 11
+    },
+    "AE-BSREG005T": {
+      "TBC": 10
+    },
+    "AE-BSREG010": {
+      "TBC": 3
+    },
+    "AE-BSSIN005T": {
+      "TBC": 17
+    },
+    "AE-BSSIN010": {
+      "TBC": 21
+    },
+    "AE-BSSWR005T": {
+      "TBC": 5
+    },
+    "AE-BSSWR010": {
+      "TBC": 6
+    },
+    "AE-BSTRA005T": {
+      "TBC": 0
+    },
+    "AE-BSTRA010": {
+      "TBC": 21
+    },
+    "AE-BSTWS005T": {
+      "TBC": 9
+    },
+    "AE-BSTWS010": {
+      "TBC": 13
+    },
+    "AE-BTCLBS050T": {
+      "TBC": 12
+    },
+    "AE-BTCLBS100": {
+      "TBC": 12
+    },
+    "AE-BTFAC010T": {
+      "TBC": 10
+    },
+    "AE-BTFAC030": {
+      "TBC": 8
+    },
+    "AE-BTFACT025T": {
+      "TBC": 8
+    },
+    "AE-BTFACT100": {
+      "TBC": 11
+    },
+    "AE-BTHAI025T": {
+      "TBC": 10
+    },
+    "AE-BTHAI050": {
+      "TBC": 5
+    },
+    "AE-BTPURS050": {
+      "TBC": 12
+    },
+    "AE-BTPURS100": {
+      "TBC": 12
+    },
+    "AE-BTROSE005": {
+      "TBC": 6
+    },
+    "AE-BTROSE025": {
+      "TBC": 9
+    },
+    "AE-BTSCA010T": {
+      "TBC": 2
+    },
+    "AE-BTSCA025": {
+      "TBC": 9
+    },
+    "AE-BXFTB010T": {
+      "TBC": 16
+    },
+    "AE-BXFTB100": {
+      "TBC": 21
+    },
+    "AE-BXREL020T": {
+      "TBC": 12
+    },
+    "AE-BXREL100": {
+      "TBC": 12
+    },
+    "AE-CALG010T": {
+      "TBC": 5
+    },
+    "AE-CALG100": {
+      "TBC": 12
+    },
+    "AE-CBAS050T": {
+      "TBC": 9
+    },
+    "AE-CBAS200": {
+      "TBC": 10
+    },
+    "AE-CDMHAIR001": {
+      "TBC": 1
+    },
+    "AE-CDMWNT001": {
+      "TBC": 4
+    },
+    "AE-CEDA005T": {
+      "TBC": 3
+    },
+    "AE-CEDA010": {
+      "TBC": 15
+    },
+    "AE-CFAC025T": {
+      "TBC": 0
+    },
+    "AE-CFAC050": {
+      "TBC": 7
+    },
+    "AE-CINL005T": {
+      "TBC": 5
+    },
+    "AE-CINL010": {
+      "TBC": 6
+    },
+    "AE-CITR005T": {
+      "TBC": 1
+    },
+    "AE-CITR010": {
+      "TBC": 3
+    },
+    "AE-CLAS005T": {
+      "TBC": 15
+    },
+    "AE-CLAS010": {
+      "TBC": 1
+    },
+    "AE-CLOB005T": {
+      "TBC": 1
+    },
+    "AE-CLOB010": {
+      "TBC": 6
+    },
+    "AE-CMAS010T": {
+      "TBC": 9
+    },
+    "AE-CMAS100": {
+      "TBC": 11
+    },
+    "AE-CRFNC025T": {
+      "TBC": 11
+    },
+    "AE-CRFNC050": {
+      "TBC": 8
+    },
+    "AE-EUCA005T": {
+      "TBC": 13
+    },
+    "AE-EUCA010": {
+      "TBC": 0
+    },
+    "AE-FRAN001T": {
+      "TBC": 11
+    },
+    "AE-FRAN005": {
+      "TBC": 5
+    },
+    "AE-GBRF002": {
+      "TBC": 6
+    },
+    "AE-GERA005T": {
+      "TBC": 13
+    },
+    "AE-GERA010": {
+      "TBC": 17
+    },
+    "AE-LASS005T": {
+      "TBC": 3
+    },
+    "AE-LASS010": {
+      "TBC": 16
+    },
+    "AE-LAVA005T": {
+      "TBC": 8
+    },
+    "AE-LAVA010": {
+      "TBC": 8
+    },
+    "AE-LAVT010": {
+      "TBC": 8
+    },
+    "AE-LEMG005T": {
+      "TBC": 0
+    },
+    "AE-LEMG010": {
+      "TBC": 10
+    },
+    "AE-LEMN005T": {
+      "TBC": 0
+    },
+    "AE-LEMN010": {
+      "TBC": 6
+    },
+    "AE-LIME005T": {
+      "TBC": 2
+    },
+    "AE-LIME010": {
+      "TBC": 17
+    },
+    "AE-MBBUG025T": {
+      "TBC": 10
+    },
+    "AE-MBBUG100": {
+      "TBC": 13
+    },
+    "AE-MNKA001T": {
+      "TBC": 8
+    },
+    "AE-MNKA005": {
+      "TBC": 7
+    },
+    "AE-ORAS005T": {
+      "TBC": 8
+    },
+    "AE-ORAS010": {
+      "TBC": 4
+    },
+    "AE-OREG005T": {
+      "TBC": 14
+    },
+    "AE-OREG010": {
+      "TBC": 12
+    },
+    "AE-PATS001T": {
+      "TBC": 4
+    },
+    "AE-PATS005": {
+      "TBC": 3
+    },
+    "AE-PEPM005T": {
+      "TBC": 9
+    },
+    "AE-PEPM010": {
+      "TBC": 13
+    },
+    "AE-RSMY005T": {
+      "TBC": 9
+    },
+    "AE-RSMY010": {
+      "TBC": 3
+    },
+    "AE-SAND001T": {
+      "TBC": 8
+    },
+    "AE-SAND005": {
+      "TBC": 13
+    },
+    "AE-SBBRC010T": {
+      "TBC": 5
+    },
+    "AE-SBBRC050": {
+      "TBC": 18
+    },
+    "AE-TEAT005T": {
+      "TBC": 3
+    },
+    "AE-TEAT010": {
+      "TBC": 11
+    },
+    "AE-THYM001T": {
+      "TBC": 8
+    },
+    "AE-THYM005": {
+      "TBC": 12
+    },
+    "AE-UTFS010T": {
+      "TBC": 12
+    },
+    "AE-UTFS025": {
+      "TBC": 9
+    },
+    "AE-VALM025T": {
+      "TBC": 8
+    },
+    "AE-VALM100": {
+      "TBC": 9
+    },
+    "AE-VANI001T": {
+      "TBC": 5
+    },
+    "AE-VANI005": {
+      "TBC": 14
+    },
+    "AE-VAPR025T": {
+      "TBC": 12
+    },
+    "AE-VAPR100": {
+      "TBC": 27
+    },
+    "AE-VARG010T": {
+      "TBC": 5
+    },
+    "AE-VARG025": {
+      "TBC": 9
+    },
+    "AE-VCAS010T": {
+      "TBC": 7
+    },
+    "AE-VCAS050": {
+      "TBC": 35
+    },
+    "AE-VEPO010T": {
+      "TBC": 12
+    },
+    "AE-VEPO050": {
+      "TBC": 12
+    },
+    "AE-VJOJ010T": {
+      "TBC": 8
+    },
+    "AE-VJOJ050": {
+      "TBC": 17
+    },
+    "AE-VRHO010T": {
+      "TBC": 10
+    },
+    "AE-VRHO025": {
+      "TBC": 3
+    },
+    "AE-WINT005T": {
+      "TBC": 9
+    },
+    "AE-WINT010": {
+      "TBC": 9
+    },
+    "AE-WMIN005T": {
+      "TBC": 5
+    },
+    "AE-WMIN010": {
+      "TBC": 13
+    },
+    "AE-YLAN010": {
+      "TBC": 16
+    },
+    "AHACAI": {
+      "TBC": 0
+    },
+    "AHBAYLF": {
+      "TBC": 0
+    },
+    "AlmondButter": {
+      "TBC": 0
+    },
+    "AM09": {
+      "TBC": 0
+    },
+    "AM10": {
+      "TBC": 0
+    },
+    "AM11": {
+      "TBC": 0
+    },
+    "AM12": {
+      "TBC": 0
+    },
+    "ARCNOB": {
+      "TBC": 0
+    },
+    "BABRSD": {
+      "TBC": 0
+    },
+    "BAJA-COURSE450g": {
+      "TBC": 197
+    },
+    "BAJA-FINE450g": {
+      "TBC": 455
+    },
+    "BBCCA10D": {
+      "TBC": 6
+    },
+    "BBCCA12D": {
+      "TBC": 16
+    },
+    "BBCCA13D": {
+      "TBC": 18
+    },
+    "BBCCA18D": {
+      "TBC": 6
+    },
+    "BBCCA3D": {
+      "TBC": 24
+    },
+    "BBCCA5D": {
+      "TBC": 24
+    },
+    "BBCCA6D": {
+      "TBC": 24
+    },
+    "BBCCA9D": {
+      "TBC": 9
+    },
+    "BBCCB1AGD": {
+      "TBC": 11
+    },
+    "BBCCB1D": {
+      "TBC": 4
+    },
+    "BBCCB1GD": {
+      "TBC": 5
+    },
+    "BBCCB6AGD": {
+      "TBC": 0
+    },
+    "BBCCB6D": {
+      "TBC": 15
+    },
+    "BBCCD2D": {
+      "TBC": 0
+    },
+    "BBCCM6D": {
+      "TBC": 8
+    },
+    "BBGOT50AU": {
+      "TBC": 0
+    },
+    "BBOBGP60": {
+      "TBC": 0
+    },
+    "BBOFRU750": {
+      "TBC": 0
+    },
+    "BBOMIXP10LT": {
+      "TBC": 0
+    },
+    "BBOROB750": {
+      "TBC": 0
+    },
+    "BBPBBOOK": {
+      "TBC": 0
+    },
+    "BBPB-CR-NOSALT": {
+      "TBC": 107
+    },
+    "BBPB-CR-SALT": {
+      "TBC": 118
+    },
+    "BBPB-CR-SALT-1kg": {
+      "TBC": 1
+    },
+    "BBPB-SM-NOSALT": {
+      "TBC": 62
+    },
+    "BBPB-SM-SALT": {
+      "TBC": 1
+    },
+    "BBPB-SM-SALT-1kg": {
+      "TBC": 0
+    },
+    "BBSATAY-OR": {
+      "TBC": 45
+    },
+    "BG1H": {
+      "TBC": 0
+    },
+    "BG-GT-12pack": {
+      "TBC": 245
+    },
+    "BG-OG-12pack": {
+      "TBC": 195
+    },
+    "BLCUMPWD": {
+      "TBC": 0
+    },
+    "BPACP400": {
+      "TBC": 259
+    },
+    "BPACP4KG": {
+      "TBC": 0
+    },
+    "BPACSH400": {
+      "TBC": 220
+    },
+    "BPACSH4KG": {
+      "TBC": 0
+    },
+    "BPAET400": {
+      "TBC": 31
+    },
+    "BPAKM400": {
+      "TBC": 190
+    },
+    "BPASSH400": {
+      "TBC": 181
+    },
+    "BPLOT15AU": {
+      "TBC": 89
+    },
+    "BTF01": {
+      "TBC": 58
+    },
+    "BULK-ABBNR-BOX": {
+      "TBC": 13
+    },
+    "BULK-ABBRS-BOX": {
+      "TBC": 0
+    },
+    "BULK-ABCMP-BOX": {
+      "TBC": 0
+    },
+    "BULK-ABCNO-BOX": {
+      "TBC": 0
+    },
+    "BULK-ABCTS-BOX": {
+      "TBC": 0
+    },
+    "BULK-ABHPP-BKT": {
+      "TBC": 0
+    },
+    "BULK-ABHPP-BOX": {
+      "TBC": 0
+    },
+    "BULK-ABHRO-BOX": {
+      "TBC": 0
+    },
+    "BULK-ABPPP-BOX": {
+      "TBC": 0
+    },
+    "BULK-ABPSO-BOX": {
+      "TBC": 0
+    },
+    "BULK-ABSBO-BOX": {
+      "TBC": 0
+    },
+    "BULK-ABSKO-BOX": {
+      "TBC": 0
+    },
+    "BULK-ABWRO-BOX": {
+      "TBC": 0
+    },
+    "BULK-ABWSO-BOX": {
+      "TBC": 0
+    },
+    "BULK-ABWTS-BOX": {
+      "TBC": 0
+    },
+    "BULK-AFMP-BOX": {
+      "TBC": 0
+    },
+    "BULK-AHASR-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHBAY-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHBIR-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHBO-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHCP-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHDL-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHENB-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHFRA-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHFSO-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHGLO-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHIMF-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHJSB-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHJUN-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHLBO-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHLEM-BOX": {
+      "TBC": 0
+    },
+    "BULK-AHLFO-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHMAT-5KG": {
+      "TBC": 20
+    },
+    "BULK-AHOLO-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHPLO-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHRO-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHROA-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHROS-BOX": {
+      "TBC": 0
+    },
+    "BULK-AHSCH-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHSGR-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHSHO-1KG": {
+      "TBC": 0
+    },
+    "BULK-AHYER-1KG": {
+      "TBC": 0
+    },
+    "BULK-ASHAR-1KG": {
+      "TBC": 0
+    },
+    "BULK-BLCUM-1KG": {
+      "TBC": 0
+    },
+    "BULK-BOBKG-BOX": {
+      "TBC": 0
+    },
+    "BULK-BROWN-BOX": {
+      "TBC": 0
+    },
+    "BULK-CACPO-BOX": {
+      "TBC": 0
+    },
+    "BULK-CELTI-BOX": {
+      "TBC": 0
+    },
+    "BULK-CHATR-1KG": {
+      "TBC": 0
+    },
+    "BULK-CHIAS-BOX": {
+      "TBC": 0
+    },
+    "BULK-CHICK-BOX": {
+      "TBC": 0
+    },
+    "BULK-DATES-BOX": {
+      "TBC": 0
+    },
+    "BULK-DCAMA-BOX": {
+      "TBC": 0
+    },
+    "BULK-DCPSO-BOX": {
+      "TBC": 0
+    },
+    "BULK-EAGRG-BOX": {
+      "TBC": 0
+    },
+    "BULK-GMPBU-BOX": {
+      "TBC": 0
+    },
+    "BULK-GMPSO-BOX": {
+      "TBC": 0
+    },
+    "BULK-GOCHU-BOX": {
+      "TBC": 0
+    },
+    "BULK-GREEN-BOX": {
+      "TBC": 0
+    },
+    "BULK-HEMPS-BKT": {
+      "TBC": 2
+    },
+    "BULK-HEMPS-BOX": {
+      "TBC": 1
+    },
+    "BULK-LEMVE-1KG": {
+      "TBC": 0
+    },
+    "BULK-LINSE-BOX": {
+      "TBC": 0
+    },
+    "BULK-PHYIN-BOX": {
+      "TBC": 0
+    },
+    "BULK-QUINO-BOX": {
+      "TBC": 0
+    },
+    "BULK-RAWME-BOX": {
+      "TBC": 0
+    },
+    "BULK-REDLE-BOX": {
+      "TBC": 0
+    },
+    "BULK-RHORO-1KG": {
+      "TBC": 0
+    },
+    "BULK-SESAM-1KG": {
+      "TBC": 0
+    },
+    "BULK-SESAM-BOX": {
+      "TBC": 0
+    },
+    "BULK-TKELP-BOX": {
+      "TBC": 0
+    },
+    "BV-H2rasp30": {
+      "TBC": 35
+    },
+    "BV-MBT-LOTUS": {
+      "TBC": 21
+    },
+    "BV-MBT-MANUK": {
+      "TBC": 1
+    },
+    "BV-MBT-TANSY": {
+      "TBC": 22
+    },
+    "C9P225J": {
+      "TBC": 0
+    },
+    "C9P450J": {
+      "TBC": 0
+    },
+    "Cashew Butter": {
+      "TBC": 0
+    },
+    "CASPIEC": {
+      "TBC": 113.4
+    },
+    "CB2CALM1": {
+      "TBC": 0
+    },
+    "CB2RELIEF1": {
+      "TBC": 0
+    },
+    "CB2ZEN1": {
+      "TBC": 0
+    },
+    "CHATREBER": {
+      "TBC": 0
+    },
+    "Choc Coconut Chips - Intermediate": {
+      "TBC": 4
+    },
+    "CM-CO-30box": {
+      "TBC": 14
+    },
+    "CM-DCtwin": {
+      "TBC": 58
+    },
+    "CP-CDU-SUNPACK-STANDONLY": {
+      "TBC": 8
+    },
+    "CP-DEO-6x4SKUSTANDONLY": {
+      "TBC": 5
+    },
+    "CP-DEO-ATH": {
+      "TBC": 51
+    },
+    "CP-DEO-CSP": {
+      "TBC": 61
+    },
+    "CP-DEO-FLF": {
+      "TBC": 19
+    },
+    "CP-DEO-OBE": {
+      "TBC": 65
+    },
+    "CP-LIP-10x3SKU-STANDONLY": {
+      "TBC": 6
+    },
+    "CP-LIP-10x4SKU-GUMBALL-STANDONLY": {
+      "TBC": 2
+    },
+    "CP-LIP-10x5SKU-STANDONLY": {
+      "TBC": 19
+    },
+    "CP-LIP-CBUT-6g": {
+      "TBC": 205
+    },
+    "CP-LIP-COFC-6g": {
+      "TBC": 44
+    },
+    "CP-LIP-COFC-HANG": {
+      "TBC": 82
+    },
+    "CP-LIPHANG-6x4SKU-STANDONLY": {
+      "TBC": 4
+    },
+    "CP-LIP-MANU-6g": {
+      "TBC": 136
+    },
+    "CP-LIP-MANU-HANG": {
+      "TBC": 91
+    },
+    "CP-LIP-PAWP-6g": {
+      "TBC": 120
+    },
+    "CP-LIP-PAWP-HANG": {
+      "TBC": 110
+    },
+    "CP-LIP-STRW-6g": {
+      "TBC": 147
+    },
+    "CP-LIP-STRW-HANG": {
+      "TBC": 94
+    },
+    "CP-LIP-ZINC-6g": {
+      "TBC": 139
+    },
+    "CP-SCR-BABY": {
+      "TBC": 10
+    },
+    "CP-SCR-NIGHT": {
+      "TBC": 7
+    },
+    "CP-SCR-NIPP": {
+      "TBC": 13
+    },
+    "CP-SCR-TAT": {
+      "TBC": 36
+    },
+    "CP-SOAP-6x1SKU-STANDONLY": {
+      "TBC": 14
+    },
+    "CP-SOAP-BSS": {
+      "TBC": 118
+    },
+    "CP-SOAP-GMS": {
+      "TBC": 59
+    },
+    "CP-SOAP-MCS": {
+      "TBC": 105
+    },
+    "CP-SOAP-WOS": {
+      "TBC": 103
+    },
+    "CP-SUN-ADL": {
+      "TBC": 28
+    },
+    "CP-SUN-KID": {
+      "TBC": 77
+    },
+    "CP-SUN-KID-TESTER": {
+      "TBC": 20
+    },
+    "CRICKPOWDER": {
+      "TBC": 0
+    },
+    "CRUNCHY2KG-NOSALT": {
+      "TBC": 0
+    },
+    "CRUNCHYS20KG": {
+      "TBC": 0
+    },
+    "CRUNCHYS2KG": {
+      "TBC": 21
+    },
+    "CSBS250": {
+      "TBC": 0
+    },
+    "CSHABAP250": {
+      "TBC": 0
+    },
+    "CSPGE250": {
+      "TBC": 0
+    },
+    "CSPLC250": {
+      "TBC": 0
+    },
+    "CSRPG250": {
+      "TBC": 0
+    },
+    "CSSHBO250": {
+      "TBC": 0
+    },
+    "CSSHM250": {
+      "TBC": 0
+    },
+    "CSSJO250": {
+      "TBC": 0
+    },
+    "CSSPPBP250": {
+      "TBC": 0
+    },
+    "CSXOA250": {
+      "TBC": 0
+    },
+    "CSYKBA250": {
+      "TBC": 0
+    },
+    "DC-ACC": {
+      "TBC": 54
+    },
+    "DC-BCC": {
+      "TBC": 38
+    },
+    "DC-BCC5": {
+      "TBC": 0
+    },
+    "DC-BTP10F": {
+      "TBC": 0
+    },
+    "DC-CCC5": {
+      "TBC": 0
+    },
+    "DC-DECF-200-WB": {
+      "TBC": 24
+    },
+    "DC-DUKE-200-GR": {
+      "TBC": 31
+    },
+    "DC-DUKE-200-WB": {
+      "TBC": 24
+    },
+    "DC-DUKE-500-WB": {
+      "TBC": 32
+    },
+    "DC-DUKEBAGS-6Pack": {
+      "TBC": 1
+    },
+    "DC-HIGH-200-WB": {
+      "TBC": 22
+    },
+    "DC-HIGH-500-WB": {
+      "TBC": 25
+    },
+    "DC-MRKT-200-GR": {
+      "TBC": 22
+    },
+    "DC-MRKT-200-WB": {
+      "TBC": 21
+    },
+    "DC-MRKT-500-WB": {
+      "TBC": 36
+    },
+    "DC-ROC-200-WB": {
+      "TBC": 29
+    },
+    "DCT001P6": {
+      "TBC": 0
+    },
+    "DCT002P6": {
+      "TBC": 0
+    },
+    "DCT006P6": {
+      "TBC": 0
+    },
+    "DC-WCC": {
+      "TBC": 14
+    },
+    "DC-WCC5": {
+      "TBC": 0
+    },
+    "DC-WTP10F": {
+      "TBC": 0
+    },
+    "DJOLM001": {
+      "TBC": 0
+    },
+    "DJOLM002": {
+      "TBC": 0
+    },
+    "DJOLM003": {
+      "TBC": 0
+    },
+    "DJOLM004": {
+      "TBC": 0
+    },
+    "DJOLM005": {
+      "TBC": 0
+    },
+    "DOG-PB": {
+      "TBC": 15
+    },
+    "DSSG001": {
+      "TBC": 0
+    },
+    "DSSG002": {
+      "TBC": 0
+    },
+    "EC-HAZCHOC1kg": {
+      "TBC": 7
+    },
+    "EC-HAZCHOC-TESTER": {
+      "TBC": 1
+    },
+    "EC-HAZCOCO200": {
+      "TBC": 86
+    },
+    "EC-HAZCOCO-TESTER": {
+      "TBC": 3
+    },
+    "EC-HAZCRCH200": {
+      "TBC": 164
+    },
+    "EC-HAZCRCH-TESTER": {
+      "TBC": 3
+    },
+    "EC-PISTCRCH200": {
+      "TBC": 148
+    },
+    "EC-PISTCRCH-TESTER": {
+      "TBC": 4
+    },
+    "EC-PISTCRMY1kg": {
+      "TBC": 5
+    },
+    "EC-PISTCRMY200": {
+      "TBC": 94
+    },
+    "EC-PISTCRMY-TESTER": {
+      "TBC": 3
+    },
+    "EC-PISTMATC1kg": {
+      "TBC": 5
+    },
+    "EC-PISTMATC200": {
+      "TBC": 123
+    },
+    "EC-PISTMATC-TESTER": {
+      "TBC": 3
+    },
+    "EC-PISTPURE1kg": {
+      "TBC": 5
+    },
+    "EC-PISTPURE200": {
+      "TBC": 95
+    },
+    "EC-TASTINGKIT": {
+      "TBC": 6
+    },
+    "EG-CleanAir-100": {
+      "TBC": 78
+    },
+    "EG-Deep-500": {
+      "TBC": 63
+    },
+    "EG-Dish-500": {
+      "TBC": 55
+    },
+    "EG-Laundry-1000": {
+      "TBC": 64
+    },
+    "EG-Multi-1000": {
+      "TBC": 59
+    },
+    "EG-Multi-RTU-500": {
+      "TBC": 71
+    },
+    "EG-Pet-500": {
+      "TBC": 50
+    },
+    "EG-Refill-500": {
+      "TBC": 64
+    },
+    "EG-Silk-500": {
+      "TBC": 0
+    },
+    "EHBC250": {
+      "TBC": 89
+    },
+    "EHBC500": {
+      "TBC": 12
+    },
+    "EHBL150": {
+      "TBC": 0
+    },
+    "EHMC500": {
+      "TBC": 0
+    },
+    "EH-POS-CARD": {
+      "TBC": 41
+    },
+    "EH-POS-WOBBLER": {
+      "TBC": 42
+    },
+    "ENKASH50": {
+      "TBC": 0
+    },
+    "ENKBLU100": {
+      "TBC": 0
+    },
+    "ENKBLU50": {
+      "TBC": 0
+    },
+    "ENKBOD100": {
+      "TBC": 0
+    },
+    "ENKCHA50": {
+      "TBC": 3
+    },
+    "ENKCOR50": {
+      "TBC": 2
+    },
+    "ENKDAY30": {
+      "TBC": 1
+    },
+    "ENKDIG50": {
+      "TBC": 1
+    },
+    "ENKFEM50": {
+      "TBC": 0
+    },
+    "ENKFRA50": {
+      "TBC": 0
+    },
+    "ENKHEM50": {
+      "TBC": 0
+    },
+    "ENKHYD100": {
+      "TBC": 4
+    },
+    "ENKIMM50": {
+      "TBC": 4
+    },
+    "ENKMIC50": {
+      "TBC": 3
+    },
+    "ENKNIG30": {
+      "TBC": 0
+    },
+    "ENKSLE50": {
+      "TBC": 0
+    },
+    "ENKTUR50": {
+      "TBC": 0
+    },
+    "EVOOCHILLIOREA": {
+      "TBC": 0
+    },
+    "GFF": {
+      "TBC": 0.8
+    },
+    "HPLIQSH30": {
+      "TBC": 25
+    },
+    "HPLIQSH50": {
+      "TBC": 31
+    },
+    "HPShil30g": {
+      "TBC": 90
+    },
+    "HPShil50g": {
+      "TBC": 31
+    },
+    "HPShil5gSAMPLE": {
+      "TBC": 20
+    },
+    "HPShilajit-A-Frame": {
+      "TBC": 55
+    },
+    "HPShilajit-Pull-Up-Banner": {
+      "TBC": 55
+    },
+    "HPShilBROCHURE": {
+      "TBC": 83
+    },
+    "HT-AH-BAG": {
+      "TBC": 0
+    },
+    "HT-AH-MINI": {
+      "TBC": 38
+    },
+    "HT-AH-TESTER": {
+      "TBC": 5
+    },
+    "HT-BR-MINI": {
+      "TBC": 84
+    },
+    "HT-BR-SJ": {
+      "TBC": 5
+    },
+    "HT-BR-TESTER": {
+      "TBC": 8
+    },
+    "HT-CL-MINI": {
+      "TBC": 65
+    },
+    "HT-CL-SJ": {
+      "TBC": 21
+    },
+    "HT-DA-MINI": {
+      "TBC": 59
+    },
+    "HT-DA-SJ": {
+      "TBC": 28
+    },
+    "HT-DA-TESTER": {
+      "TBC": 8
+    },
+    "HT-DI-MINI": {
+      "TBC": 57
+    },
+    "HT-DI-SJ": {
+      "TBC": 33
+    },
+    "HT-DI-TESTER": {
+      "TBC": 6
+    },
+    "HT-FD-MINI": {
+      "TBC": 70
+    },
+    "HT-FD-SJ": {
+      "TBC": 19
+    },
+    "HT-FD-TESTER": {
+      "TBC": 9
+    },
+    "HT-FL-MINI": {
+      "TBC": 91
+    },
+    "HT-FL-SJ": {
+      "TBC": 13
+    },
+    "HT-FL-TESTER": {
+      "TBC": 8
+    },
+    "HT-HBT-MINI": {
+      "TBC": 83
+    },
+    "HT-HBT-SJ": {
+      "TBC": 27
+    },
+    "HT-HBT-TESTER": {
+      "TBC": 13
+    },
+    "HT-LP-MINI": {
+      "TBC": 31
+    },
+    "HT-LP-SJ": {
+      "TBC": 14
+    },
+    "HT-LP-TESTER": {
+      "TBC": 8
+    },
+    "HT-ML-MINI": {
+      "TBC": 59
+    },
+    "HT-ML-SJ": {
+      "TBC": 20
+    },
+    "HT-ML-TESTER": {
+      "TBC": 12
+    },
+    "HT-NMT-MINI": {
+      "TBC": 55
+    },
+    "HT-NMT-SJ": {
+      "TBC": 12
+    },
+    "HT-NMT-TESTER": {
+      "TBC": 15
+    },
+    "HT-RR-MINI": {
+      "TBC": 33
+    },
+    "HT-RR-SJ": {
+      "TBC": 35
+    },
+    "HT-RR-TESTER": {
+      "TBC": 5
+    },
+    "HT-RS-MINI": {
+      "TBC": 70
+    },
+    "HT-RS-SJ": {
+      "TBC": 30
+    },
+    "HT-RS-TESTER": {
+      "TBC": 5
+    },
+    "HT-StandOnly-Mini": {
+      "TBC": 23
+    },
+    "HT-ST-MINI": {
+      "TBC": 53
+    },
+    "HT-ST-SJ": {
+      "TBC": 30
+    },
+    "HT-ST-TESTER": {
+      "TBC": 13
+    },
+    "HT-TMM-MINI": {
+      "TBC": 82
+    },
+    "HT-TMM-SJ": {
+      "TBC": 18
+    },
+    "HT-TMM-TESTER": {
+      "TBC": 15
+    },
+    "HT-WI-MINI": {
+      "TBC": 63
+    },
+    "HT-WI-SJ": {
+      "TBC": 16
+    },
+    "HT-WI-TESTER": {
+      "TBC": 12
+    },
+    "HT-YE-MINI": {
+      "TBC": 63
+    },
+    "HT-YE-SJ": {
+      "TBC": 32
+    },
+    "HT-YE-TESTER": {
+      "TBC": 18
+    },
+    "IADW": {
+      "TBC": 0
+    },
+    "ICRC": {
+      "TBC": 50.01
+    },
+    "IH-BlackSeed-Brochure": {
+      "TBC": 34
+    },
+    "IH-BlackSeed-Wobbler": {
+      "TBC": 4
+    },
+    "IH-BLKSDOIL100": {
+      "TBC": 139
+    },
+    "IH-BLKSDOIL200": {
+      "TBC": 35
+    },
+    "IH-POS and Marketing": {
+      "TBC": 0
+    },
+    "IRCASH": {
+      "TBC": 44
+    },
+    "ISS": {
+      "TBC": 0
+    },
+    "JOAM0061L": {
+      "TBC": 0
+    },
+    "JOLM002J1LT": {
+      "TBC": 0
+    },
+    "JOLM0031L": {
+      "TBC": 0
+    },
+    "KIP-MGO1200+250g": {
+      "TBC": 22
+    },
+    "KIP-MGO514+250g": {
+      "TBC": 48
+    },
+    "KIP-MGO700+250g": {
+      "TBC": 27
+    },
+    "KIP-MGO829+250g": {
+      "TBC": 21
+    },
+    "KIP-MGO988+250g": {
+      "TBC": 31
+    },
+    "KYV-EVOO-700ml": {
+      "TBC": 154
+    },
+    "L6FOAM": {
+      "TBC": 4000
+    },
+    "LCCDE120": {
+      "TBC": 25
+    },
+    "LCCDE60": {
+      "TBC": 31
+    },
+    "LCCHDE120": {
+      "TBC": 41
+    },
+    "LCCHDE60": {
+      "TBC": 26
+    },
+    "LCLMDE120": {
+      "TBC": 27
+    },
+    "LCRDE120": {
+      "TBC": 20
+    },
+    "LCRDE60": {
+      "TBC": 15
+    },
+    "LCSDE120": {
+      "TBC": 5
+    },
+    "LCSDE60": {
+      "TBC": 12
+    },
+    "LCSTAND": {
+      "TBC": 0
+    },
+    "LCTTDE120": {
+      "TBC": 13
+    },
+    "LCTTDE60": {
+      "TBC": 23
+    },
+    "LEMVER": {
+      "TBC": 0
+    },
+    "LMFPINLSSM": {
+      "TBC": 0
+    },
+    "LOVEBUNDLE": {
+      "TBC": 0
+    },
+    "LPP-01w": {
+      "TBC": 0
+    },
+    "M3SparklingLime355ml": {
+      "TBC": 97
+    },
+    "M3SparklingOrig355ml": {
+      "TBC": 1289
+    },
+    "M3SparklingPeachMan355ml": {
+      "TBC": 6
+    },
+    "M3Water1L": {
+      "TBC": 633
+    },
+    "M3Water500ml": {
+      "TBC": 1383
+    },
+    "MAPLMOVE-CDU-STANDONLY": {
+      "TBC": 40
+    },
+    "MAPLMOVE-LEMON-32ml": {
+      "TBC": 50
+    },
+    "MAPLMOVE-LEMON-BOX12": {
+      "TBC": 124
+    },
+    "MAPLMOVE-MAPLE-30ml": {
+      "TBC": 50
+    },
+    "MAPLMOVE-MAPLE-BOX12": {
+      "TBC": 90
+    },
+    "MC-Cinn-8pcs": {
+      "TBC": 32
+    },
+    "MC-Mint-16pcs": {
+      "TBC": 10
+    },
+    "MC-Mint-8pcs": {
+      "TBC": 20
+    },
+    "MC-OGMT-8pcs": {
+      "TBC": 20
+    },
+    "MC-Orig-8pcs": {
+      "TBC": 19
+    },
+    "MC-STRB-8pcs": {
+      "TBC": 39
+    },
+    "MC-Zero-16pcs": {
+      "TBC": 21
+    },
+    "MC-Zero-8pcs": {
+      "TBC": 23
+    },
+    "MFALMONB5": {
+      "TBC": 5
+    },
+    "MFASHWAB10": {
+      "TBC": 0
+    },
+    "MFASTRAB4": {
+      "TBC": 0
+    },
+    "MFBARBEB1.6": {
+      "TBC": 0
+    },
+    "MFBARBEME": {
+      "TBC": 36
+    },
+    "MFBIRCHB1.1": {
+      "TBC": 0
+    },
+    "MFBIRPBB6": {
+      "TBC": 0
+    },
+    "MFBKCARASM": {
+      "TBC": 8
+    },
+    "MFBKCHOCSM": {
+      "TBC": 57
+    },
+    "MFBLCUMME": {
+      "TBC": 0
+    },
+    "MFBLCUMSM": {
+      "TBC": 224,
+      "TBC Height": 0
+    },
+    "MFBLPEPSM": {
+      "TBC": 125,
+      "TBC Height": 0
+    },
+    "MFBLUBUME": {
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFBRAHMB1.8": {
+      "TBC": 0
+    },
+    "MFBRAZNB6.5": {
+      "TBC": 0
+    },
+    "MFBRAZNSM": {
+      "TBC": 282,
+      "TBC Height": 0
+    },
+    "MFBUCKFB5": {
+      "TBC": 0
+    },
+    "MFCACAPLG": {
+      "TBC": 59,
+      "TBC Height": 0
+    },
+    "MFCARCLB4.5": {
+      "TBC": 0
+    },
+    "MFCHAMOB1.2": {
+      "TBC": 1
+    },
+    "MFCHIASB7": {
+      "TBC": 3
+    },
+    "MFCHILBB.8": {
+      "TBC": 6
+    },
+    "MFCHILFB3": {
+      "TBC": 0
+    },
+    "MFCHOCLB4.5": {
+      "TBC": 2
+    },
+    "MFCINNQUME": {
+      "TBC": 0
+    },
+    "MFCINNQUSM": {
+      "TBC": 0
+    },
+    "MFCINNQXL": {
+      "TBC": 0
+    },
+    "MFCOCOSME": {
+      "TBC": 0
+    },
+    "MFCOCOSSM": {
+      "TBC": 0
+    },
+    "MFCORNFB.8": {
+      "TBC": 0
+    },
+    "MFCUMSWSM": {
+      "TBC": 148,
+      "TBC Height": 0
+    },
+    "MFDMTEAB.8": {
+      "TBC": 8
+    },
+    "MFDMTEASM": {
+      "TBC": 116
+    },
+    "MFENGLBB3.6": {
+      "TBC": 0
+    },
+    "MFEROLVB4.5": {
+      "TBC": 4
+    },
+    "MFFENNSSM": {
+      "TBC": 168,
+      "TBC Height": 120
+    },
+    "MFFENUWSM": {
+      "TBC": 55
+    },
+    "MFFIRESB.8": {
+      "TBC": 1
+    },
+    "MFFIRESSM": {
+      "TBC": 0
+    },
+    "MFFRANKB6": {
+      "TBC": 0
+    },
+    "MFFRANKSM": {
+      "TBC": 18
+    },
+    "MFGINGGB3.6": {
+      "TBC": 0
+    },
+    "MFGINGRB3.8": {
+      "TBC": 0
+    },
+    "MFGINKLB1.4": {
+      "TBC": 0
+    },
+    "MFGINSEB2": {
+      "TBC": 0
+    },
+    "MFGOCHUB3.8": {
+      "TBC": 0
+    },
+    "MFGOLDGB5": {
+      "TBC": 4
+    },
+    "MFGOTUKB.8": {
+      "TBC": 0
+    },
+    "MFGREELB8": {
+      "TBC": 0
+    },
+    "MFHAZELSM": {
+      "TBC": 0
+    },
+    "MFHEMPSSM": {
+      "TBC": 0
+    },
+    "MFHIBISB2.2": {
+      "TBC": 0
+    },
+    "MFIMMB": {
+      "TBC": 2
+    },
+    "MFJASMIB1.1": {
+      "TBC": 0
+    },
+    "MFJUNIPB3.8": {
+      "TBC": 0
+    },
+    "MFKBBQMB5": {
+      "TBC": 1
+    },
+    "MFKELPMSM": {
+      "TBC": 270,
+      "TBC Height": 0
+    },
+    "MFLAVENB1.2": {
+      "TBC": 0
+    },
+    "MFLBALMB.8": {
+      "TBC": 0
+    },
+    "MFLEMMPB3.6": {
+      "TBC": 0
+    },
+    "MFLIQUOB2.7": {
+      "TBC": 0
+    },
+    "MFMACADSM": {
+      "TBC": 26
+    },
+    "MFMACAHB22": {
+      "TBC": 0
+    },
+    "MFMACAPB2": {
+      "TBC": 2
+    },
+    "MFMAPLEB5": {
+      "TBC": 8
+    },
+    "MFMESQPB2": {
+      "TBC": 1
+    },
+    "MFMESQPB5.6": {
+      "TBC": 2
+    },
+    "MFMIXENB5.5": {
+      "TBC": 20
+    },
+    "MFMULLESM": {
+      "TBC": 0,
+      "TBC Height": 0
+    },
+    "MFOLIVLB2": {
+      "TBC": 0
+    },
+    "MFOOLONB1.3": {
+      "TBC": 0
+    },
+    "MFORANPB3.4": {
+      "TBC": 0
+    },
+    "MFORANPME": {
+      "TBC": 0
+    },
+    "MFOREGAB2.8": {
+      "TBC": 0
+    },
+    "MFPASSIB1.6": {
+      "TBC": 0
+    },
+    "MFPECANB4.5": {
+      "TBC": 0
+    },
+    "MFPECANSM": {
+      "TBC": 160,
+      "TBC Height": 180
+    },
+    "MFPECRAWB4.5": {
+      "TBC": 0
+    },
+    "MFPEPITB12": {
+      "TBC": 0
+    },
+    "MFPEPITB6": {
+      "TBC": 0
+    },
+    "MFPEPPEB.6": {
+      "TBC": 0
+    },
+    "MF-POS-POSTER02": {
+      "TBC": 192
+    },
+    "MF-POS-TastingTent01": {
+      "TBC": 5
+    },
+    "MFPSYHULG": {
+      "TBC": 0
+    },
+    "MFPSYHUSM": {
+      "TBC": 0
+    },
+    "MFREISSB1.2": {
+      "TBC": 0
+    },
+    "MFREISSSM": {
+      "TBC": 0
+    },
+    "MFRESISB5": {
+      "TBC": 0
+    },
+    "MFRESISLG": {
+      "TBC": 0
+    },
+    "MFRMIXNB5.5": {
+      "TBC": 1
+    },
+    "MFROOIBB1.6": {
+      "TBC": 1
+    },
+    "MFROSEMB1.8": {
+      "TBC": 0
+    },
+    "MFROSHBSM": {
+      "TBC": 1
+    },
+    "MFSCHIBB4.6": {
+      "TBC": 0
+    },
+    "MFSCHIBSM": {
+      "TBC": 0
+    },
+    "MFSESASB5.6": {
+      "TBC": 0
+    },
+    "MFSESASSM": {
+      "TBC": 233,
+      "TBC Height": 0
+    },
+    "MFSPEARB.8": {
+      "TBC": 0
+    },
+    "MFSTARAB2": {
+      "TBC": 0
+    },
+    "MF-TastingCup4oz": {
+      "TBC": 23
+    },
+    "MF-TastingSpoon": {
+      "TBC": 5
+    },
+    "MFTERIMB5": {
+      "TBC": 0
+    },
+    "MFTERIMSM": {
+      "TBC": 284,
+      "TBC Height": 0
+    },
+    "MFTULSIB2": {
+      "TBC": 0
+    },
+    "MFTUMMTB.8": {
+      "TBC": 6
+    },
+    "MFVALERB4.4": {
+      "TBC": 0
+    },
+    "MFWALNUB4.5": {
+      "TBC": 4
+    },
+    "MFWALNUSM": {
+      "TBC": 540,
+      "TBC Height": 0
+    },
+    "MFWATTLSM": {
+      "TBC": 0
+    },
+    "MFWOODSHELF": {
+      "TBC": 0
+    },
+    "MFYERBALG": {
+      "TBC": 7
+    },
+    "MFYUMMBB6": {
+      "TBC": 0
+    },
+    "MIRN": {
+      "TBC": 0
+    },
+    "MMBANANA": {
+      "TBC": 1
+    },
+    "MMBANREFIL": {
+      "TBC": 9
+    },
+    "MMCAROBALMOND": {
+      "TBC": 270
+    },
+    "MMCAROBCHILLI": {
+      "TBC": 151
+    },
+    "MMCAROBCOCOGOJI": {
+      "TBC": 328
+    },
+    "MMCAROBELIX150g": {
+      "TBC": 8
+    },
+    "MMCAROBELIX1kg": {
+      "TBC": 0
+    },
+    "MMCAROBHAZEL": {
+      "TBC": 131
+    },
+    "MMCAROBPEPBUCK": {
+      "TBC": 176
+    },
+    "MMCAROBPURE": {
+      "TBC": 303
+    },
+    "MM-POS": {
+      "TBC": 2
+    },
+    "MMPOSBOX": {
+      "TBC": 0
+    },
+    "MM-POS-Carob-WOBBLER": {
+      "TBC": 90
+    },
+    "MMSPICELIX150g": {
+      "TBC": 11
+    },
+    "MYCROAM100": {
+      "TBC": 115
+    },
+    "MYCROCO30": {
+      "TBC": 37
+    },
+    "MYCROLM100": {
+      "TBC": 131
+    },
+    "MYCROMA100": {
+      "TBC": 9
+    },
+    "MYCROMA30": {
+      "TBC": 7
+    },
+    "MYCROPM100": {
+      "TBC": 66
+    },
+    "MYCRORE100": {
+      "TBC": 37
+    },
+    "MYCRORE30": {
+      "TBC": 63
+    },
+    "MYCROSH100": {
+      "TBC": 0
+    },
+    "MYCROSH30": {
+      "TBC": 13
+    },
+    "MYCROTT100": {
+      "TBC": 25
+    },
+    "MYCROTT30": {
+      "TBC": 26
+    },
+    "MYCRO-WOBBLER": {
+      "TBC": 0
+    },
+    "MYCROZAM100": {
+      "TBC": 59
+    },
+    "MYCROZEROCO30": {
+      "TBC": 15
+    },
+    "MYCROZEROLM30": {
+      "TBC": 53
+    },
+    "MYCROZERORE30": {
+      "TBC": 10
+    },
+    "MYCROZEROTT30": {
+      "TBC": 23
+    },
+    "MYCROZPM100": {
+      "TBC": 32
+    },
+    "NSC-BROAD-100g": {
+      "TBC": 23
+    },
+    "NSC-BROAD-TESTER": {
+      "TBC": 0
+    },
+    "NSC-KIDS-TESTER": {
+      "TBC": 0
+    },
+    "NT-AFTERSUN100TESTER": {
+      "TBC": 23
+    },
+    "NT-BABYBALM-45TESTER": {
+      "TBC": 9
+    },
+    "NT-BOOKLET": {
+      "TBC": 84
+    },
+    "NT-CB100": {
+      "TBC": 20
+    },
+    "NT-CB50TESTER": {
+      "TBC": 16
+    },
+    "NT-FACESERUM-TESTER": {
+      "TBC": 8
+    },
+    "NT-FRANKFACE-TESTER": {
+      "TBC": 33
+    },
+    "NT-GINGER-180": {
+      "TBC": 20
+    },
+    "NT-GINGER-80": {
+      "TBC": 50
+    },
+    "NT-GINGER-TESTER": {
+      "TBC": 4
+    },
+    "NT-LEMON100TESTER": {
+      "TBC": 22
+    },
+    "NT-LIP10-TESTER": {
+      "TBC": 0
+    },
+    "NT-MAG-120": {
+      "TBC": 57
+    },
+    "NT-MAG-220": {
+      "TBC": 0
+    },
+    "NT-MAG-TESTER": {
+      "TBC": 41
+    },
+    "NT-MIST100": {
+      "TBC": 14
+    },
+    "NT-MIST100TESTER": {
+      "TBC": 34
+    },
+    "NT-NAKED100TESTER": {
+      "TBC": 30
+    },
+    "NT-OIL100": {
+      "TBC": 48
+    },
+    "NT-OIL100TESTER": {
+      "TBC": 41
+    },
+    "NT-OIL250": {
+      "TBC": 19
+    },
+    "NT-POS-WOBBLER-MAG": {
+      "TBC": 85
+    },
+    "NT-POWCLEANSER-30": {
+      "TBC": 16
+    },
+    "NT-PROMO-WOBBLER-2026": {
+      "TBC": 123
+    },
+    "NT-PROMOWOBBLER'25": {
+      "TBC": 39
+    },
+    "NT-SHELFSTRIPS": {
+      "TBC": 37
+    },
+    "NT-SLEEP100TESTER": {
+      "TBC": 32
+    },
+    "NT-SOOTHBALM-45": {
+      "TBC": 23
+    },
+    "NT-SOOTHBALM-TESTER": {
+      "TBC": 36
+    },
+    "NT-SOOTHMASK-45": {
+      "TBC": 14
+    },
+    "NT-STICKS1000": {
+      "TBC": 0
+    },
+    "NT-ZINCNAPPY-55": {
+      "TBC": 37
+    },
+    "NT-ZINCNAPPY-55TESTER": {
+      "TBC": 27
+    },
+    "NUTDUST": {
+      "TBC": 0
+    },
+    "OH-4PACK-1xCARDBOARDONLY": {
+      "TBC": 99
+    },
+    "OH-6PACK-1xCARDBOARDONLY": {
+      "TBC": 99
+    },
+    "OH-CONSC-750": {
+      "TBC": 174
+    },
+    "OH-CONSC-750-SAMPLE": {
+      "TBC": 0
+    },
+    "OH-LEM-OG375": {
+      "TBC": 1392
+    },
+    "OH-LEM-OG375-SAMPLE": {
+      "TBC": 4
+    },
+    "OMGHEE-ORG1KG": {
+      "TBC": 64
+    },
+    "OMGHEE-ORG550": {
+      "TBC": 231
+    },
+    "OYSTERMUSHSF": {
+      "TBC": 0
+    },
+    "PHYINULIN": {
+      "TBC": 0
+    },
+    "PINKLAKESALT": {
+      "TBC": 0
+    },
+    "PMSAVOMAYO": {
+      "TBC": 0
+    },
+    "PMSBACON": {
+      "TBC": 0
+    },
+    "PMSBBQ80G": {
+      "TBC": 0
+    },
+    "PMSCASHP": {
+      "TBC": 0
+    },
+    "PMSCROUT": {
+      "TBC": 0
+    },
+    "PMSHEMPP": {
+      "TBC": 0
+    },
+    "PMSMAPLE80G": {
+      "TBC": 0
+    },
+    "PMSSEAWS": {
+      "TBC": 0
+    },
+    "PMSSPASUN": {
+      "TBC": 0
+    },
+    "PMSSUPER80G": {
+      "TBC": 0
+    },
+    "PMSSUPERSS": {
+      "TBC": 0
+    },
+    "PMSYEAST": {
+      "TBC": 0
+    },
+    "PP225J": {
+      "TBC": 0
+    },
+    "PP450J": {
+      "TBC": 0
+    },
+    "PTAB100": {
+      "TBC": 37
+    },
+    "PTAB50": {
+      "TBC": 48
+    },
+    "PTACV500": {
+      "TBC": 21
+    },
+    "PT-CALMBITT50": {
+      "TBC": 51
+    },
+    "PT-ENRGBITT50": {
+      "TBC": 30
+    },
+    "PTFIRE200": {
+      "TBC": 42
+    },
+    "PTFIRE500": {
+      "TBC": 16
+    },
+    "PTFLORA200": {
+      "TBC": 24
+    },
+    "PTFLORA500": {
+      "TBC": 9
+    },
+    "PTFOREST200": {
+      "TBC": 39
+    },
+    "PTFOREST500": {
+      "TBC": 18
+    },
+    "PT-POS-TASTINGKIT": {
+      "TBC": 0
+    },
+    "PWFQ": {
+      "TBC": 0
+    },
+    "PYTMISO": {
+      "TBC": 0
+    },
+    "RE.BLA.L": {
+      "TBC": 0
+    },
+    "RE.BLA.M": {
+      "TBC": 0
+    },
+    "RE.BLA.S": {
+      "TBC": 0
+    },
+    "RE.BLA.XL": {
+      "TBC": 0
+    },
+    "RE.BLA.XXL": {
+      "TBC": 0
+    },
+    "RE.GRE.L": {
+      "TBC": 0
+    },
+    "RE.GRE.M": {
+      "TBC": 0
+    },
+    "RE.GRE.XL": {
+      "TBC": 0
+    },
+    "RE.GRE.XXL": {
+      "TBC": 4
+    },
+    "RE.NAV.L": {
+      "TBC": 0
+    },
+    "RE.NAV.M": {
+      "TBC": 0
+    },
+    "RE.NAV.S": {
+      "TBC": 0
+    },
+    "RE.NAV.XL": {
+      "TBC": 1
+    },
+    "RE.NAV.XXL": {
+      "TBC": 1
+    },
+    "RE.SNA.L": {
+      "TBC": 0
+    },
+    "RE.SNA.M": {
+      "TBC": 0
+    },
+    "RE.SNA.S": {
+      "TBC": 0
+    },
+    "RE.SNA.XXL": {
+      "TBC": 2
+    },
+    "RE.TRO.L": {
+      "TBC": 0
+    },
+    "RE.TRO.M": {
+      "TBC": 0
+    },
+    "RE.TRO.S": {
+      "TBC": 0
+    },
+    "RE.TRO.XL": {
+      "TBC": 4
+    },
+    "RE.TRO.XXL": {
+      "TBC": 3
+    },
+    "RECRCL": {
+      "TBC": 0
+    },
+    "RECRCM": {
+      "TBC": 0
+    },
+    "RECRCS": {
+      "TBC": 0
+    },
+    "RECRCXL": {
+      "TBC": 0
+    },
+    "RECRUL": {
+      "TBC": 2
+    },
+    "RECRUM": {
+      "TBC": 0
+    },
+    "RECRUS": {
+      "TBC": 0
+    },
+    "RECRUXL": {
+      "TBC": 3
+    },
+    "RECRUXXL": {
+      "TBC": 1
+    },
+    "REDOGL": {
+      "TBC": 0
+    },
+    "REDOGM": {
+      "TBC": 0
+    },
+    "REDOGS": {
+      "TBC": 4
+    },
+    "REDOGXL": {
+      "TBC": 0
+    },
+    "REHOOL": {
+      "TBC": 3
+    },
+    "REHOOM": {
+      "TBC": 0
+    },
+    "REHOOS": {
+      "TBC": 0
+    },
+    "REHOOXL": {
+      "TBC": 0
+    },
+    "REINCL": {
+      "TBC": 7
+    },
+    "REINCM": {
+      "TBC": 3
+    },
+    "REINCS": {
+      "TBC": 0
+    },
+    "REINCXL": {
+      "TBC": 6
+    },
+    "REINCXXL": {
+      "TBC": 1
+    },
+    "REODEM": {
+      "TBC": 2
+    },
+    "REODES": {
+      "TBC": 0
+    },
+    "REODEXL": {
+      "TBC": 6
+    },
+    "REODEXXL": {
+      "TBC": 3
+    },
+    "REOFFL": {
+      "TBC": 3
+    },
+    "REOFFM": {
+      "TBC": 1
+    },
+    "REOFFS": {
+      "TBC": 1
+    },
+    "REOFFXL": {
+      "TBC": 5
+    },
+    "REOFFXXL": {
+      "TBC": 2
+    },
+    "REONPL": {
+      "TBC": 0
+    },
+    "REONPM": {
+      "TBC": 0
+    },
+    "REONPS": {
+      "TBC": 0
+    },
+    "REONPXL": {
+      "TBC": 0
+    },
+    "REONPXXL": {
+      "TBC": 0
+    },
+    "REROOL": {
+      "TBC": 2
+    },
+    "REROOM": {
+      "TBC": 0
+    },
+    "REROOS": {
+      "TBC": 0
+    },
+    "REROOXL": {
+      "TBC": 4
+    },
+    "REROOXXL": {
+      "TBC": 2
+    },
+    "RESLIL": {
+      "TBC": 3
+    },
+    "RESLIM": {
+      "TBC": 0
+    },
+    "RESLIS": {
+      "TBC": 0
+    },
+    "RESLIXL": {
+      "TBC": 1
+    },
+    "RESLIXXL": {
+      "TBC": 3
+    },
+    "RESTAND1": {
+      "TBC": 5
+    },
+    "RESTAND2": {
+      "TBC": 6
+    },
+    "RESTANDMINI": {
+      "TBC": 0
+    },
+    "RESUNL": {
+      "TBC": 2
+    },
+    "RESUNM": {
+      "TBC": 1
+    },
+    "RESUNS": {
+      "TBC": 1
+    },
+    "RESUNXL": {
+      "TBC": 1
+    },
+    "RESUNXXL": {
+      "TBC": 3
+    },
+    "REWAVL": {
+      "TBC": 5
+    },
+    "REWAVM": {
+      "TBC": 0
+    },
+    "REWAVS": {
+      "TBC": 0
+    },
+    "REWAVXL": {
+      "TBC": 6
+    },
+    "REWAVXXL": {
+      "TBC": 2
+    },
+    "REZEPL": {
+      "TBC": 0
+    },
+    "REZEPM": {
+      "TBC": 0
+    },
+    "REZEPS": {
+      "TBC": 1
+    },
+    "REZEPXL": {
+      "TBC": 2
+    },
+    "REZEPXXL": {
+      "TBC": 2
+    },
+    "S6FOAM": {
+      "TBC": 4000
+    },
+    "SAMPLE-MMALMOND": {
+      "TBC": 36
+    },
+    "SAMPLE-MMBANANA": {
+      "TBC": 35
+    },
+    "SAMPLE-MMCAROBELIX": {
+      "TBC": 0
+    },
+    "SAMPLE-MMCHILLI": {
+      "TBC": 35
+    },
+    "SAMPLE-MMCOCOGOJI": {
+      "TBC": 35
+    },
+    "SAMPLE-MMHAZEL": {
+      "TBC": 35
+    },
+    "SAMPLE-MMPEPBUCK": {
+      "TBC": 40
+    },
+    "SAMPLE-MMSPICELIX": {
+      "TBC": 4
+    },
+    "SB-AC-BOX10": {
+      "TBC": 16
+    },
+    "SBADC1KG": {
+      "TBC": 5
+    },
+    "SBBarsCalmDblChoc10PK": {
+      "TBC": 36
+    },
+    "SBBarsCalmPB35G10PK": {
+      "TBC": 26
+    },
+    "SBBarsCalmSC10PK": {
+      "TBC": 26
+    },
+    "SBBarsEnergyDblChoc10PK": {
+      "TBC": 31
+    },
+    "SBBarsEnergyPB35G10PK": {
+      "TBC": 18
+    },
+    "SBBarsEnergySC10PK": {
+      "TBC": 25
+    },
+    "SBBBCPOD10": {
+      "TBC": 20
+    },
+    "SBBBDCOL": {
+      "TBC": 552
+    },
+    "SBBBDLEM": {
+      "TBC": 167
+    },
+    "SBBBDMIX": {
+      "TBC": 528
+    },
+    "SB-BLC-BOX10": {
+      "TBC": 14
+    },
+    "SBCalmWater15": {
+      "TBC": 16
+    },
+    "SBCCM1KG": {
+      "TBC": 6
+    },
+    "SBCMATCH180G": {
+      "TBC": 33
+    },
+    "SBCMM1KG": {
+      "TBC": 5
+    },
+    "SBCoffeePow10sachet": {
+      "TBC": 14
+    },
+    "SBCoffeePow15": {
+      "TBC": 10
+    },
+    "SBCoffeePow25": {
+      "TBC": 16
+    },
+    "SB-CPB-BOX10": {
+      "TBC": 16
+    },
+    "SBGIFTSET": {
+      "TBC": 30
+    },
+    "SBGreensCalm15": {
+      "TBC": 6
+    },
+    "SBGreensEnergy15": {
+      "TBC": 17
+    },
+    "SB-PB-BOX10": {
+      "TBC": 19
+    },
+    "SB-POS-WOBBLER": {
+      "TBC": 93
+    },
+    "SBSMB1KG": {
+      "TBC": 5
+    },
+    "SCMWG": {
+      "TBC": 64
+    },
+    "SCMWGR": {
+      "TBC": 57
+    },
+    "SCMWP": {
+      "TBC": 70
+    },
+    "SDPCARAB3.8": {
+      "TBC": 0
+    },
+    "SDPORIGB3.8": {
+      "TBC": 3
+    },
+    "SE1KG": {
+      "TBC": 6
+    },
+    "SEM-CC-100-BLK": {
+      "TBC": 213
+    },
+    "SEM-CC-200-BLK": {
+      "TBC": 130
+    },
+    "SEM-CC-400-BLK": {
+      "TBC": 72
+    },
+    "SF1KG": {
+      "TBC": 6
+    },
+    "SF250G": {
+      "TBC": 20
+    },
+    "SIS-CupsSleevex100": {
+      "TBC": 6
+    },
+    "SIS-MagBottle-100ml": {
+      "TBC": 29
+    },
+    "SIS-MagBottle-100ml-TESTER": {
+      "TBC": 0
+    },
+    "SIS-MagBottle-30ml": {
+      "TBC": 32
+    },
+    "SIS-MagCedar-100ml": {
+      "TBC": 35
+    },
+    "SIS-MagCedar-100ml-TESTER": {
+      "TBC": 0
+    },
+    "SIS-MagCedar-30ml": {
+      "TBC": 43
+    },
+    "SIS-MagRefill-90ml": {
+      "TBC": 27
+    },
+    "SIS-POS-A5Strut": {
+      "TBC": 9
+    },
+    "SIS-POS-MAGA5Strut": {
+      "TBC": 195
+    },
+    "SIS-POS-MAGA6Info": {
+      "TBC": 20
+    },
+    "SIS-POS-Magnesium-Wobbler": {
+      "TBC": 5
+    },
+    "SIS-POS-TastingKit": {
+      "TBC": 11
+    },
+    "SIS-POS-TONIC-A6Info": {
+      "TBC": 4
+    },
+    "SIS-POS-Tonic-Wobbler": {
+      "TBC": 94
+    },
+    "SISSU-POS-Spray": {
+      "TBC": 197
+    },
+    "SIS-TonicBottle-700ml": {
+      "TBC": 1
+    },
+    "SIS-TonicFlask-180ml": {
+      "TBC": 28
+    },
+    "SIS-TonicFlask-50ml": {
+      "TBC": 23
+    },
+    "SIS-TonicFlask-TESTER": {
+      "TBC": 22
+    },
+    "SIS-TonicSatchel-700ml": {
+      "TBC": 12
+    },
+    "SL1KG": {
+      "TBC": 9
+    },
+    "SMOOTH20KG": {
+      "TBC": 0
+    },
+    "SMOOTH2KG": {
+      "TBC": 26
+    },
+    "SMOOTH2KG-NOSALT": {
+      "TBC": 0
+    },
+    "SOMM100G": {
+      "TBC": 20
+    },
+    "SOMRED400G": {
+      "TBC": 0
+    },
+    "SOSB100G": {
+      "TBC": 28
+    },
+    "SOSGCO1KG": {
+      "TBC": 68
+    },
+    "SOSGCO2KG": {
+      "TBC": 0
+    },
+    "SOSGCO5KG": {
+      "TBC": 0
+    },
+    "SOSGCO685G": {
+      "TBC": 111
+    },
+    "SOSGCOG275G": {
+      "TBC": 7
+    },
+    "SOSGGF1KG": {
+      "TBC": 27
+    },
+    "SOSGGF275G": {
+      "TBC": 123
+    },
+    "SOSGGF450G": {
+      "TBC": 110
+    },
+    "SOSGGF5KG": {
+      "TBC": 0
+    },
+    "SOSGTS275G": {
+      "TBC": 34
+    },
+    "SPV250G": {
+      "TBC": 41
+    },
+    "SSAQ750ML": {
+      "TBC": 1171
+    },
+    "SSCB750ML": {
+      "TBC": 1473
+    },
+    "SSKETX50": {
+      "TBC": 265
+    },
+    "SSKL750ML": {
+      "TBC": 1153
+    },
+    "SSLM750ML": {
+      "TBC": 948
+    },
+    "SS-POS": {
+      "TBC": 33
+    },
+    "STCBOX": {
+      "TBC": 136
+    },
+    "STC-CARD+WOODBLOCK": {
+      "TBC": 12
+    },
+    "STCGIFT": {
+      "TBC": 10
+    },
+    "STCMULTIBOX": {
+      "TBC": 0
+    },
+    "STC-POS-Buy2Wobbler": {
+      "TBC": 17
+    },
+    "STICKERMFLARGE": {
+      "TBC": 0
+    },
+    "SV1KG": {
+      "TBC": 5
+    },
+    "TBCCATALOG": {
+      "TBC": 36
+    },
+    "TBC-POS-NT": {
+      "TBC": 0
+    },
+    "TL-POS-WY.WOBBLER": {
+      "TBC": 59
+    },
+    "TLWYC100": {
+      "TBC": 72
+    },
+    "TLWYC100-MENS": {
+      "TBC": 25
+    },
+    "TLWYC100-TEEN": {
+      "TBC": 23
+    },
+    "TR-Chai250": {
+      "TBC": 52
+    },
+    "TR-Chai30SAMPLE": {
+      "TBC": 16
+    },
+    "TR-Chai500": {
+      "TBC": 41
+    },
+    "TR-FLYER": {
+      "TBC": 49
+    },
+    "TR-Gold250": {
+      "TBC": 35
+    },
+    "TR-Gold500": {
+      "TBC": 21
+    },
+    "TR-GoldSAMPLE": {
+      "TBC": 11
+    },
+    "TR-Shroom500": {
+      "TBC": 30
+    },
+    "TR-ShroomSAMPLE": {
+      "TBC": 79
+    },
+    "WALNUTOIL-FLYER": {
+      "TBC": 98
+    },
+    "WALNUTOIL-ORG500ml": {
+      "TBC": 1013
+    },
+    "WALNUTOIL-ORG500ml-SAMPLE": {
+      "TBC": 9
+    },
+    "WSBOM": {
+      "TBC": 0
+    },
+    "WSGG130": {
+      "TBC": 0
+    },
+    "WSGG60": {
+      "TBC": 0
+    },
+    "WSGGTB18": {
+      "TBC": 0
+    },
+    "WSML250": {
+      "TBC": 5
+    },
+    "WSMM120": {
+      "TBC": 0
+    },
+    "WSOG24": {
+      "TBC": 964
+    },
+    "WSPEP130": {
+      "TBC": 0
+    },
+    "WSPEP60": {
+      "TBC": 0
+    },
+    "WSPEPTB18": {
+      "TBC": 0
+    },
+    "WSPURE150": {
+      "TBC": 0
+    },
+    "WSPURETB18": {
+      "TBC": 0
+    },
+    "WSYUZU24": {
+      "TBC": 0
+    },
+    "WTCAPP200": {
+      "TBC": 0
+    },
+    "WTCBUS200": {
+      "TBC": 0
+    },
+    "WTCCPB200": {
+      "TBC": 0
+    },
+    "WTCFIR200": {
+      "TBC": 0
+    },
+    "WTCMLM200": {
+      "TBC": 0
+    },
+    "WTCQUA200": {
+      "TBC": 0
+    },
+    "WTCRAS200": {
+      "TBC": 0
+    },
+    "WTCSEA200": {
+      "TBC": 0
+    },
+    "WTCSRL200": {
+      "TBC": 0
+    },
+    "WTCTBS200": {
+      "TBC": 0
+    },
+    "WTCTLM200": {
+      "TBC": 0
+    },
+    "WTCWHI200": {
+      "TBC": 0
+    },
+    "WTCZSP200": {
+      "TBC": 0
+    },
+    "XHBP": {
+      "TBC": 0
+    },
+    "XHBSP": {
+      "TBC": 0
+    },
+    "ZH-BIOTIC-200": {
+      "TBC": 0
+    },
+    "ZH-CFC": {
+      "TBC": 0
+    },
+    "ZH-DANDY-150": {
+      "TBC": 0
+    },
+    "ZH-FHA": {
+      "TBC": 0
+    },
+    "ZH-GSB": {
+      "TBC": 0
+    },
+    "ZH-PCC": {
+      "TBC": 0
+    },
+    "ZH-POSTER": {
+      "TBC": 0
+    },
+    "ZH-TRIOB": {
+      "TBC": 0
+    },
+    "ZH-Wobbler": {
+      "TBC": 0
+    },
+    "ZW-DAVOSHRUB": {
+      "TBC": 17
+    },
+    "ZWFBUNYM": {
+      "TBC": 8
+    },
+    "ZWFBUNYV": {
+      "TBC": 3
+    },
+    "ZWFBUNYV-TESTER": {
+      "TBC": 7
+    },
+    "ZWFDAVOH": {
+      "TBC": 25
+    },
+    "ZWFDAVOH-TESTER": {
+      "TBC": 12
+    },
+    "ZWFDAVOJ": {
+      "TBC": 11
+    },
+    "ZWFDAVOV": {
+      "TBC": 14
+    },
+    "ZWFDAVOV-TESTER": {
+      "TBC": 11
+    },
+    "ZWFGANTH": {
+      "TBC": 10
+    },
+    "ZWFGANTH-TESTER": {
+      "TBC": 12
+    },
+    "ZWFLEMOM": {
+      "TBC": 9
+    },
+    "ZWFNETTH": {
+      "TBC": 3
+    },
+    "ZWFNETTH-TESTER": {
+      "TBC": 12
+    },
+    "ZWFPINEH": {
+      "TBC": 22
+    },
+    "ZWF-POSKIT": {
+      "TBC": 0
+    },
+    "ZWFRASPV-TESTER": {
+      "TBC": 4
+    },
+    "ZWFSEAWV": {
+      "TBC": 15
+    },
+    "ZWFSEAWV-TESTER": {
+      "TBC": 14
+    },
+    "ZWFSPOONS": {
+      "TBC": 0
+    },
+    "ZWFWAKAM": {
+      "TBC": 2
+    },
+    "ZW-ROSLSHRUB": {
+      "TBC": 11
+    },
+    "ZW-WATESHRUB": {
+      "TBC": 13
+    },
+    "MFCASHESM": {
+      "TBC Height": 0
+    },
+    "MFMORINSM": {
+      "TBC Height": 0
+    }
+  },
+  "warehouses": [
+    "Lundberg Storeroom",
+    "MF Operations",
+    "MF Packaging",
+    "TBC",
+    "TBC Height"
+  ],
+  "totalRecords": 4154
+}
