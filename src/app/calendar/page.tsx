@@ -24,6 +24,7 @@ import {
 } from '@/lib/engine/optimiser-orchestrator';
 import { assignBatchesToDays } from '@/lib/engine/day-assigner';
 import { projectToCalendar } from '@/lib/planning/calendar-projection';
+import { chooseEfficientStation } from '@/lib/engine/station-router';
 import { CalendarApp } from './CalendarApp';
 
 export const dynamic = 'force-dynamic'; // Always re-run; calendar reflects latest data
@@ -100,17 +101,52 @@ function buildPayload() {
     horizon,
   });
 
+  // Per-product routing decisions, keyed by productCode → routed-station + rationale.
+  // Surfaced in the activity drawer so the user can see WHY each product
+  // landed where it did.
+  const routingByProduct = new Map<string, { station: string; rationale: string }>();
+
   const products: ProductPlan[] = Object.keys(monthlyRates).map((code) => {
-    const meta = capacity.productMetaBySku[code];
+    const baseMeta = capacity.productMetaBySku[code];
     const weeklyDemand = forecast
       .filter((r) => r.productCode === code)
       .map((r) => ({ weekStart: r.weekStart, quantity: r.quantity }));
-    const station = capacity.stations[meta.station];
+    const totalDemand = weeklyDemand.reduce((s, w) => s + w.quantity, 0);
+
+    // Build candidate set from spreadsheet's primary + alternate. The
+    // station-router picks the cost-efficient choice — so a product with
+    // bottlo as alternate may land on bottlo if its volume × throughput
+    // beats the primary's slower-but-cheaper-to-switch option.
+    const intermediate = capacity.intermediates.get(baseMeta.family ?? '');
+    const candidates: string[] = [];
+    if (intermediate?.packingStation) candidates.push(intermediate.packingStation);
+    if (intermediate?.alternateStation && intermediate.alternateStation !== intermediate.packingStation) {
+      candidates.push(intermediate.alternateStation);
+    }
+    if (candidates.length === 0) candidates.push(baseMeta.station); // fallback
+    const decision = chooseEfficientStation({
+      productCode: code,
+      candidateStations: candidates as Parameters<typeof chooseEfficientStation>[0]['candidateStations'],
+      totalHorizonDemand: totalDemand,
+      extendedFamily: baseMeta.extendedFamily,
+      stationDefaults: capacity.stations,
+      changeoverMatrix: capacity.changeoverMatrix,
+    });
+    routingByProduct.set(code, { station: decision.station, rationale: decision.rationale });
+
+    // Re-derive station defaults from the chosen station (may differ from primary).
+    const chosenMeta = {
+      ...baseMeta,
+      station: decision.station,
+      rateUnitsPerHour:
+        capacity.stations[decision.station]?.unitsPerHour ?? baseMeta.rateUnitsPerHour,
+    };
+    const station = capacity.stations[decision.station];
     const maxBatch = station
       ? dailyStationOutput(station.unitsPerHour, station.hoursPerDay)
-      : 1500; // safe fallback if station defaults missing
+      : 1500;
     return {
-      meta,
+      meta: chosenMeta,
       weeklyDemand,
       initialInventory: 0,
       shelfLifeDays: DEFAULT_SHELF_LIFE_DAYS,
@@ -160,11 +196,18 @@ function buildPayload() {
   const totalChangeoverMin = orchestratorOutput.totalChangeoverMinutes;
   const dataAge = demandData?.sourceMtime ?? null;
 
+  // Convert Map → plain object for the server-client boundary.
+  const routingDecisions: Record<string, string> = {};
+  for (const [code, dec] of routingByProduct.entries()) {
+    routingDecisions[code] = dec.rationale;
+  }
+
   return {
     horizon,
     activities: projection.activities,
     dayLoads: projection.dayLoads,
     infeasibleProducts,
+    routingDecisions,
     summary: {
       productCount,
       feasibleCount,
