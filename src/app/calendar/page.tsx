@@ -129,7 +129,7 @@ export default async function CalendarPage({
   let payload: Awaited<ReturnType<typeof buildPayload>> | null = null;
 
   try {
-    payload = buildPayload(horizonWeeks);
+    payload = await buildPayload(horizonWeeks);
   } catch (e) {
     pageError = e instanceof Error ? e.message : 'Unknown error loading calendar data.';
   }
@@ -173,9 +173,12 @@ function eligibleSohOf(
   return sum;
 }
 
-function buildPayload(horizonWeeks: number) {
+async function buildPayload(horizonWeeks: number) {
   const capacity = loadCapacityDataFromPath(SPREADSHEET);
-  const demandData = loadMonthlyDemand();
+  // Phase 4o: prefers Google Sheets when GOOGLE_SHEETS_ID is set,
+  // falls back to data/demand.csv. Network fetch on every render is
+  // ~150 KB/<200ms — fine for a daily-replan cadence.
+  const demandData = await loadMonthlyDemand();
   const horizon = defaultHorizon(horizonWeeks, new Date());
 
   // Limit to SKUs that have BOTH a demand rate AND a productMeta we can route
