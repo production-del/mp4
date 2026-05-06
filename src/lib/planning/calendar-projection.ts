@@ -27,8 +27,15 @@ import type {
 
 // ─── Public types ────────────────────────────────────────────
 
-/** Future kinds will include 'po-placed', 'po-receiving'. */
-export type CalendarActivityKind = 'packaging' | 'kitchen';
+/**
+ * Future kinds will include 'po-placed', 'po-receiving'.
+ *
+ * - 'packaging'        — output of the optimiser; chip per planned batch
+ * - 'kitchen'          — live Unleashed assemblies at Lundberg (already-scheduled)
+ * - 'kitchen-required' — derived gap from intermediate-demand vs supply;
+ *                        a kitchen run that must happen but isn't yet scheduled
+ */
+export type CalendarActivityKind = 'packaging' | 'kitchen' | 'kitchen-required';
 
 export interface CalendarActivity {
   /** Per-render identifier — fine for React keys, do NOT use for persistence. */
