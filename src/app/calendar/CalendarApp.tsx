@@ -84,11 +84,11 @@ interface CalendarAppProps {
   sohByProductCode: Record<string, Record<string, number>>;
   /** ISO timestamp of the last SOH refresh, or null when cache is missing. */
   sohFetchedAt: string | null;
-  /** Warehouses present in the SOH cache, used for the picker. */
+  /** Warehouses present in the SOH cache (informational, for the drawer breakdown). */
   availableWarehouses: string[];
-  /** Warehouse currently used as the planner's source of initialInventory. */
-  planningWarehouse: string;
-  /** Per-product effective initialInventory (= SOH at planningWarehouse). */
+  /** Warehouses whose stock the planner counts as fulfilment-eligible. */
+  eligibleWarehouses: string[];
+  /** Per-product effective initialInventory (= sum of SOH across eligibleWarehouses). */
   initialInventoryByProduct: Record<string, number>;
   /** Per-product list of active sales-order lines. Empty when no commitments. */
   salesOrdersByProduct: Record<
@@ -204,7 +204,7 @@ export function CalendarApp(props: CalendarAppProps) {
     sohByProductCode,
     sohFetchedAt,
     availableWarehouses,
-    planningWarehouse,
+    eligibleWarehouses,
     initialInventoryByProduct,
     salesOrdersByProduct,
     committedByProduct,
@@ -685,35 +685,21 @@ export function CalendarApp(props: CalendarAppProps) {
             tone={salesOrdersFetchedAt ? undefined : 'amber'}
           />
           {availableWarehouses.length > 0 && (
-            <div style={{ marginTop: 4, fontSize: 12 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Plan from:</span>
-                <select
-                  value={planningWarehouse}
-                  onChange={(e) => {
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('warehouse', e.target.value);
-                    window.location.assign(url.toString());
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '3px 4px',
-                    fontSize: 11,
-                    border: '0.5px solid var(--border)',
-                    borderRadius: 3,
-                    background: 'var(--bg-page)',
-                    color: 'inherit',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  {availableWarehouses.includes(planningWarehouse) ? null : (
-                    <option value={planningWarehouse}>{planningWarehouse} (none)</option>
-                  )}
-                  {availableWarehouses.map((w) => (
-                    <option key={w} value={w}>{w}</option>
-                  ))}
-                </select>
-              </label>
+            <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)' }}>
+              <div style={{ marginBottom: 2 }}>Eligible warehouses (sum):</div>
+              <ul style={{ margin: 0, paddingLeft: 16 }}>
+                {eligibleWarehouses.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+              {availableWarehouses.some((w) => !eligibleWarehouses.includes(w)) && (
+                <div style={{ marginTop: 4 }}>
+                  Excluded:{' '}
+                  {availableWarehouses
+                    .filter((w) => !eligibleWarehouses.includes(w))
+                    .join(', ')}
+                </div>
+              )}
             </div>
           )}
           {(summary.orchestratorWarningCount + summary.dayAssignerWarningCount + summary.capacityWarningCount) > 0 && (
@@ -951,7 +937,7 @@ export function CalendarApp(props: CalendarAppProps) {
           stationDailyOutput={productStationDailyOutput[selected.productCode] ?? 0}
           globalShelfLifeDays={globalDefaults.shelfLifeDays}
           sohBreakdown={sohByProductCode[selected.productCode] ?? null}
-          planningWarehouse={planningWarehouse}
+          eligibleWarehouses={eligibleWarehouses}
           plannerInitialInventory={initialInventoryByProduct[selected.productCode] ?? 0}
           salesOrders={salesOrdersByProduct[selected.productCode] ?? []}
           totalCommitted={committedByProduct[selected.productCode] ?? 0}
@@ -1233,7 +1219,7 @@ function ActivityDrawer({
   stationDailyOutput,
   globalShelfLifeDays,
   sohBreakdown,
-  planningWarehouse,
+  eligibleWarehouses,
   plannerInitialInventory,
   salesOrders,
   totalCommitted,
@@ -1258,8 +1244,8 @@ function ActivityDrawer({
   globalShelfLifeDays: number;
   /** Per-warehouse SOH breakdown for this product, or null when cache is empty. */
   sohBreakdown: Record<string, number> | null;
-  /** Warehouse the planner is using as the source of truth. */
-  planningWarehouse: string;
+  /** Warehouses whose stock is summed into initialInventory (others displayed muted). */
+  eligibleWarehouses: string[];
   /** What the planner used as initialInventory for this product. */
   plannerInitialInventory: number;
   /** Active sales-order lines for this product (sorted ascending by date). */
@@ -1411,7 +1397,7 @@ function ActivityDrawer({
             {Object.entries(sohBreakdown)
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([wh, qty]) => {
-                const isPlanning = wh === planningWarehouse;
+                const isEligible = eligibleWarehouses.includes(wh);
                 return (
                   <li
                     key={wh}
@@ -1419,11 +1405,18 @@ function ActivityDrawer({
                       display: 'flex',
                       justifyContent: 'space-between',
                       padding: '2px 0',
-                      fontWeight: isPlanning ? 500 : 400,
-                      color: isPlanning ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      color: isEligible ? 'var(--text-primary)' : 'var(--text-muted)',
+                      opacity: isEligible ? 1 : 0.7,
                     }}
                   >
-                    <span>{wh}{isPlanning && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}> · planner uses this</span>}</span>
+                    <span>
+                      {wh}
+                      {!isEligible && (
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                          {' · excluded'}
+                        </span>
+                      )}
+                    </span>
                     <span>{qty.toLocaleString()}</span>
                   </li>
                 );
@@ -1431,7 +1424,7 @@ function ActivityDrawer({
           </ul>
         )}
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-          Planner used: {plannerInitialInventory.toLocaleString()} units (from {planningWarehouse})
+          Planner used: {plannerInitialInventory.toLocaleString()} units (sum of eligible warehouses)
         </div>
       </div>
 
