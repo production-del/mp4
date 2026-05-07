@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
-  readSohCache,
-  writeSohCache,
+  readSohCacheFromFile,
+  writeSohCacheToFile,
   buildSohCache,
   sohOf,
   sohBreakdownOf,
@@ -113,8 +113,8 @@ describe('soh-cache: file persistence', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  test('readSohCache returns null when file missing', () => {
-    expect(readSohCache(filePath)).toBeNull();
+  test('readSohCacheFromFile returns null when file missing', () => {
+    expect(readSohCacheFromFile(filePath)).toBeNull();
   });
 
   test('write then read round-trips per-warehouse data', () => {
@@ -122,8 +122,8 @@ describe('soh-cache: file persistence', () => {
       { productCode: 'A', warehouseName: 'WH1', qtyOnHand: 10 },
       { productCode: 'A', warehouseName: 'WH2', qtyOnHand: 5 },
     ]);
-    writeSohCache(cache, filePath);
-    const back = readSohCache(filePath);
+    writeSohCacheToFile(cache, filePath);
+    const back = readSohCacheFromFile(filePath);
     expect(back).not.toBeNull();
     expect(back!.byProductCode.A).toEqual({ WH1: 10, WH2: 5 });
     expect(back!.warehouses).toEqual(['WH1', 'WH2']);
@@ -132,12 +132,12 @@ describe('soh-cache: file persistence', () => {
 
   test('returns null on malformed JSON', () => {
     writeFileSync(filePath, 'not json {{{', 'utf-8');
-    expect(readSohCache(filePath)).toBeNull();
+    expect(readSohCacheFromFile(filePath)).toBeNull();
   });
 
   test('returns null on missing required fields', () => {
     writeFileSync(filePath, JSON.stringify({ wrong: 'shape' }), 'utf-8');
-    expect(readSohCache(filePath)).toBeNull();
+    expect(readSohCacheFromFile(filePath)).toBeNull();
   });
 
   test('returns null when byProductCode is an array', () => {
@@ -149,7 +149,7 @@ describe('soh-cache: file persistence', () => {
       }),
       'utf-8',
     );
-    expect(readSohCache(filePath)).toBeNull();
+    expect(readSohCacheFromFile(filePath)).toBeNull();
   });
 
   test('drops non-numeric quantities from per-warehouse breakdown', () => {
@@ -166,7 +166,7 @@ describe('soh-cache: file persistence', () => {
       }),
       'utf-8',
     );
-    const back = readSohCache(filePath);
+    const back = readSohCacheFromFile(filePath);
     expect(back!.byProductCode).toEqual({
       A: { WH1: 10, WH4: 20 },
       C: { WH1: 50 },
@@ -176,7 +176,7 @@ describe('soh-cache: file persistence', () => {
   test('creates parent directory when missing', () => {
     const nested = join(tempDir, 'nested', 'soh.json');
     const cache = buildSohCache([]);
-    writeSohCache(cache, nested);
-    expect(readSohCache(nested)).not.toBeNull();
+    writeSohCacheToFile(cache, nested);
+    expect(readSohCacheFromFile(nested)).not.toBeNull();
   });
 });

@@ -49,7 +49,7 @@ export async function POST() {
   }));
 
   const cache = buildAssembliesCache(raw);
-  writeAssembliesCache(cache);
+  await writeAssembliesCache(cache);
 
   return NextResponse.json({
     cache,

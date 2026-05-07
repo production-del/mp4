@@ -37,6 +37,11 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
+import {
+  dbReadCache,
+  dbWriteCache,
+  isDatabaseConfigured,
+} from '@/lib/db/unleashed-cache-store';
 
 // ─── Public types ────────────────────────────────────────────
 
@@ -57,60 +62,111 @@ export function defaultSohCachePath(cwd: string = process.cwd()): string {
   return join(cwd, 'data', 'soh-cache.json');
 }
 
-/** Read the cache. Returns null if file missing or unparseable. */
-export function readSohCache(
+/**
+ * Validate an unknown value as a SohCache. Used by both the file reader
+ * and the DB reader so the same data hygiene applies to either path.
+ * Returns null if the shape is wrong, otherwise a cleaned cache (drops
+ * non-numeric quantities, missing warehouses).
+ */
+function validateSohCache(parsed: unknown): SohCache | null {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const r = parsed as Record<string, unknown>;
+  if (
+    typeof r.fetchedAt !== 'string' ||
+    !r.byProductCode ||
+    typeof r.byProductCode !== 'object' ||
+    Array.isArray(r.byProductCode)
+  ) {
+    return null;
+  }
+  const cleaned: Record<string, Record<string, number>> = {};
+  const warehousesSet = new Set<string>();
+  for (const [productCode, byWh] of Object.entries(r.byProductCode)) {
+    if (!byWh || typeof byWh !== 'object' || Array.isArray(byWh)) continue;
+    const innerCleaned: Record<string, number> = {};
+    for (const [wh, qty] of Object.entries(byWh as Record<string, unknown>)) {
+      if (typeof qty === 'number' && Number.isFinite(qty) && qty >= 0 && wh) {
+        innerCleaned[wh] = qty;
+        warehousesSet.add(wh);
+      }
+    }
+    if (Object.keys(innerCleaned).length > 0) {
+      cleaned[productCode] = innerCleaned;
+    }
+  }
+  return {
+    fetchedAt: r.fetchedAt,
+    byProductCode: cleaned,
+    warehouses: Array.isArray(r.warehouses)
+      ? (r.warehouses as unknown[]).filter((w): w is string => typeof w === 'string')
+      : Array.from(warehousesSet).sort(),
+    totalRecords:
+      typeof r.totalRecords === 'number' ? r.totalRecords : Object.keys(cleaned).length,
+  };
+}
+
+/**
+ * File-only reader. Used by tests and as a fallback when DATABASE_URL
+ * isn't configured. Returns null if file missing or unparseable.
+ */
+export function readSohCacheFromFile(
   filePath: string = defaultSohCachePath(),
 ): SohCache | null {
   if (!existsSync(filePath)) return null;
   try {
     const text = readFileSync(filePath, 'utf-8');
-    const parsed = JSON.parse(text);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-    const r = parsed as Record<string, unknown>;
-    if (
-      typeof r.fetchedAt !== 'string' ||
-      !r.byProductCode ||
-      typeof r.byProductCode !== 'object' ||
-      Array.isArray(r.byProductCode)
-    ) {
-      return null;
-    }
-    // Validate per-product/per-warehouse entries — drop anything non-numeric.
-    const cleaned: Record<string, Record<string, number>> = {};
-    const warehousesSet = new Set<string>();
-    for (const [productCode, byWh] of Object.entries(r.byProductCode)) {
-      if (!byWh || typeof byWh !== 'object' || Array.isArray(byWh)) continue;
-      const innerCleaned: Record<string, number> = {};
-      for (const [wh, qty] of Object.entries(byWh as Record<string, unknown>)) {
-        if (typeof qty === 'number' && Number.isFinite(qty) && qty >= 0 && wh) {
-          innerCleaned[wh] = qty;
-          warehousesSet.add(wh);
-        }
-      }
-      if (Object.keys(innerCleaned).length > 0) {
-        cleaned[productCode] = innerCleaned;
-      }
-    }
-    return {
-      fetchedAt: r.fetchedAt,
-      byProductCode: cleaned,
-      warehouses: Array.isArray(r.warehouses)
-        ? (r.warehouses as unknown[]).filter((w): w is string => typeof w === 'string')
-        : Array.from(warehousesSet).sort(),
-      totalRecords: typeof r.totalRecords === 'number' ? r.totalRecords : Object.keys(cleaned).length,
-    };
+    return validateSohCache(JSON.parse(text));
   } catch {
     return null;
   }
 }
 
-export function writeSohCache(
+/** File-only writer. */
+export function writeSohCacheToFile(
   cache: SohCache,
   filePath: string = defaultSohCachePath(),
 ): void {
   const dir = dirname(filePath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(filePath, JSON.stringify(cache, null, 2) + '\n', 'utf-8');
+}
+
+/**
+ * Storage-agnostic reader (Phase 4p).
+ *   • DATABASE_URL set     → Postgres (`unleashed_cache` table, kind='soh')
+ *   • DATABASE_URL absent  → file (`data/soh-cache.json`)
+ *
+ * Returns null when nothing usable exists in either store.
+ */
+export async function readSohCache(
+  filePath: string = defaultSohCachePath(),
+): Promise<SohCache | null> {
+  if (isDatabaseConfigured()) {
+    const row = await dbReadCache<unknown>('soh');
+    if (row) {
+      const validated = validateSohCache(row.payload);
+      if (validated) return validated;
+      // DB row exists but its shape is unusable — fall through to file
+      // rather than returning null so we have a sane local snapshot.
+    }
+  }
+  return readSohCacheFromFile(filePath);
+}
+
+/**
+ * Storage-agnostic writer (Phase 4p).
+ *   • DATABASE_URL set     → Postgres (atomic upsert via dbWriteCache)
+ *   • DATABASE_URL absent  → file
+ */
+export async function writeSohCache(
+  cache: SohCache,
+  filePath: string = defaultSohCachePath(),
+): Promise<void> {
+  if (isDatabaseConfigured()) {
+    await dbWriteCache('soh', cache, cache.fetchedAt);
+    return;
+  }
+  writeSohCacheToFile(cache, filePath);
 }
 
 // ─── Lookup helpers ─────────────────────────────────────────

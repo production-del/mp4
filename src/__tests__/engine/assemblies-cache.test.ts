@@ -3,8 +3,8 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import {
   buildAssembliesCache,
-  readAssembliesCache,
-  writeAssembliesCache,
+  readAssembliesCacheFromFile,
+  writeAssembliesCacheToFile,
   assembliesAtWarehouse,
   type AssembliesCache,
 } from '@/lib/planning/assemblies-cache';
@@ -155,19 +155,19 @@ describe('persistence', () => {
         lastModifiedOn: '2026-05-15T00:00:00Z',
       },
     ]);
-    writeAssembliesCache(cache, filePath);
-    const back = readAssembliesCache(filePath);
+    writeAssembliesCacheToFile(cache, filePath);
+    const back = readAssembliesCacheFromFile(filePath);
     expect(back).not.toBeNull();
     expect(back!.lines).toHaveLength(1);
   });
 
   test('returns null for missing file', () => {
-    expect(readAssembliesCache(filePath)).toBeNull();
+    expect(readAssembliesCacheFromFile(filePath)).toBeNull();
   });
 
   test('returns null on malformed JSON', () => {
     writeFileSync(filePath, 'not json {{{', 'utf-8');
-    expect(readAssembliesCache(filePath)).toBeNull();
+    expect(readAssembliesCacheFromFile(filePath)).toBeNull();
   });
 
   test('drops malformed line entries on read', () => {
@@ -199,7 +199,7 @@ describe('persistence', () => {
       }),
       'utf-8',
     );
-    const back = readAssembliesCache(filePath);
+    const back = readAssembliesCacheFromFile(filePath);
     expect(back!.lines).toHaveLength(1);
     expect(back!.lines[0].assemblyNumber).toBe('A-1');
   });

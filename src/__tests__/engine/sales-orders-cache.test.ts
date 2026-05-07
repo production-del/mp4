@@ -3,8 +3,8 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import {
   buildSalesOrdersCache,
-  readSalesOrdersCache,
-  writeSalesOrdersCache,
+  readSalesOrdersCacheFromFile,
+  writeSalesOrdersCacheToFile,
   salesOrdersForProduct,
   totalCommittedFor,
   type SalesOrdersCache,
@@ -175,23 +175,23 @@ describe('persistence', () => {
         orderStatus: 'Placed',
       },
     ]);
-    writeSalesOrdersCache(cache, filePath);
-    const back = readSalesOrdersCache(filePath);
+    writeSalesOrdersCacheToFile(cache, filePath);
+    const back = readSalesOrdersCacheFromFile(filePath);
     expect(back).not.toBeNull();
     expect(back!.lines).toHaveLength(1);
     expect(back!.lines[0].quantityRemaining).toBe(70);
   });
 
-  test('readSalesOrdersCache returns null for missing file', () => {
-    expect(readSalesOrdersCache(filePath)).toBeNull();
+  test('readSalesOrdersCacheFromFile returns null for missing file', () => {
+    expect(readSalesOrdersCacheFromFile(filePath)).toBeNull();
   });
 
-  test('readSalesOrdersCache returns null on malformed JSON', () => {
+  test('readSalesOrdersCacheFromFile returns null on malformed JSON', () => {
     writeFileSync(filePath, 'not json {{{', 'utf-8');
-    expect(readSalesOrdersCache(filePath)).toBeNull();
+    expect(readSalesOrdersCacheFromFile(filePath)).toBeNull();
   });
 
-  test('readSalesOrdersCache drops malformed line entries', () => {
+  test('readSalesOrdersCacheFromFile drops malformed line entries', () => {
     writeFileSync(
       filePath,
       JSON.stringify({
@@ -219,7 +219,7 @@ describe('persistence', () => {
       }),
       'utf-8',
     );
-    const back = readSalesOrdersCache(filePath);
+    const back = readSalesOrdersCacheFromFile(filePath);
     expect(back!.lines).toHaveLength(1);
     expect(back!.lines[0].productCode).toBe('A');
   });

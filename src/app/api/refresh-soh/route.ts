@@ -50,7 +50,7 @@ export async function POST() {
   }));
 
   const cache = buildSohCache(records);
-  writeSohCache(cache);
+  await writeSohCache(cache);
 
   return NextResponse.json({
     cache,

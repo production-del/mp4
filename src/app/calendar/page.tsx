@@ -160,7 +160,7 @@ export default async function CalendarPage({
 
 /** Sum SOH for a product across only the fulfilment-eligible warehouses. */
 function eligibleSohOf(
-  cache: ReturnType<typeof readSohCache>,
+  cache: Awaited<ReturnType<typeof readSohCache>>,
   productCode: string,
 ): number {
   if (!cache) return 0;
@@ -198,7 +198,7 @@ async function buildPayload(horizonWeeks: number) {
   // them to the rate-derived baseline. Out-of-horizon lines are silently
   // dropped by the forecaster — committed demand far in the future doesn't
   // belong in this horizon.
-  const salesCache = readSalesOrdersCache();
+  const salesCache = await readSalesOrdersCache();
   const salesEvents: Demand[] = (salesCache?.lines ?? []).map((line) => ({
     productCode: line.productCode,
     quantityNeeded: line.quantityRemaining,
@@ -289,7 +289,7 @@ async function buildPayload(horizonWeeks: number) {
   // Stock-on-hand cache — produced by /api/refresh-soh from Unleashed.
   // Read on each render; null when the cache file is missing (planner falls
   // back to 0 for every product, matching pre-4g behaviour).
-  const sohCache = readSohCache();
+  const sohCache = await readSohCache();
 
   // Build the ProductPlan list using the balanced routing decisions.
   const products: ProductPlan[] = balanced.routings.map((r) => {
@@ -342,7 +342,7 @@ async function buildPayload(horizonWeeks: number) {
   // Lundberg Storeroom (kitchen production) — packaging assemblies are
   // already covered by the optimiser output. Each assembly becomes one
   // CalendarActivity with kind='kitchen' and station=null.
-  const assembliesCache = readAssembliesCache();
+  const assembliesCache = await readAssembliesCache();
   const kitchenActivities: CalendarActivity[] = [];
   for (const a of assembliesAtWarehouse(assembliesCache, WAREHOUSES.LUNDBERG)) {
     // Use the activity's scheduled date as both the day and the weekStart

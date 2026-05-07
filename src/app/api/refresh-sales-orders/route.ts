@@ -56,7 +56,7 @@ export async function POST() {
   }
 
   const cache = buildSalesOrdersCache(rawLines);
-  writeSalesOrdersCache(cache);
+  await writeSalesOrdersCache(cache);
 
   return NextResponse.json({
     cache,

@@ -38,6 +38,11 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
+import {
+  dbReadCache,
+  dbWriteCache,
+  isDatabaseConfigured,
+} from '@/lib/db/unleashed-cache-store';
 
 // ─── Public types ────────────────────────────────────────────
 
@@ -67,56 +72,86 @@ export function defaultSalesOrdersCachePath(cwd: string = process.cwd()): string
   return join(cwd, 'data', 'sales-orders-cache.json');
 }
 
-export function readSalesOrdersCache(
+/** Validate any input as a SalesOrdersCache; null on shape mismatch. */
+function validateSalesOrdersCache(parsed: unknown): SalesOrdersCache | null {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const r = parsed as Record<string, unknown>;
+  if (typeof r.fetchedAt !== 'string' || !Array.isArray(r.lines)) return null;
+  const cleaned: SalesOrderLineSummary[] = [];
+  for (const raw of r.lines) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const line = raw as Record<string, unknown>;
+    if (
+      typeof line.productCode !== 'string' ||
+      typeof line.quantityRemaining !== 'number' ||
+      !Number.isFinite(line.quantityRemaining) ||
+      line.quantityRemaining <= 0 ||
+      typeof line.requiredDate !== 'string' ||
+      typeof line.orderNumber !== 'string' ||
+      typeof line.customerName !== 'string' ||
+      typeof line.orderStatus !== 'string'
+    ) continue;
+    cleaned.push({
+      productCode: line.productCode,
+      quantityRemaining: line.quantityRemaining,
+      requiredDate: line.requiredDate,
+      orderNumber: line.orderNumber,
+      customerName: line.customerName,
+      orderStatus: line.orderStatus,
+    });
+  }
+  return {
+    fetchedAt: r.fetchedAt,
+    lines: cleaned,
+    totalLines: typeof r.totalLines === 'number' ? r.totalLines : cleaned.length,
+  };
+}
+
+/** File-only reader. Used by tests and as fallback when DATABASE_URL absent. */
+export function readSalesOrdersCacheFromFile(
   filePath: string = defaultSalesOrdersCachePath(),
 ): SalesOrdersCache | null {
   if (!existsSync(filePath)) return null;
   try {
-    const text = readFileSync(filePath, 'utf-8');
-    const parsed = JSON.parse(text);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-    const r = parsed as Record<string, unknown>;
-    if (typeof r.fetchedAt !== 'string' || !Array.isArray(r.lines)) return null;
-    const cleaned: SalesOrderLineSummary[] = [];
-    for (const raw of r.lines) {
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
-      const line = raw as Record<string, unknown>;
-      if (
-        typeof line.productCode !== 'string' ||
-        typeof line.quantityRemaining !== 'number' ||
-        !Number.isFinite(line.quantityRemaining) ||
-        line.quantityRemaining <= 0 ||
-        typeof line.requiredDate !== 'string' ||
-        typeof line.orderNumber !== 'string' ||
-        typeof line.customerName !== 'string' ||
-        typeof line.orderStatus !== 'string'
-      ) continue;
-      cleaned.push({
-        productCode: line.productCode,
-        quantityRemaining: line.quantityRemaining,
-        requiredDate: line.requiredDate,
-        orderNumber: line.orderNumber,
-        customerName: line.customerName,
-        orderStatus: line.orderStatus,
-      });
-    }
-    return {
-      fetchedAt: r.fetchedAt,
-      lines: cleaned,
-      totalLines: typeof r.totalLines === 'number' ? r.totalLines : cleaned.length,
-    };
+    return validateSalesOrdersCache(JSON.parse(readFileSync(filePath, 'utf-8')));
   } catch {
     return null;
   }
 }
 
-export function writeSalesOrdersCache(
+export function writeSalesOrdersCacheToFile(
   cache: SalesOrdersCache,
   filePath: string = defaultSalesOrdersCachePath(),
 ): void {
   const dir = dirname(filePath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(filePath, JSON.stringify(cache, null, 2) + '\n', 'utf-8');
+}
+
+/** Storage-agnostic reader (Phase 4p). DB when configured, else file. */
+export async function readSalesOrdersCache(
+  filePath: string = defaultSalesOrdersCachePath(),
+): Promise<SalesOrdersCache | null> {
+  if (isDatabaseConfigured()) {
+    const row = await dbReadCache<unknown>('sales-orders');
+    if (row) {
+      const validated = validateSalesOrdersCache(row.payload);
+      if (validated) return validated;
+    }
+  }
+  return readSalesOrdersCacheFromFile(filePath);
+}
+
+/** Storage-agnostic writer (Phase 4p). */
+export async function writeSalesOrdersCache(
+  cache: SalesOrdersCache,
+  filePath: string = defaultSalesOrdersCachePath(),
+): Promise<void> {
+  if (isDatabaseConfigured()) {
+    await dbWriteCache('sales-orders', cache, cache.fetchedAt);
+    return;
+  }
+  writeSalesOrdersCacheToFile(cache, filePath);
 }
 
 // ─── Builder + lookup helpers ───────────────────────────────
