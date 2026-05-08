@@ -1,6 +1,15 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
+/**
+ * Local-dev escape hatch: when `DISABLE_AUTH=true` is set in `.env.local`,
+ * the SSO gate is bypassed and every route renders without requiring a
+ * Google session. Intended ONLY for solo local development — never set
+ * this in any deployed environment. Default behaviour (var unset) is
+ * unchanged: production redirects unauthenticated requests to /signin.
+ */
+const SKIP_AUTH = process.env.DISABLE_AUTH === "true";
+
 export default auth((req) => {
   const { pathname } = req.nextUrl;
 
@@ -12,6 +21,8 @@ export default auth((req) => {
   ) {
     return NextResponse.next();
   }
+
+  if (SKIP_AUTH) return NextResponse.next();
 
   if (!req.auth) {
     const signInUrl = new URL("/signin", req.nextUrl.origin);
