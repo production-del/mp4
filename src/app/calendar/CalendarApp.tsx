@@ -2723,7 +2723,7 @@ function ActivityDrawer({
         }}
       >
         {activity.kind === 'kitchen'
-          ? 'Kitchen (scheduled)'
+          ? `Kitchen (scheduled)${activity.assemblyNumber ? ` · ${activity.assemblyNumber}` : ''}`
           : activity.kind === 'kitchen-required'
           ? 'Kitchen (required by plan)'
           : activity.kind === 'po-placed'

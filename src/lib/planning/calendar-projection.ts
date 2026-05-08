@@ -101,6 +101,12 @@ export interface CalendarActivity {
   family: string | null;
   extendedFamily: string | null;
   /**
+   * For `kind: 'kitchen'` only — the Unleashed assembly number, surfaced in
+   * the drawer / chip tooltip so the operator can correlate the chip with
+   * the source assembly in Unleashed.
+   */
+  assemblyNumber?: string;
+  /**
    * For `kind: 'po-placed'` and `kind: 'po-receiving'` only — purchasing
    * details. The two chips for one PO share these fields and reference each
    * other via `sisterStableId`.

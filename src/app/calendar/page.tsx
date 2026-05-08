@@ -370,6 +370,7 @@ async function buildPayload(horizonWeeks: number) {
       changeoverMinutes: 0,
       family: null,
       extendedFamily: null,
+      assemblyNumber: a.assemblyNumber,
     });
   }
   // ─── Cascading kitchen-run planner (Phase 4k.2) ──────────
