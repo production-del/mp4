@@ -1,0 +1,211 @@
+Code,In family sheet?,Has BOM?,Has demand?,AVE /mo,Product Group,Current routing,Action needed
+MFCECACLG,no,no,no,,,(unplanned),add BOM; add demand row; add BOM
+MFCLOVWXL,no,YES,no,,MF - Pantry (Bulk),auto: hand-packing,add to family sheet for proper routing; add demand row
+MFCECACSM,no,no,no,,,(unplanned),add BOM; add demand row; add BOM
+MFCECACME,no,no,no,,,(unplanned),add BOM; add demand row; add BOM
+SDSCHISSM,YES,YES,YES,13,Stardust - Adaptogen,family sheet,(none)
+SDASTRASM,YES,YES,YES,8,Stardust - Adaptogen,family sheet,(none)
+MFBIRPBLG,YES,YES,YES,370,MF - Granola,family sheet,(none)
+MFCELTSME,YES,YES,YES,401,MF - Pantry,family sheet,(none)
+SDYELLOB3,no,YES,YES,1,Stardust,auto: hand-packing,add to family sheet for proper routing
+SDASHWASM,YES,YES,YES,36,Stardust - Adaptogen,family sheet,(none)
+MFWILDCSM,no,YES,YES,215,MF - Munchies,auto: hand-packing,add to family sheet for proper routing
+MFWILDCLG,YES,YES,YES,21,MF - Munchies,family sheet,(none)
+MFOATSRB5,no,YES,YES,2,MF - Pantry (Bulk),auto: hand-packing,add to family sheet for proper routing
+MFTERIMB5,no,YES,YES,2,MF - Munchies,auto: hand-packing,add to family sheet for proper routing
+MFLOTUSME,YES,YES,YES,289,MF - Tea,family sheet,(none)
+MFLINSEB6.5,no,YES,YES,4,MF - Pantry (Bulk),auto: hand-packing,add to family sheet for proper routing
+MFMATCHSM,YES,YES,YES,202,MF - Tea,family sheet,(none)
+MFYERBAME,YES,YES,YES,127,MF - Tea,family sheet,(none)
+SDPCHOCLG,YES,YES,YES,234,Stardust - Protein,family sheet,(none)
+MFROSHBSM,YES,YES,YES,6,MF - Pantry,family sheet,(none)
+MFPECANME,YES,YES,YES,663,MF - Nuts,family sheet,(none)
+MFGOLDGXL,no,YES,YES,52,MF - Granola,auto: hand-packing,add to family sheet for proper routing
+MFBIRPBXL,no,YES,YES,52,MF - Granola,auto: hand-packing,add to family sheet for proper routing
+MFBLUBUSM,YES,YES,YES,171,MF - Pantry,family sheet,(none)
+MFBKCHOCB9,no,YES,YES,130,MF - Buckies,auto: hand-packing,add to family sheet for proper routing
+MFCARCLLG,YES,YES,YES,369,MF - Clusters,family sheet,(none)
+SDCACAOSM,YES,YES,YES,763,Stardust,family sheet,(none)
+MFCACAPLG,YES,YES,YES,197,MF - Pantry,family sheet,(none)
+MFASHWPSM,YES,YES,YES,258,MF - Pantry,family sheet,(none)
+MFBKCARABG,no,YES,YES,204,MF - Buckies,auto: hand-packing,add to family sheet for proper routing
+SDPORIGLG,YES,YES,YES,306,Stardust - Protein,family sheet,(none)
+MFCELTSSM,YES,YES,YES,711,MF - Pantry,family sheet,(none)
+SDYELLOSM,YES,YES,no,,SDYELLOSM,family sheet,add demand row
+MFYEASTME,YES,YES,YES,165,MF - Pantry,family sheet,(none)
+MFJASMIME,YES,YES,YES,91,MF - Tea,family sheet,(none)
+MFMACARME,YES,YES,YES,88,MF - Nuts,family sheet,(none)
+MFCINNPXL,no,YES,no,,,auto: hand-packing,add to family sheet for proper routing; add demand row
+MFCINNQXL,no,YES,YES,1,MF - Pantry (Bulk),auto: hand-packing,add to family sheet for proper routing
+MFCURNTME,YES,YES,no,,,family sheet,add demand row
+MFGINGGSM,YES,YES,YES,455,MF - Pantry,family sheet,(none)
+MFCACAPME,YES,YES,YES,600,MF - Pantry,family sheet,(none)
+MFMAPLEME,YES,YES,no,,MFMAPLEME,family sheet,add demand row
+MFCACAPSM,YES,YES,YES,277,MF - Pantry,family sheet,(none)
+MFALMONLG,YES,YES,YES,313,MF - Nuts,family sheet,(none)
+MFKELPMME,YES,YES,YES,200,MF - Pantry,family sheet,(none)
+MFLINSEME,YES,YES,YES,78,MF - Pantry,family sheet,(none)
+MFSPEARME,YES,YES,YES,56,MF - Tea,family sheet,(none)
+MFCYNPEPSM,YES,YES,YES,214,MF - Pantry,family sheet,(none)
+MFBUCKWLG,YES,YES,YES,231,MF - Pantry,family sheet,(none)
+MFCACBPXL,no,YES,YES,169,MF - Granola,auto: hand-packing,add to family sheet for proper routing
+MFCHOCLLG,YES,YES,YES,513,MF - Clusters,family sheet,(none)
+MFMAPLEB10,no,YES,YES,6,MF - Munchies,auto: hand-packing,add to family sheet for proper routing
+MFDATESLG,YES,YES,YES,78,MF - Pantry,family sheet,(none)
+MFFENUWSM,YES,YES,YES,40,MF - Pantry,family sheet,(none)
+MFBLPEPSM,YES,YES,YES,63,MF - Pantry,family sheet,(none)
+MFCACBPB5,no,YES,YES,14,MF - Granola,auto: hand-packing,add to family sheet for proper routing
+MFCANIBME,YES,YES,YES,226,MF - Pantry,family sheet,(none)
+MFPASSIME,YES,YES,YES,83,MF - Tea,family sheet,(none)
+MFTURMESM,YES,YES,YES,927,MF - Pantry,family sheet,(none)
+MFALMONSM,YES,YES,YES,224,MF - Nuts,family sheet,(none)
+MFCORNFME,YES,YES,YES,18,MF - Tea,family sheet,(none)
+MFKBBQMME,YES,YES,YES,589,MF - Munchies,family sheet,(none)
+MFRASFDME,YES,YES,YES,383,MF - Pantry,family sheet,(none)
+MFCACBPLG,YES,YES,no,,MFCACBPLG,family sheet,add demand row
+MFBRAZNXL,no,YES,YES,25,MF - Nuts,auto: hand-packing,add to family sheet for proper routing
+MFASHWAME,YES,YES,YES,43,MF - Tea,family sheet,(none)
+MFBKCARAB9,no,YES,YES,22,MF - Buckies,auto: hand-packing,add to family sheet for proper routing
+SDYELLOLG,no,YES,YES,94,Stardust,auto: hand-packing,add to family sheet for proper routing
+MFPEPPEME,YES,YES,YES,126,MF - Tea,family sheet,(none)
+MFBEETPME,YES,YES,YES,821,MF - Pantry,family sheet,(none)
+MFROSEMME,YES,YES,YES,40,MF - Tea,family sheet,(none)
+MFGINSEME,YES,YES,YES,46,MF - Tea,family sheet,(none)
+MFEROLVB4.5,no,YES,YES,8,MF - Granola,auto: hand-packing,add to family sheet for proper routing
+MFCHIASLG,YES,YES,YES,63,MF - Pantry,family sheet,(none)
+MFCHILBME,YES,YES,YES,677,MF - Tea,family sheet,(none)
+MFSUNFSME,YES,YES,YES,376,MF - Pantry,family sheet,(none)
+MFKELPMSM,YES,YES,YES,433,MF - Pantry,family sheet,(none)
+MFBRAZNSM,YES,YES,YES,389,MF - Nuts,family sheet,(none)
+MFBKCHOCBG,no,YES,YES,787,MF - Buckies,auto: hand-packing,add to family sheet for proper routing
+BULK-CACPO-5KG,no,YES,YES,18,Bulk Products,auto: hand-packing,add to family sheet for proper routing
+MFMIXENB11,no,YES,YES,10,MF - Nuts,auto: hand-packing,add to family sheet for proper routing
+MFFIRESME,YES,YES,YES,169,MF - Tea,family sheet,(none)
+SDYELLOXL,no,YES,YES,20,Stardust,auto: hand-packing,add to family sheet for proper routing
+MFBKBRYB9,no,YES,YES,7,MF - Buckies,auto: hand-packing,add to family sheet for proper routing
+MFTUMMTME,YES,YES,YES,647,MF - Tea,family sheet,(none)
+MFCHAMOME,YES,YES,YES,260,MF - Tea,family sheet,(none)
+MFWALNUXL,no,YES,YES,115,MF - Nuts,auto: hand-packing,add to family sheet for proper routing
+MFCHOCLSM,no,YES,YES,396,MF - Clusters,auto: hand-packing,add to family sheet for proper routing
+SDREDLOLG,no,YES,YES,20,Stardust,auto: hand-packing,add to family sheet for proper routing
+MFCASHEME,YES,YES,YES,566,MF - Nuts,family sheet,(none)
+MFLBALMME,YES,YES,YES,166,MF - Tea,family sheet,(none)
+SDBLUEISM,YES,YES,YES,645,Stardust,family sheet,(none)
+MFYUMMBME,YES,YES,YES,255,MF - Pantry,family sheet,(none)
+MFCINNPSM,YES,YES,no,,MF - Pantry,family sheet,add demand row
+MFBKBRYBG,no,YES,YES,513,MF - Buckies,auto: hand-packing,add to family sheet for proper routing
+SDRHODISM,YES,YES,YES,63,Stardust - Adaptogen,family sheet,(none)
+MFHIBISME,YES,YES,YES,535,MF - Tea,family sheet,(none)
+MFSEEDMLG,YES,YES,YES,185,MF - Pantry,family sheet,(none)
+MFMESQPSM,YES,YES,YES,89,MF - Pantry,family sheet,(none)
+SDREDLOSM,YES,YES,YES,722,Stardust,family sheet,(none)
+MFMAPLEXL,no,YES,YES,38,MF - Munchies,auto: hand-packing,add to family sheet for proper routing
+MFMAPLESM,YES,YES,YES,691,MF - Munchies,family sheet,(none)
+MFPAPRSSM,YES,YES,YES,225,MF - Pantry,family sheet,(none)
+MFMIXENLG,YES,YES,YES,21,MF - Nuts,family sheet,(none)
+MFCANIBSM,YES,YES,YES,278,MF - Pantry,family sheet,(none)
+SDREDLOB3,no,YES,YES,4,Stardust,auto: hand-packing,add to family sheet for proper routing
+MFTUMMTB.8,no,YES,YES,8,MF - Tea,auto: hand-packing,add to family sheet for proper routing
+MFSLIPPSM,YES,YES,YES,153,MF - Pantry,family sheet,(none)
+MFKBBQMLG,YES,YES,YES,21,MF - Munchies,family sheet,(none)
+MFBUCKWB12,no,YES,YES,27,MF - Pantry (Bulk),auto: hand-packing,add to family sheet for proper routing
+MFMAPLELG,YES,YES,YES,21,MF - Munchies,family sheet,(none)
+MFMIXENME,YES,YES,no,,MFMIXENME,family sheet,add demand row
+SDGREENSM,YES,YES,YES,362,Stardust,family sheet,(none)
+MFBLCUMSM,YES,YES,YES,171,MF - Pantry,family sheet,(none)
+MFBEETPSM,YES,YES,YES,775,MF - Pantry,family sheet,(none)
+MFOOLONME,YES,YES,YES,35,MF - Tea,family sheet,(none)
+MFEROLVXL,no,YES,YES,59,MF - Granola,auto: hand-packing,add to family sheet for proper routing
+MFCACBPSM,no,YES,YES,314,MF - Granola,auto: hand-packing,add to family sheet for proper routing
+MFRASLFME,YES,YES,YES,85,MF - Tea,family sheet,(none)
+MFEROLVLG,YES,YES,YES,553,MF - Granola,family sheet,(none)
+MFIMMUNME,YES,YES,YES,447,MF - Tea,family sheet,(none)
+MFHAZELME,YES,YES,YES,289,MF - Nuts,family sheet,(none)
+MFTERIMME,YES,YES,YES,635,MF - Munchies,family sheet,(none)
+MFFRANKSM,YES,YES,YES,18,MF - Pantry,family sheet,(none)
+MFMIXENXL,no,YES,YES,140,MF - Nuts,auto: hand-packing,add to family sheet for proper routing
+MFCHIASME,YES,YES,YES,421,MF - Pantry,family sheet,(none)
+MFMAPLEB5,no,YES,YES,11,MF - Munchies,auto: hand-packing,add to family sheet for proper routing
+MFROOIBME,YES,YES,YES,48,MF - Tea,family sheet,(none)
+MFLAVENME,YES,YES,YES,150,MF - Tea,family sheet,(none)
+MFTUMMTSM,YES,YES,YES,167,MF - Tea,family sheet,(none)
+MFHEMPSME,YES,YES,YES,68,MF - Pantry,family sheet,(none)
+MFTULSIME,YES,YES,YES,66,MF - Tea,family sheet,(none)
+MFBRAZNLG,YES,YES,YES,299,MF - Nuts,family sheet,(none)
+MFCHILBB.8,no,YES,YES,6,MF - Tea,auto: hand-packing,add to family sheet for proper routing
+SDREDLOXL,no,YES,YES,9,Stardust,auto: hand-packing,add to family sheet for proper routing
+MFASHWPME,YES,YES,YES,182,MF - Pantry,family sheet,(none)
+FCORDYSM,YES,YES,YES,43,Fungi,family sheet,(none)
+MFCARDASM,YES,YES,YES,56,MF - Pantry,family sheet,(none)
+MFLOTUSSM,YES,YES,YES,229,MF - Pantry,family sheet,(none)
+MFTURMEME,YES,YES,YES,334,MF - Pantry,family sheet,(none)
+MFCACBPB10,no,YES,YES,8,MF - Granola,auto: hand-packing,add to family sheet for proper routing
+MFDMTEASM,YES,YES,YES,70,MF - Tea,family sheet,(none)
+MFROSEPSM,YES,YES,YES,504,MF - Pantry,family sheet,(none)
+SDCACAOLG,no,YES,YES,38,Stardust,auto: hand-packing,add to family sheet for proper routing
+MFSESASSM,YES,YES,YES,128,MF - Pantry,family sheet,(none)
+MFGOCHUME,YES,YES,YES,70,MF - Pantry,family sheet,(none)
+MFCASHELG,YES,YES,YES,184,MF - Nuts,family sheet,(none)
+MFSUNFSLG,YES,YES,YES,72,MF - Pantry,family sheet,(none)
+MFDMTEAME,YES,YES,YES,350,MF - Tea,family sheet,(none)
+MFCASHEB6,no,YES,YES,1,MF - Nuts,auto: hand-packing,add to family sheet for proper routing
+MFCINNPME,YES,YES,YES,528,MF - Pantry,family sheet,(none)
+MFMIXENSM,YES,YES,YES,463,MF - Nuts,family sheet,(none)
+MFGOLDGLG,YES,YES,YES,375,MF - Granola,family sheet,(none)
+MFCARCLSM,no,YES,YES,239,MF - Clusters,auto: hand-packing,add to family sheet for proper routing
+MFSEEDMME,YES,YES,YES,636,MF - Pantry,family sheet,(none)
+MFMACAPME,YES,YES,YES,162,MF - Pantry,family sheet,(none)
+MFBRAZNME,YES,YES,YES,944,MF - Nuts,family sheet,(none)
+MFMIXENINFYME,YES,YES,YES,158,MF - Nuts,family sheet,(none)
+MFTERIMSM,YES,YES,YES,293,MF - Munchies,family sheet,(none)
+MFMIXENINFYSM,YES,YES,YES,128,MF - Nuts,family sheet,(none)
+MFCHILBSM,YES,YES,YES,401,MF - Tea,family sheet,(none)
+MFPEPITME,YES,YES,YES,642,MF - Pantry,family sheet,(none)
+MFTAMARME,YES,YES,YES,140,MF - Munchies,family sheet,(none)
+MFLEMMPSM,YES,YES,YES,176,MF - Pantry,family sheet,(none)
+MFTERIMB10,no,YES,YES,5,MF - Munchies,auto: hand-packing,add to family sheet for proper routing
+MFMORINME,YES,YES,YES,121,MF - Pantry,family sheet,(none)
+MFMACAPSM,YES,YES,YES,174,MF - Pantry,family sheet,(none)
+MFWALNUME,YES,YES,no,,MFWALNUME,family sheet,add demand row
+MFWALNUSM,YES,YES,YES,329,MF - Nuts,family sheet,(none)
+MFGARLPSM,YES,YES,YES,119,MF - Pantry,family sheet,(none)
+MFMORINSM,YES,YES,YES,164,MF - Pantry,family sheet,(none)
+MFEROLVSM,no,YES,YES,174,MF - Granola,auto: hand-packing,add to family sheet for proper routing
+MFALMONME,YES,YES,YES,789,MF - Nuts,family sheet,(none)
+MFCASHEXL,no,YES,YES,46,MF - Nuts,auto: hand-packing,add to family sheet for proper routing
+MFLIQUOME,YES,YES,YES,83,MF - Tea,family sheet,(none)
+MFPEPITLG,YES,YES,YES,180,MF - Pantry,family sheet,(none)
+MFCASHESM,YES,YES,YES,127,MF - Nuts,family sheet,(none)
+MFPECANXL,no,YES,YES,29,MF - Nuts,auto: hand-packing,add to family sheet for proper routing
+BULK-ABBNR-BOX,no,YES,YES,6,Bulk Products,auto: hand-packing,add to family sheet for proper routing
+MFTAMARSM,no,YES,YES,270,MF - Munchies,auto: hand-packing,add to family sheet for proper routing
+MFNUTMESM,YES,YES,YES,20,MF - Pantry,family sheet,(none)
+MFTAMARLG,YES,YES,YES,21,MF - Munchies,family sheet,(none)
+MFEROLVB9,no,YES,YES,7,MF - Granola,auto: hand-packing,add to family sheet for proper routing
+MFWALNULG,YES,YES,YES,818,MF - Nuts,family sheet,(none)
+MFCHERRME,YES,YES,YES,109,MF - Pantry,family sheet,(none)
+MFPECANSM,YES,YES,YES,132,MF - Nuts,family sheet,(none)
+FLIONMSM,YES,YES,YES,149,Fungi,family sheet,(none)
+MFMIXENB5.5,no,YES,YES,13,MF - Nuts,auto: hand-packing,add to family sheet for proper routing
+MFTERIMLG,YES,YES,YES,21,MF - Munchies,family sheet,(none)
+FLIONMLG,YES,YES,YES,4,Fungi,family sheet,(none)
+MFPSYHUME,YES,YES,YES,74,MF - Pantry,family sheet,(none)
+MFGINKLME,YES,YES,YES,29,MF - Tea,family sheet,(none)
+MFVALERSM,YES,YES,YES,35,MF - Pantry,family sheet,(none)
+SDBLUEIXL,no,YES,YES,5,Stardust,auto: hand-packing,add to family sheet for proper routing
+MFENGLBME,YES,YES,YES,64,MF - Tea,family sheet,(none)
+MFGINGRME,YES,YES,YES,81,MF - Tea,family sheet,(none)
+SDGREENLG,no,YES,YES,4,Stardust,auto: hand-packing,add to family sheet for proper routing
+SDBLUEILG,no,YES,YES,17,Stardust,auto: hand-packing,add to family sheet for proper routing
+FSHROBSM,YES,YES,YES,93,Fungi,family sheet,(none)
+MFWILDCME,YES,YES,YES,168,MF - Munchies,family sheet,(none)
+MFPECANLG,YES,YES,YES,162,MF - Nuts,family sheet,(none)
+MFALMONXL,no,YES,YES,68,MF - Nuts,auto: hand-packing,add to family sheet for proper routing
+MFCUMSWSM,YES,YES,YES,50,MF - Pantry,family sheet,(none)
+MFSTARASM,YES,YES,YES,59,MF - Pantry,family sheet,(none)
+MFCARCLB9,no,YES,YES,2,MF - Clusters,auto: hand-packing,add to family sheet for proper routing
+MFFENNSSM,YES,YES,YES,75,MF - Pantry,family sheet,(none)
+MFGOTUKME,YES,YES,YES,39,MF - Tea,family sheet,(none)
+FREISHSM,YES,YES,YES,43,Fungi,family sheet,(none)
+FCHAGASM,YES,YES,YES,41,Fungi,family sheet,(none)
+SDCREATME,no,no,no,,,(unplanned),add BOM; add demand row; add BOM

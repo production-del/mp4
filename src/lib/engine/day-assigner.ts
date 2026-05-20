@@ -21,15 +21,29 @@
  * For each station, walk batches in chronological order (orchestrator
  * already sorted them by week, then by within-week reorder for family
  * clustering). For each week:
- *   1. Start at Monday with `dayUsed = 0`.
- *   2. For each batch: compute `total = production_minutes + changeover_minutes`.
+ *   1. **Profit-aware pre-trim (Phase 4l.9).** Sum production+changeover
+ *      minutes across this week's batches and compare against the week's
+ *      total available minutes (sum of days × per-day capacity). If we
+ *      exceed, rank every batch by *profit per minute*
+ *      (`profitPerItem × quantity / totalMinutes`) ascending and drop the
+ *      lowest-value batches until the week fits. Drops are re-emitted as
+ *      `week_overflow` warnings (the calendar surfaces them as overdue
+ *      chips on today). Batches with `profitPerItem == null` rank at
+ *      profit = 0 — missing-data SKUs are de-prioritised so the team is
+ *      nudged to fill in `data/_profit-input.tsv`.
+ *   2. Start at Monday with `dayUsed = 0`.
+ *   3. For each surviving batch (orchestrator order preserved so family-
+ *      clustering survives the trim): compute
+ *      `total = production_minutes + changeover_minutes`.
  *      If `dayUsed + total ≤ capacity`, assign to current day, increment
  *      `dayUsed`. Else advance to next day, retry on a fresh capacity.
- *   3. If even a fresh day can't hold the batch (production > daily cap),
+ *   4. If even a fresh day can't hold the batch (production > daily cap),
  *      emit `oversize_batch` warning and assign anyway with overrun
  *      reported in `usedMinutes > capacityMinutes`.
- *   4. If we run off Friday with batches remaining, emit `week_overflow`
- *      warning; remaining batches are NOT assigned.
+ *   5. If we run off Friday with batches remaining (per-day packing
+ *      failure that survived the pre-trim — e.g. clustering forced a
+ *      bad split), emit `week_overflow` warning; remaining batches are
+ *      NOT assigned.
  *
  * Greedy by orchestrator-order preserves family-clustering across day
  * boundaries (the cheapest changeover stays adjacent), at the cost of
@@ -107,7 +121,21 @@ export type DayAssignerWarning =
       station: Station;
       weekStart: string;
       productCode: string;
+      productName: string;
+      quantity: number;
       durationMinutes: number;
+      /**
+       * Why the batch was dropped:
+       *   'profit_trim'   — pre-trim chose to drop this batch because its
+       *                     profit-per-minute was lowest among the week's
+       *                     batches and the week was over capacity.
+       *   'day_packing'   — survived the trim but ran off Friday during
+       *                     per-day assignment (typically family-clustering
+       *                     forced a split that couldn't fit).
+       */
+      reason: 'profit_trim' | 'day_packing';
+      /** Total batch profit (AUD = profitPerItem × quantity). `null` when SKU has no profit data. */
+      batchProfit: number | null;
       message: string;
     };
 
@@ -182,32 +210,122 @@ export function assignBatchesToDays(
     while (i < N) {
       const weekStart = timeline.batches[i].weekStart;
       const days = workingDaysOf(weekStart);
+
+      // ─── Collect this week's batches (indexes into timeline) ──
+      const weekIdxs: number[] = [];
+      let j = i;
+      while (j < N && timeline.batches[j].weekStart === weekStart) {
+        weekIdxs.push(j);
+        j += 1;
+      }
+
+      // Helper: total minutes (production + changeover) for a batch at idx.
+      const minutesAt = (idx: number): number => {
+        const prodMin = productionMinutes(timeline.batches[idx]);
+        const changeMin = timeline.changeovers[idx].costMinutes;
+        return prodMin + changeMin;
+      };
+
+      // ─── Profit-aware pre-trim (Phase 4l.9) ───────────────────
+      // If the week as a whole over-runs the sum of daily capacities, drop
+      // batches in ascending order of profit-per-minute until we fit. This
+      // pushes the optimiser to spend constrained packaging minutes on the
+      // most-valuable demand (joint profit × quantity signal). Survivors
+      // keep their orchestrator order so within-week family-clustering is
+      // preserved among them.
+      const weekCapacityTotal = days.reduce(
+        (s, d) => s + capacityFor(stationCap, d),
+        0,
+      );
+      let weekDemandTotal = weekIdxs.reduce((s, idx) => s + minutesAt(idx), 0);
+      const droppedIdxs = new Set<number>();
+      if (weekDemandTotal > weekCapacityTotal && weekIdxs.length > 0) {
+        // Rank every batch by profit-per-minute ascending. Missing profit
+        // data ranks at 0 → these get dropped first, which is the right
+        // signal: the team needs to fill them in.
+        const ranked = weekIdxs
+          .map((idx) => {
+            const b = timeline.batches[idx];
+            const profitPer = b.productMeta.profitPerItem;
+            const profit =
+              typeof profitPer === 'number' && Number.isFinite(profitPer)
+                ? profitPer
+                : 0;
+            const batchProfit = profit * b.quantity;
+            const mins = minutesAt(idx);
+            const profitPerMin = mins > 0 ? batchProfit / mins : 0;
+            return { idx, mins, batchProfit, profitPerMin, hasProfit: profitPer !== null && profitPer !== undefined };
+          })
+          .sort((a, b) => {
+            if (a.profitPerMin !== b.profitPerMin) {
+              return a.profitPerMin - b.profitPerMin;
+            }
+            // Tiebreak: prefer to drop SKUs with no profit data (signals to
+            // the team to fill them in) over priced SKUs at the same rate.
+            if (a.hasProfit !== b.hasProfit) {
+              return a.hasProfit ? 1 : -1;
+            }
+            // Final tiebreak: drop later-week-position batches first so
+            // earlier ones (often family-cluster heads) stay.
+            return b.idx - a.idx;
+          });
+        for (const entry of ranked) {
+          if (weekDemandTotal <= weekCapacityTotal) break;
+          droppedIdxs.add(entry.idx);
+          weekDemandTotal -= entry.mins;
+          const dropBatch = timeline.batches[entry.idx];
+          warnings.push({
+            kind: 'week_overflow',
+            station,
+            weekStart,
+            productCode: dropBatch.productMeta.productCode,
+            productName: dropBatch.productMeta.productName,
+            quantity: dropBatch.quantity,
+            durationMinutes: entry.mins,
+            reason: 'profit_trim',
+            batchProfit: entry.hasProfit ? entry.batchProfit : null,
+            message: `Week ${weekStart} on ${station}: dropped ${dropBatch.productMeta.productCode} (${entry.mins.toFixed(0)} min, ${
+              entry.hasProfit ? `$${entry.batchProfit.toFixed(0)} batch profit` : 'no profit data'
+            }) — week over capacity by ${(weekDemandTotal + entry.mins - weekCapacityTotal).toFixed(0)} min before this drop.`,
+          });
+        }
+      }
+
+      // ─── Per-day packing pass over survivors ─────────────────
       let dayIdx = 0;
       let currentDay = days[dayIdx];
       let dayCapacity = capacityFor(stationCap, currentDay);
       let dayUsed = 0;
 
-      // Process all batches in this week.
-      while (i < N && timeline.batches[i].weekStart === weekStart) {
-        const batch = timeline.batches[i];
+      for (const idx of weekIdxs) {
+        if (droppedIdxs.has(idx)) continue;
+        const batch = timeline.batches[idx];
         const prodMin = productionMinutes(batch);
-        const changeMin = timeline.changeovers[i].costMinutes;
+        const changeMin = timeline.changeovers[idx].costMinutes;
         const totalMin = prodMin + changeMin;
 
         if (dayUsed > 0 && dayUsed + totalMin > dayCapacity) {
           // Doesn't fit on the current day. Advance.
           dayIdx += 1;
           if (dayIdx >= days.length) {
-            // Out of days for this week — overflow.
+            // Out of days for this week — overflow that the profit trim
+            // didn't catch (per-day packing failed despite week total
+            // fitting). Surface as a day-packing overflow.
+            const profitPer = batch.productMeta.profitPerItem;
+            const hasProfit =
+              typeof profitPer === 'number' && Number.isFinite(profitPer);
             warnings.push({
               kind: 'week_overflow',
               station,
               weekStart,
               productCode: batch.productMeta.productCode,
+              productName: batch.productMeta.productName,
+              quantity: batch.quantity,
               durationMinutes: totalMin,
+              reason: 'day_packing',
+              batchProfit: hasProfit ? (profitPer as number) * batch.quantity : null,
               message: `Week ${weekStart} on ${station}: ran out of working days; batch ${batch.productMeta.productCode} (${totalMin.toFixed(0)} min) not assigned.`,
             });
-            i += 1;
             continue;
           }
           currentDay = days[dayIdx];
@@ -248,8 +366,9 @@ export function assignBatchesToDays(
         dayBucket.batches.push(assigned);
         dayBucket.usedMinutes += totalMin;
         dayUsed += totalMin;
-        i += 1;
       }
+
+      i = j;
     }
   }
 

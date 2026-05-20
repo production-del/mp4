@@ -68,6 +68,11 @@ export interface ProductPlan {
   setupCost?: number;
   storageCapByWeek?: ReadonlyArray<number>;
   step?: number;
+  /**
+   * Phase 4l.12 — per-SKU SOH floor (days of forward demand). Threads
+   * through to the DP. Undefined → DP uses its global default.
+   */
+  sohFloorDays?: number;
 }
 
 export interface OrchestratorInput {
@@ -264,9 +269,48 @@ export function orchestrateBatchPlan(
   const stationBuckets = new Map<Station, ScheduledBatchWithMeta[]>();
   for (const station of STATIONS_ALL) stationBuckets.set(station, []);
 
+  // Phase 4l.12 — low-velocity skip threshold. If producing the minimum
+  // batch would leave more than this many weeks of forward-demand cover
+  // past the horizon, skip the DP entirely. Avoids the pathological case
+  // where a near-zero-demand product (e.g. MFTERIMB5 at 0.42 units/week)
+  // with adequate SOH gets force-batched to its 50-unit minimum,
+  // producing ~2 years of excess carry. We accept the small horizon-end
+  // shortfall — the next refresh-with-updated-SOH will reconsider.
+  const MAX_EXCESS_CARRY_WEEKS = 26;
   for (const plan of input.products) {
     const setupCost =
       plan.setupCost ?? deriveDefaultSetupCost(plan.meta, matrix);
+
+    // Pre-check: would one minimum batch overproduce by months of cover?
+    const horizonWeeks = plan.weeklyDemand.length;
+    const totalDemand = plan.weeklyDemand.reduce((s, w) => s + w.quantity, 0);
+    const avgWeekly = horizonWeeks > 0 ? totalDemand / horizonWeeks : 0;
+    const endInvIfOneBatch =
+      plan.initialInventory + plan.minBatchSize - totalDemand;
+    const excessCarry = avgWeekly > 0 ? endInvIfOneBatch / avgWeekly : Infinity;
+    if (
+      avgWeekly > 0 &&
+      endInvIfOneBatch > 0 &&
+      excessCarry > MAX_EXCESS_CARRY_WEEKS
+    ) {
+      const carryWeeksRounded = excessCarry === Infinity
+        ? 'infinite'
+        : excessCarry.toFixed(0);
+      perProduct.set(plan.meta.productCode, {
+        batches: [],
+        rationale: [
+          `Skipped: existing SOH (${plan.initialInventory.toFixed(0)}) covers most of ${horizonWeeks}-week demand (${totalDemand.toFixed(1)}). ` +
+            `A single ${plan.minBatchSize}-unit min batch would leave ${endInvIfOneBatch.toFixed(0)} units at horizon end ` +
+            `= ~${carryWeeksRounded} weeks excess carry (>${MAX_EXCESS_CARRY_WEEKS} threshold).`,
+          'Will replan on next refresh with updated SOH.',
+        ],
+        interRunDays: [],
+        unmetDemand: [],
+        totalCost: 0,
+        feasible: true,
+      });
+      continue;
+    }
 
     const dpInput: SingleProductOptimiserInput = {
       productCode: plan.meta.productCode,
@@ -278,6 +322,7 @@ export function orchestrateBatchPlan(
       setupCost,
       storageCapByWeek: plan.storageCapByWeek,
       step: plan.step,
+      sohFloorDays: plan.sohFloorDays,
     };
     const result = optimiseSingleProduct(dpInput);
     perProduct.set(plan.meta.productCode, result);

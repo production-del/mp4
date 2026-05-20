@@ -94,6 +94,15 @@ function bucketEventWeek(
   if (weekStarts.length === 0) return null;
   const eventMonday = mondayOf(fromLocalISODate(needByDate));
   const eventISO = toLocalISODate(eventMonday);
+  const firstISO = weekStarts[0];
+  // Phase 4l.10: past-due events (needByDate before the horizon start)
+  // bucket into the FIRST horizon week instead of being silently dropped.
+  // They're commitments we've ALREADY missed — we need to make them ASAP,
+  // not pretend they don't exist. Without this, oversold SKUs like
+  // SDASHWASM (committed 125, SOH 0, requiredDates all in the past) had
+  // zero event-driven demand reach the DP and got planned at the tiny
+  // rate-based baseline instead.
+  if (eventISO < firstISO) return firstISO;
   // Linear scan is fine — horizon is bounded (≤52 weeks even at 1y).
   return weekStarts.includes(eventISO) ? eventISO : null;
 }

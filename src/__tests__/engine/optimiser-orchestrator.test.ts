@@ -331,4 +331,72 @@ describe('orchestrateBatchPlan', () => {
       }
     });
   });
+
+  describe('Phase 4l.12: low-velocity skip', () => {
+    test('product with adequate SOH + tiny demand + large minBatch is SKIPPED', () => {
+      // Mirrors the real MFTERIMB5 case: 0.42 units/week demand, 3 SOH,
+      // 50-unit minBatch. Without the skip, the DP forces a 50-unit
+      // batch leaving ~114 weeks of carry. With the skip, no batch.
+      const m = meta({ productCode: 'MFTERIMB5', station: 'hand-packing' });
+      const r = orchestrateBatchPlan({
+        products: [
+          plan({
+            meta: m,
+            weeklyDemand: constantDemand(12, 0.42),
+            initialInventory: 3,
+            minBatchSize: 50,
+            maxBatchSize: 2000,
+            shelfLifeDays: 540,
+          }),
+        ],
+      });
+      const result = r.perProduct.get('MFTERIMB5')!;
+      expect(result.feasible).toBe(true);
+      expect(result.batches.length).toBe(0);
+      expect(result.rationale[0]).toMatch(/Skipped/);
+    });
+
+    test('product where minBatch is justified by demand is NOT skipped', () => {
+      // Normal case: high-demand product still gets planned.
+      const m = meta({ productCode: 'MFBEETPME', station: 'bottlo' });
+      const r = orchestrateBatchPlan({
+        products: [
+          plan({
+            meta: m,
+            weeklyDemand: constantDemand(12, 200),
+            initialInventory: 0,
+            minBatchSize: 100,
+            maxBatchSize: 2000,
+            shelfLifeDays: 540,
+          }),
+        ],
+      });
+      const result = r.perProduct.get('MFBEETPME')!;
+      expect(result.feasible).toBe(true);
+      expect(result.batches.length).toBeGreaterThan(0);
+    });
+
+    test('zero-demand product is left alone (no batches, no skip warning)', () => {
+      // Edge case: no demand at all. DP returns 0 batches naturally;
+      // our skip predicate requires avgWeekly > 0 so it doesn't fire.
+      const m = meta({ productCode: 'MFDEAD', station: 'hand-packing' });
+      const r = orchestrateBatchPlan({
+        products: [
+          plan({
+            meta: m,
+            weeklyDemand: constantDemand(8, 0),
+            initialInventory: 10,
+            minBatchSize: 50,
+            maxBatchSize: 2000,
+            shelfLifeDays: 540,
+          }),
+        ],
+      });
+      const result = r.perProduct.get('MFDEAD')!;
+      expect(result.feasible).toBe(true);
+      expect(result.batches.length).toBe(0);
+      // Should NOT have the "Skipped" rationale — natural zero-demand.
+      expect(result.rationale[0] ?? '').not.toMatch(/Skipped/);
+    });
+  });
 });

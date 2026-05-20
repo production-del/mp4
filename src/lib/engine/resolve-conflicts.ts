@@ -93,6 +93,18 @@ export interface ResolveConflictsInput {
   maxWalkDays?: number;
   /** Defensive cap on outer loop. Default 20. */
   maxIterations?: number;
+
+  // ─── SOH-aware mode (Phase 4l.3) ───────────────────────────
+  // Mirrored straight to `detectScheduleConflicts` so the resolver and the
+  // UI agree on which conflicts exist. Optional — when omitted, the
+  // resolver detects in legacy mode (matching pre-4l.3 behaviour).
+
+  /** Per-ingredient starting SOH. Forwarded to detectScheduleConflicts. */
+  initialSohByCode?: Record<string, number>;
+  /** Per-unit ingredient consumption per consumer code. */
+  consumesQtyMap?: Record<string, Record<string, number>>;
+  /** Per-activity effective supply qty (yield-discounted for kitchen runs). */
+  supplyQtyByActivity?: Record<string, number>;
 }
 
 export interface ResolveConflictsOutput {
@@ -174,6 +186,9 @@ export function resolveScheduleConflicts(
       activities: mutated,
       consumesMap: input.consumesMap,
       dismissedStableIds: dismissedSet,
+      initialSohByCode: input.initialSohByCode,
+      consumesQtyMap: input.consumesQtyMap,
+      supplyQtyByActivity: input.supplyQtyByActivity,
     });
     lastConflicts = conflicts;
     if (conflicts.length === 0) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db/client';
 import { ensureSchema } from '@/lib/db/init';
+import { isDatabaseConfigured } from '@/lib/db/unleashed-cache-store';
 import { auth } from '@/auth';
 import type { PlanItem, PlanItemKind } from '@/lib/planning/plan-item';
 
@@ -21,6 +22,17 @@ interface MutateRequest {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // Graceful local-dev fallback: when no Postgres is configured, swallow
+  // the mutation as a no-op. The client's optimistic local update still
+  // applies — only the cross-device persistence is skipped.
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json({
+      ok: true,
+      serverTime: new Date().toISOString(),
+      note: 'database not configured — mutation applied locally only',
+    });
+  }
+
   await ensureSchema();
 
   const session = await auth();

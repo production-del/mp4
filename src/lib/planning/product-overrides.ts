@@ -38,6 +38,14 @@ export interface ProductOverride {
   shelfLifeDays?: number;
   /** Override the per-product max batch size (units). Absent → use station daily output. */
   maxBatchSize?: number;
+  /**
+   * Phase 4l.12 — override the target SOH floor (in days of forward
+   * demand) for this SKU. Absent → use the global default
+   * (DEFAULT_SOH_FLOOR_DAYS = 10). 0 disables the floor for this SKU.
+   * Useful for high-velocity SKUs you want extra buffer on, or
+   * slow-movers where 10 days of cover means dead stock.
+   */
+  sohFloorDays?: number;
 }
 
 export type ProductOverridesMap = Record<string, ProductOverride>;
@@ -110,15 +118,22 @@ export function clearOverride(
 export function resolveOverride(
   map: ProductOverridesMap,
   productCode: string,
-  defaults: { shelfLifeDays: number; maxBatchSize: number },
-): { shelfLifeDays: number; maxBatchSize: number; overridden: { shelfLifeDays: boolean; maxBatchSize: boolean } } {
+  defaults: { shelfLifeDays: number; maxBatchSize: number; sohFloorDays?: number },
+): {
+  shelfLifeDays: number;
+  maxBatchSize: number;
+  sohFloorDays: number | undefined;
+  overridden: { shelfLifeDays: boolean; maxBatchSize: boolean; sohFloorDays: boolean };
+} {
   const override = map[productCode];
   return {
     shelfLifeDays: override?.shelfLifeDays ?? defaults.shelfLifeDays,
     maxBatchSize: override?.maxBatchSize ?? defaults.maxBatchSize,
+    sohFloorDays: override?.sohFloorDays ?? defaults.sohFloorDays,
     overridden: {
       shelfLifeDays: override?.shelfLifeDays !== undefined,
       maxBatchSize: override?.maxBatchSize !== undefined,
+      sohFloorDays: override?.sohFloorDays !== undefined,
     },
   };
 }
@@ -134,6 +149,11 @@ function cleanOverride(o: ProductOverride): ProductOverride {
   if (typeof o.maxBatchSize === 'number' && o.maxBatchSize > 0) {
     out.maxBatchSize = Math.round(o.maxBatchSize);
   }
+  // sohFloorDays: keep 0 (= "disable floor for this SKU") explicitly,
+  // but reject negatives.
+  if (typeof o.sohFloorDays === 'number' && o.sohFloorDays >= 0) {
+    out.sohFloorDays = Math.round(o.sohFloorDays);
+  }
   return out;
 }
 
@@ -146,6 +166,7 @@ function validateMap(raw: Record<string, unknown>): ProductOverridesMap {
     const clean = cleanOverride({
       shelfLifeDays: typeof v.shelfLifeDays === 'number' ? v.shelfLifeDays : undefined,
       maxBatchSize: typeof v.maxBatchSize === 'number' ? v.maxBatchSize : undefined,
+      sohFloorDays: typeof v.sohFloorDays === 'number' ? v.sohFloorDays : undefined,
     });
     if (Object.keys(clean).length > 0) out[code] = clean;
   }

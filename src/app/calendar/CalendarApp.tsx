@@ -45,9 +45,13 @@ import {
   applyEditLeadTime,
   applyClearLeadTime,
   editedLeadTimeDaysOf,
+  applyEditStation,
+  applyClearStation,
+  editedStationOf,
   leadTimeOverridesByCode,
   clearStale,
   staleStableIds,
+  pruneStaleReschedules,
   readMutationsFromStorage,
   writeMutationsToStorage,
   applyMutationsToActivities,
@@ -76,7 +80,20 @@ import {
   resolveScheduleConflicts,
   type ResolveStrategy,
 } from '@/lib/engine/resolve-conflicts';
-import type { PlanningHorizon, Station } from '@/lib/planning/engine-io';
+import type {
+  ChangeoverCostMatrix,
+  ExtendedFamily,
+  PackageSize,
+  PlanningHorizon,
+  Station,
+} from '@/lib/planning/engine-io';
+import { costToSwitch } from '@/lib/engine/changeover';
+import { toLocalISODate } from '@/lib/planning/working-day';
+import {
+  readManualActivitiesFromStorage,
+  writeManualActivitiesToStorage,
+  type ManualActivity,
+} from '@/lib/planning/manual-activities';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -119,6 +136,21 @@ interface CalendarAppProps {
    * productCode isn't in the map fall back to KITCHEN_DEFAULT_MINUTES.
    */
   kitchenMinutesByProductCode: Record<string, number>;
+  /**
+   * Phase 4l.10 — total effective dehydrator-tray pool across all kitchen
+   * dehydrators (Mamma + Pappa + Midgy at typical max-fill, currently 605).
+   * The day-header D% column = sum(dehydratorTrays of chips occupying day)
+   * / dehydratorTotalTrays. Zero if no dehydrator data found in spreadsheet.
+   */
+  dehydratorTotalTrays: number;
+  /**
+   * Phase 4l.11 — per-product weekly demand. The client walks this plus
+   * initial SOH plus per-day production from packaging chips to compute
+   * an availability-over-time timeline per product. Drives chip BG
+   * lightness (availability heat) and the sparkline overlay.
+   * Structure: { productCode: [{ weekStart: 'YYYY-MM-DD', quantity: N }] }.
+   */
+  weeklyDemandByProduct: Record<string, Array<{ weekStart: string; quantity: number }>>;
   infeasibleProducts: InfeasibleProduct[];
   /** productCode → cost-router rationale string (why this station was chosen). */
   routingDecisions: Record<string, string>;
@@ -132,10 +164,19 @@ interface CalendarAppProps {
   sohFetchedAt: string | null;
   /** Warehouses present in the SOH cache (informational, for the drawer breakdown). */
   availableWarehouses: string[];
-  /** Warehouses whose stock the planner counts as fulfilment-eligible. */
+  /** Warehouses whose stock the planner counts as fulfilment-eligible (FG side). */
   eligibleWarehouses: string[];
+  /** Phase 4l.12 — warehouses the planner counts toward intermediate
+   *  SOH (Lundberg + MF Packaging + MF Operations). The drawer uses
+   *  this when the selected chip is an intermediate so the "excluded"
+   *  label reflects the right rule for that chip's kind. */
+  intermediateEligibleWarehouses: readonly string[];
   /** Per-product effective initialInventory (= sum of SOH across eligibleWarehouses). */
   initialInventoryByProduct: Record<string, number>;
+  /** Phase 4l.12 — per-intermediate effective SOH (= sum across the
+   *  three intermediate-eligible warehouses). Surfaced in the drawer
+   *  for `kitchen` / `kitchen-required` chips. */
+  intermediateSohByCode: Record<string, number>;
   /** Per-product list of active sales-order lines. Empty when no commitments. */
   salesOrdersByProduct: Record<
     string,
@@ -165,6 +206,16 @@ interface CalendarAppProps {
   horizonOptions: number[];
   /** productCode → list of intermediate codes its BOM consumes (depth 1). For conflict detection. */
   consumesMap: Record<string, string[]>;
+  /** Per-ingredient starting SOH (sum across all warehouses) for SOH-aware conflict detection. */
+  conflictInitialSohByCode: Record<string, number>;
+  /** consumer productCode → ingredient code → qty per unit of consumer (combined clean+wastage). */
+  consumesQtyMap: Record<string, Record<string, number>>;
+  /** intermediate code → recipe yield rate (output qty per unit nominal). Missing = 1.0. */
+  yieldRateByCode: Record<string, number>;
+  /** Per-station changeover-cost matrix from the spreadsheet (Phase 4l.7 client recompute). */
+  changeoverMatrix: ChangeoverCostMatrix;
+  /** Non-null when URL `?from=...` overrides the planner's "today" anchor. */
+  planFromDate: string | null;
   summary: SummaryProps;
 }
 
@@ -173,30 +224,245 @@ interface CalendarAppProps {
 const STATIONS: Station[] = ['hand-packing', 'elephant', 'dust', 'bottlo'];
 
 /**
- * Kitchen-team capacity model (Phase 4l.7 / 4l.8).
+ * Kitchen-team capacity model (Phase 4l.7 / 4l.8 / 4l.10).
  * Used both by the resolver (push/pull past kitchen-overloaded days) and by
  * the calendar heatmap so the user sees the same load picture the resolver
  * does.
  *
- * 8-hour kitchen day → 480 minutes total.
+ * Phase 4l.10: 3 people × 7-hour shift = 1260 person-minutes per day.
+ * (Previously hard-coded as 480, which assumed one person — gave inflated
+ * K% utilisation readings.)
  *
- * Per-recipe minutes come from the spreadsheet via `kitchenTeamMinutesFor`,
- * passed in as `kitchenMinutesByProductCode`. Activities whose productCode
- * isn't in that map (unusual but possible — e.g. a kitchen-required chip
- * for an intermediate that isn't in the kitchen-processes sheet) fall back
- * to `KITCHEN_DEFAULT_CHIP_MINUTES`.
+ * Per-chip minutes come from `activity.kitchenMinutes` (preferred —
+ * computed server-side as `quantity × per-unit-rate` for dehydrator
+ * recipes), with fallback to `kitchenMinutesByProductCode[code]` (the
+ * legacy per-recipe map) or `KITCHEN_DEFAULT_CHIP_MINUTES` for unknown
+ * recipes.
  */
-const KITCHEN_DAILY_MINUTES = 480;
+const KITCHEN_DAILY_MINUTES = 1260;
 const KITCHEN_DEFAULT_CHIP_MINUTES = 240;
+
+// Phase 4l.12 — target SOH floor in days of forward demand. MUST match
+// `DEFAULT_SOH_FLOOR_DAYS` in `batch-optimiser.ts`; the client uses this
+// only to render a reference line on each chip's inventory sparkline so
+// the user can see at-a-glance when SOH dips toward the planner's target.
+const SOH_FLOOR_DAYS = 10;
 
 interface ChipColor { bg: string; border: string; text: string; dot: string }
 
-const STATION_COLORS: Record<Station, ChipColor> = {
-  'hand-packing': { bg: '#fef3c7', border: '#f59e0b', text: '#78350f', dot: '#f59e0b' },
-  elephant: { bg: '#dbeafe', border: '#3b82f6', text: '#1e3a8a', dot: '#3b82f6' },
-  dust: { bg: '#ede9fe', border: '#8b5cf6', text: '#4c1d95', dot: '#8b5cf6' },
-  bottlo: { bg: '#d1fae5', border: '#10b981', text: '#065f46', dot: '#10b981' },
+// ─── Phase 4l.11 — packaging chip colours: profit-tier green on a fixed hue ───
+// One profit axis driving TWO visual properties:
+//   • SATURATION climbs with profit (15% → 100%).
+//   • LIGHTNESS drops with profit (92% → 45%).
+// Together they shade low-profit chips towards WHITE (faint, recede)
+// and high-profit chips towards full #00E676 (vivid, foreground).
+//
+// Hue is locked at 151° — top band matches #00E676 exactly. 20 bands of
+// $700 each scale the gradient up to the observed real-world maximum
+// (~$14k chip profit from MFBEETPME ×1010 @ $14.17/unit). This keeps
+// the spread useful inside the high-profit half — with the previous
+// 10-band/$500 scheme almost every chip ≥ $4500 pegged at vivid green,
+// killing discrimination at the top.
+//
+//     band 0  (<$700)    → sat 15%,  lit 92%   (near white)
+//     band 5  (<$4200)   → sat 37%,  lit 80%
+//     band 10 (<$7700)   → sat 60%,  lit 67%
+//     band 15 (<$11200)  → sat 82%,  lit 55%
+//     band 19 (≥$13300)  → sat 100%, lit 45%   (full #00E676)
+//
+// Per-chip: captures both margin AND scale. A 1000-unit run of a $1/unit
+// SKU can outrank a 50-unit run of a $5/unit SKU.
+//   • LIGHTNESS = inventory availability at this point in time. Walked
+//     per-day from initial SOH + production events − daily demand. Each
+//     chip's BG is rendered as a horizontal gradient: left edge = inv
+//     immediately after this batch lands (vivid, dark — "stocked up");
+//     right edge = inv just before the next event (pale — "running
+//     low"). Reading a column at a glance shows which SKUs were just
+//     produced vs which are starving for the next batch.
+//
+// Kitchen chips sit in the blue/cyan family — visually orthogonal to
+// the packaging purples so kitchen vs packaging reads at a glance.
+const STATION_HUE: Record<Station, number> = {
+  'hand-packing': 280,
+  elephant: 280,
+  dust: 280,
+  bottlo: 280,
 };
+
+/**
+ * Map total profit per chip (= profit/item × quantity) to a (saturation,
+ * lightness) pair on the fixed green hue (151°). 10 bands of $500 each —
+ * band 0 is $0–499, band 9 is $4500+. Missing/zero data falls into
+ * band 0 (most faded). Top band lands at sat=100, lit=45 which (combined
+ * with hue=151) is #00E676 exactly.
+ *
+ * Lightness sweeps DOWN as profit climbs so low-profit chips fade
+ * towards white (high lightness, low saturation) and high-profit chips
+ * intensify towards vivid green.
+ */
+const PROFIT_BAND_WIDTH = 700;
+const PROFIT_BAND_COUNT = 20;
+const PACKAGING_HUE = 151;
+const PROFIT_SAT_MIN = 15;
+const PROFIT_SAT_MAX = 100;
+const PROFIT_LIT_HIGH = 92; // low-profit → near white
+const PROFIT_LIT_LOW = 45;  // high-profit → vivid #00E676
+
+function profitTierColor(chipProfit: number | null | undefined): { sat: number; lit: number } {
+  const value =
+    chipProfit != null && Number.isFinite(chipProfit) && chipProfit > 0
+      ? chipProfit
+      : 0;
+  const band = Math.min(
+    PROFIT_BAND_COUNT - 1,
+    Math.floor(value / PROFIT_BAND_WIDTH),
+  );
+  const t = band / (PROFIT_BAND_COUNT - 1); // 0..1
+  return {
+    sat: Math.round(PROFIT_SAT_MIN + t * (PROFIT_SAT_MAX - PROFIT_SAT_MIN)),
+    lit: Math.round(PROFIT_LIT_HIGH - t * (PROFIT_LIT_HIGH - PROFIT_LIT_LOW)),
+  };
+}
+
+/**
+ * Build a chip colour for a packaging activity. Hue is fixed at 151°
+ * (green). `sat`/`lit` come from `profitTierColor` (low profit → low
+ * sat + high lit = near white; high profit → vivid #00E676).
+ *
+ * Text colour flips at lit ≈ 65: pale chips get dark green text, vivid
+ * chips get white. Border is always a deep saturated green so even the
+ * near-white low-profit chips have a defined outline.
+ *
+ * `station` and the trailing legacy arg are kept on the signature for
+ * compat but ignored.
+ */
+function packagingChipColor(station: Station, sat: number, lit: number = PROFIT_LIT_LOW): ChipColor {
+  void station;
+  const h = PACKAGING_HUE;
+  const borderLit = 22;
+  const text = lit > 65 ? `hsl(${h}, 60%, 18%)` : '#ffffff';
+  return {
+    bg: `hsl(${h}, ${sat}%, ${lit}%)`,
+    border: `hsl(${h}, 85%, ${borderLit}%)`,
+    text,
+    dot: `hsl(${h}, 85%, ${borderLit}%)`,
+  };
+}
+
+/**
+ * Phase 4l.11 — build an SVG polyline path for the inventory sparkline
+ * embedded in each packaging chip. The polyline traces the per-day
+ * inventory ratio (0..1) across the horizon as a curve at the bottom
+ * of the chip. Replaces the earlier gradient-as-availability approach
+ * (which the eye read as hazy because sRGB interpolation between many
+ * close-lightness purple stops produced perceptual mush).
+ *
+ * Returns the SVG path string AND a vertical marker x-position
+ * representing where this chip's date falls within the horizon — so
+ * you can see "this batch lands HERE on the inventory journey."
+ */
+interface SparklineGeometry {
+  points: string;
+  fillPath: string;
+  markerX: number | null;
+}
+
+interface ShortageGeometry {
+  points: string;
+  fillPath: string;
+}
+
+/** Inventory curve: bottom-anchored, fills bottom strip of the chip. */
+function buildSparklineGeometry(
+  ratios: number[],
+  chipDateIndex: number | null,
+  viewW: number,
+  viewH: number,
+): SparklineGeometry {
+  if (ratios.length === 0) {
+    return { points: '', fillPath: '', markerX: null };
+  }
+  const lastIdx = ratios.length - 1;
+  const xOf = (i: number) =>
+    lastIdx === 0 ? 0 : (i / lastIdx) * viewW;
+  const yOf = (r: number) =>
+    viewH - 0.5 - Math.max(0, Math.min(1, r)) * (viewH - 1);
+  const points = ratios
+    .map((r, i) => `${xOf(i).toFixed(2)},${yOf(r).toFixed(2)}`)
+    .join(' ');
+  const fillParts: string[] = [`M 0 ${viewH}`];
+  for (let i = 0; i < ratios.length; i++) {
+    fillParts.push(`L ${xOf(i).toFixed(2)} ${yOf(ratios[i]).toFixed(2)}`);
+  }
+  fillParts.push(`L ${viewW} ${viewH}`);
+  fillParts.push('Z');
+  const markerX =
+    chipDateIndex == null
+      ? null
+      : xOf(Math.max(0, Math.min(lastIdx, chipDateIndex)));
+  return {
+    points,
+    fillPath: fillParts.join(' '),
+    markerX,
+  };
+}
+
+/**
+ * Phase 4l.12 — floor reference curve: a thin dashed line traced at the
+ * SOH-floor target across the horizon. Uses the SAME bottom-anchored y
+ * mapping as the inventory sparkline so the floor sits at its correct
+ * relative height. Returns just the polyline points (no fill); the
+ * caller renders it as a dashed `<polyline>`.
+ */
+function buildFloorPoints(
+  floorRatios: number[] | null,
+  viewW: number,
+  viewH: number,
+): string | null {
+  if (!floorRatios || floorRatios.length === 0) return null;
+  if (!floorRatios.some((r) => r > 0)) return null;
+  const lastIdx = floorRatios.length - 1;
+  const xOf = (i: number) => (lastIdx === 0 ? 0 : (i / lastIdx) * viewW);
+  const yOf = (r: number) =>
+    viewH - 0.5 - Math.max(0, Math.min(1, r)) * (viewH - 1);
+  return floorRatios
+    .map((r, i) => `${xOf(i).toFixed(2)},${yOf(r).toFixed(2)}`)
+    .join(' ');
+}
+
+/**
+ * Shortage curve: top-anchored, inverted. Higher shortage ratio = larger
+ * y (= further down from the top edge). Renders as a red icicle hanging
+ * from the top border of the chip. Returns null when there's no shortage
+ * to show (= caller should skip the SVG entirely).
+ */
+function buildShortageGeometry(
+  shortageRatios: number[] | null,
+  viewW: number,
+  viewH: number,
+): ShortageGeometry | null {
+  if (!shortageRatios || !shortageRatios.some((r) => r > 0)) return null;
+  const lastIdx = shortageRatios.length - 1;
+  const xOf = (i: number) =>
+    lastIdx === 0 ? 0 : (i / lastIdx) * viewW;
+  const yOf = (r: number) =>
+    0.5 + Math.max(0, Math.min(1, r)) * (viewH - 1);
+  const points = shortageRatios
+    .map((r, i) => `${xOf(i).toFixed(2)},${yOf(r).toFixed(2)}`)
+    .join(' ');
+  const fillParts: string[] = ['M 0 0'];
+  for (let i = 0; i < shortageRatios.length; i++) {
+    fillParts.push(
+      `L ${xOf(i).toFixed(2)} ${yOf(shortageRatios[i]).toFixed(2)}`,
+    );
+  }
+  fillParts.push(`L ${viewW} 0`);
+  fillParts.push('Z');
+  return {
+    points,
+    fillPath: fillParts.join(' '),
+  };
+}
 
 const STATION_LABELS: Record<Station, string> = {
   'hand-packing': 'Hand packing',
@@ -205,24 +471,32 @@ const STATION_LABELS: Record<Station, string> = {
   bottlo: 'Bottlo',
 };
 
-/** Distinct colour for kitchen activities — pink/rose, separate from packaging stations. */
+/**
+ * Phase 4l.11: Kitchen ACTIVITIES (live Unleashed assemblies) — cyan.
+ * Chosen so it's visually orthogonal to every packaging station hue
+ * (amber/blue/violet/emerald) and the kitchen-required magenta. "Live"
+ * = already booked into Unleashed; operator should NOT need to act.
+ */
 const KITCHEN_COLOR: ChipColor = {
-  bg: '#fce7f3',
-  border: '#ec4899',
-  text: '#831843',
-  dot: '#ec4899',
+  bg: 'hsl(190, 70%, 90%)',
+  border: 'hsl(190, 85%, 38%)',
+  text: 'hsl(195, 90%, 20%)',
+  dot: 'hsl(190, 85%, 38%)',
 };
 
 /**
- * Kitchen-REQUIRED runs (derived shortfalls): orange. Distinct from
- * kitchen-scheduled (pink) so the operator can immediately see "this needs
- * to be added" vs "this is already on the books."
+ * Phase 4l.11: Kitchen-REQUIRED (planner-derived shortfalls) — deep
+ * indigo/navy. Stays in the blue family for visual harmony with the
+ * live-kitchen cyan (both = "kitchen domain") while sitting 50° apart
+ * in hue from the elephant packaging blue (h=215) so they don't merge
+ * at high saturation. Darker lightness than live kitchen so it still
+ * reads as "action needed" without breaking the blue palette.
  */
 const KITCHEN_REQUIRED_COLOR: ChipColor = {
-  bg: '#ffedd5',
-  border: '#f97316',
-  text: '#9a3412',
-  dot: '#f97316',
+  bg: 'hsl(235, 75%, 90%)',
+  border: 'hsl(240, 75%, 45%)',
+  text: 'hsl(240, 85%, 25%)',
+  dot: 'hsl(240, 75%, 45%)',
 };
 
 /** PO place-by chip — yellow/amber to read as "action needed". */
@@ -247,7 +521,7 @@ const PO_OVERDUE_COLOR: ChipColor = {
   dot: '#dc2626',
 };
 
-/** Pick the chip's colour scheme based on kind + station. */
+/** Pick the chip's colour scheme based on kind + station + profit heat. */
 function colorOf(activity: CalendarActivity): ChipColor {
   if (activity.kind === 'kitchen') return KITCHEN_COLOR;
   if (activity.kind === 'kitchen-required') return KITCHEN_REQUIRED_COLOR;
@@ -257,7 +531,25 @@ function colorOf(activity: CalendarActivity): ChipColor {
   if (activity.kind === 'po-receiving') {
     return activity.poInfo?.overdue ? PO_OVERDUE_COLOR : PO_RECEIVING_COLOR;
   }
-  return activity.station ? STATION_COLORS[activity.station] : KITCHEN_COLOR;
+  // Phase 4l.11: packaging chips use a profit-tier saturation on the
+  // fixed green hue. Top profit band lands on #00E676 exactly.
+  if (activity.station) {
+    // Total profit this chip produces = profit/item × units run. Captures
+    // both margin AND scale: a big run of a mid-margin SKU now reads
+    // more saturated than a tiny run of a high-margin one.
+    // Phase 4l.12 — distinguish missing profit data from zero profit.
+    // Missing data renders as a NEUTRAL grey-green (sat=8, lit=80) so
+    // it's visually distinct from the green profit gradient and
+    // doesn't blend with low-profit chips. Drawer/chip ? indicator
+    // tells the user to fill in `_profit-gaps-todo.tsv`.
+    if (activity.profitPerItem == null) {
+      return packagingChipColor(activity.station, 8, 80);
+    }
+    const chipProfit = activity.profitPerItem * activity.quantity;
+    const { sat, lit } = profitTierColor(chipProfit);
+    return packagingChipColor(activity.station, sat, lit);
+  }
+  return KITCHEN_COLOR;
 }
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -297,6 +589,82 @@ function groupByDate(activities: CalendarActivity[]): Map<string, CalendarActivi
     arr.push(a);
   }
   return out;
+}
+
+/**
+ * Write the demand-affecting subset of mutations to a cookie the server
+ * can read on the next render. Phase 4l.7 (dismissals + qty edits).
+ *
+ * Payload shape: `{ [stableId]: { d?: true, q?: number } }`. Compact keys
+ * to keep the cookie under the 4KB browser limit even with many mutations.
+ *
+ * The server uses this to:
+ *   - drop dismissed activities from the kitchen-run planner + raw-material
+ *     analyzer (cancelling a chip shrinks upstream demand)
+ *   - replace activity.quantity with `editedQuantity` (editing a chip's qty
+ *     resizes upstream POs and kitchen-required chips)
+ */
+const MUTATIONS_COOKIE_NAME = 'byron-mutations-v1';
+const MANUAL_ACTIVITIES_COOKIE_NAME = 'byron-manual-activities-v1';
+
+/** Phase 4l.8: write user-created manual activities to a cookie so the
+ *  server can inject them into `projection.activities` on next render. */
+function writeManualActivitiesCookie(activities: readonly ManualActivity[]): void {
+  if (typeof document === 'undefined') return;
+  const value = encodeURIComponent(JSON.stringify(activities));
+  document.cookie = `${MANUAL_ACTIVITIES_COOKIE_NAME}=${value};path=/;max-age=604800;SameSite=Lax`;
+}
+/**
+ * Maximum bytes for the encoded mutations cookie. Browsers cap individual
+ * cookies at ~4096 bytes; over-budget writes are silently dropped, which
+ * is how Phase 4l.10 surfaced the "cookie stays `{}` despite 71 mutations
+ * in state" bug. We budget 3800 to leave headroom for cookie key + attrs.
+ */
+const MUTATIONS_COOKIE_MAX_BYTES = 3800;
+
+function writeMutationsCookie(mutations: MutationsMap): void {
+  if (typeof document === 'undefined') return;
+  // Build candidate entries (filter to fields the server actually reads).
+  type Entry = { d?: true; q?: number; r?: string };
+  const candidates: Array<{ id: string; entry: Entry; updatedAt: string }> = [];
+  for (const [id, m] of Object.entries(mutations)) {
+    const entry: Entry = {};
+    if (m.dismissed) entry.d = true;
+    if (typeof m.editedQuantity === 'number' && Number.isFinite(m.editedQuantity)) {
+      entry.q = m.editedQuantity;
+    }
+    if (typeof m.rescheduledTo === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(m.rescheduledTo)) {
+      entry.r = m.rescheduledTo;
+    }
+    if (Object.keys(entry).length > 0) {
+      candidates.push({ id, entry, updatedAt: m.updatedAt ?? '' });
+    }
+  }
+  // Sort by updatedAt DESC so the most-recently-edited mutations win when
+  // we hit the size budget. Stable tie-break by id for determinism.
+  candidates.sort((a, b) => {
+    if (a.updatedAt !== b.updatedAt) return b.updatedAt.localeCompare(a.updatedAt);
+    return a.id.localeCompare(b.id);
+  });
+  // Greedily add candidates until adding the next would exceed the budget.
+  const payload: Record<string, Entry> = {};
+  let truncated = 0;
+  for (const c of candidates) {
+    const tentative = { ...payload, [c.id]: c.entry };
+    const encoded = encodeURIComponent(JSON.stringify(tentative));
+    if (encoded.length > MUTATIONS_COOKIE_MAX_BYTES) {
+      truncated = candidates.length - Object.keys(payload).length;
+      break;
+    }
+    payload[c.id] = c.entry;
+  }
+  if (truncated > 0) {
+    console.warn(
+      `[writeMutationsCookie] cookie size budget (${MUTATIONS_COOKIE_MAX_BYTES} bytes) exceeded — kept ${Object.keys(payload).length} most-recent mutations, dropped ${truncated} older. Use "Clear all" in the header to reset and start fresh.`,
+    );
+  }
+  const value = encodeURIComponent(JSON.stringify(payload));
+  document.cookie = `${MUTATIONS_COOKIE_NAME}=${value};path=/;max-age=604800;SameSite=Lax`;
 }
 
 /** Build a flat list of dates spanning N weeks from a Monday startDate. */
@@ -400,6 +768,8 @@ export function CalendarApp(props: CalendarAppProps) {
     kitchenRequiredCount,
     stationDailyMinutes,
     kitchenMinutesByProductCode,
+    dehydratorTotalTrays,
+    weeklyDemandByProduct,
     infeasibleProducts,
     routingDecisions,
     productOverrides,
@@ -408,7 +778,9 @@ export function CalendarApp(props: CalendarAppProps) {
     sohFetchedAt,
     availableWarehouses,
     eligibleWarehouses,
+    intermediateEligibleWarehouses,
     initialInventoryByProduct,
+    intermediateSohByCode,
     salesOrdersByProduct,
     committedByProduct,
     salesOrdersFetchedAt,
@@ -420,6 +792,11 @@ export function CalendarApp(props: CalendarAppProps) {
     globalDefaults,
     horizonOptions,
     consumesMap,
+    conflictInitialSohByCode,
+    consumesQtyMap,
+    yieldRateByCode,
+    changeoverMatrix,
+    planFromDate,
     summary,
   } = props;
   const [infeasibleOpen, setInfeasibleOpen] = useState(false);
@@ -498,6 +875,26 @@ export function CalendarApp(props: CalendarAppProps) {
     }
   }
 
+  // Purchase orders (Unleashed outstanding POs) refresh — Phase 4l.5.
+  const [refreshingPo, setRefreshingPo] = useState(false);
+  const [poRefreshError, setPoRefreshError] = useState<string | null>(null);
+  async function refreshPurchaseOrders() {
+    setRefreshingPo(true);
+    setPoRefreshError(null);
+    try {
+      const res = await fetch('/api/refresh-purchase-orders', { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail ?? data.error ?? `HTTP ${res.status}`);
+      }
+      router.refresh();
+    } catch (e) {
+      setPoRefreshError(e instanceof Error ? e.message : 'Refresh failed');
+    } finally {
+      setRefreshingPo(false);
+    }
+  }
+
   // Layer-toggle state: which packaging stations are visible. Default all on.
   const [visibleStations, setVisibleStations] = useState<Set<Station>>(
     () => new Set(STATIONS),
@@ -514,9 +911,76 @@ export function CalendarApp(props: CalendarAppProps) {
   // Purchasing chips (Phase 4m.2): place-by and arrive-by chips for raw
   // materials projected to run short. Default on so the user sees them.
   const [showPO, setShowPO] = useState(true);
+  // Sub-toggles under Purchasing (Phase 4l.8): three independent slices
+  // — place-by chips, receive-by chips, and urgent (overdue) chips. A PO
+  // chip is visible iff its master toggle is on AND at least one of its
+  // applicable sub-toggles is on. Urgent is an additional category that
+  // overlaps the place/receive split (the same overdue chip belongs to
+  // both its kind's slice and the urgent slice).
+  const [showPoPlaced, setShowPoPlaced] = useState(true);
+  const [showPoReceiving, setShowPoReceiving] = useState(true);
+  const [showPoUrgent, setShowPoUrgent] = useState(true);
 
   // Selected activity for the drawer.
   const [selected, setSelected] = useState<CalendarActivity | null>(null);
+
+  // Real today (client clock) — used by drag-guards and stale-reschedule
+  // prune. We keep this independent of `planFromDate` so that when the user
+  // is planning from a future anchor, chips can still be dragged backwards
+  // through the calendar at least as far as today (Phase 4l.8).
+  const realToday = useMemo(() => toLocalISODate(new Date()), []);
+  const clientToday = realToday;
+
+  // ─── Manual activities (Phase 4l.8) ────────────────────────
+  // User-created packaging chips, persisted in localStorage + synced to
+  // a server-readable cookie so the next render injects them into
+  // `projection.activities`. Added by dragging from the Infeasible
+  // products panel; removed via the mutations indicator.
+  const [manualActivities, setManualActivities] = useState<ManualActivity[]>([]);
+  useEffect(() => {
+    const hydrated = readManualActivitiesFromStorage();
+    setManualActivities(hydrated);
+    writeManualActivitiesCookie(hydrated);
+  }, []);
+  function persistManualActivities(next: ManualActivity[]) {
+    writeManualActivitiesToStorage(next);
+    writeManualActivitiesCookie(next);
+    return next;
+  }
+  function addManualActivity(input: Omit<ManualActivity, 'id'>) {
+    const id = `${input.productCode}|${input.date}|${Date.now()}`;
+    setManualActivities((curr) => persistManualActivities([...curr, { id, ...input }]));
+    setUnplaceableIds([]);
+  }
+  function removeManualActivity(id: string) {
+    setManualActivities((curr) => persistManualActivities(curr.filter((m) => m.id !== id)));
+    setUnplaceableIds([]);
+  }
+  // Auto-refresh when manual activities change so server re-injects.
+  const manualSignature = useMemo(
+    () => manualActivities.map((m) => `${m.id}@${m.date}×${m.quantity}@${m.station}`).sort().join('|'),
+    [manualActivities],
+  );
+  const lastManualSignature = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastManualSignature.current === null) {
+      lastManualSignature.current = manualSignature;
+      return;
+    }
+    if (lastManualSignature.current === manualSignature) return;
+    const t = setTimeout(() => {
+      lastManualSignature.current = manualSignature;
+      router.refresh();
+    }, 350);
+    return () => clearTimeout(t);
+  }, [manualSignature, router]);
+
+  // ─── Mutations indicator (Phase 4l.8) ──────────────────────
+  // Header dropdown showing every active mutation with per-entry Clear
+  // and Clear-all. Surfaces what would otherwise be invisible state
+  // (a reschedule whose chip ended up outside the current month view
+  // is the canonical motivating case).
+  const [mutationsOpen, setMutationsOpen] = useState(false);
 
   // ─── Mutations (dismiss) ─────────────────────────────────
   // Hydrated from localStorage on mount; written on every mutation.
@@ -524,17 +988,70 @@ export function CalendarApp(props: CalendarAppProps) {
   const [showDismissed, setShowDismissed] = useState(true);
 
   useEffect(() => {
-    setMutations(readMutationsFromStorage());
+    const hydrated = readMutationsFromStorage();
+    // Phase 4l.8: drop reschedules to dates that are now in the past.
+    // Drags performed in earlier sessions can leave behind zombie
+    // mutations targeting dates the calendar can no longer render.
+    const today = toLocalISODate(new Date());
+    const pruned = pruneStaleReschedules(hydrated, today);
+    setMutations(pruned);
+    // Sync localStorage + cookie only if we actually changed anything.
+    if (pruned !== hydrated) {
+      writeMutationsToStorage(pruned);
+    }
+    writeMutationsCookie(pruned);
   }, []);
+
+  // Auto-refresh the server payload when the demand-affecting subset of
+  // mutations changes (dismissals + qty edits), so the kitchen-run planner
+  // + raw-material analyzer reflow upstream demand without the user
+  // pressing Re-plan. Phase 4l.7. Debounced; reschedules and lead-time
+  // overrides are client-only and skipped here.
+  const reflowSignature = useMemo(() => {
+    const entries: string[] = [];
+    for (const [id, m] of Object.entries(mutations)) {
+      const parts: string[] = [];
+      if (m.dismissed) parts.push('d');
+      if (typeof m.editedQuantity === 'number' && Number.isFinite(m.editedQuantity)) {
+        parts.push(`q${m.editedQuantity}`);
+      }
+      if (typeof m.rescheduledTo === 'string') {
+        parts.push(`r${m.rescheduledTo}`);
+      }
+      if (parts.length > 0) entries.push(`${id}:${parts.join(',')}`);
+    }
+    entries.sort();
+    return entries.join('|');
+  }, [mutations]);
+  const lastReflowedSignature = useRef<string | null>(null);
+  useEffect(() => {
+    // Skip the first render — mutations hydrate async and we don't want an
+    // extra fetch on mount.
+    if (lastReflowedSignature.current === null) {
+      lastReflowedSignature.current = reflowSignature;
+      return;
+    }
+    if (lastReflowedSignature.current === reflowSignature) return;
+    const t = setTimeout(() => {
+      lastReflowedSignature.current = reflowSignature;
+      router.refresh();
+    }, 350);
+    return () => clearTimeout(t);
+  }, [reflowSignature, router]);
 
   // Unplaceable chips from the most-recent Resolve-all run. Cleared by any
   // subsequent mutation (the situation has changed; the user should re-run
   // resolve to get a fresh verdict). Phase 4l.4.
   const [unplaceableIds, setUnplaceableIds] = useState<string[]>([]);
 
-  // Mutation actions — every one writes through to localStorage immediately.
+  // Mutation actions — every one writes through to localStorage AND a
+  // server-readable cookie. The cookie ships dismissed stableIds (only
+  // the subset the server needs to reflow upstream demand) so the next
+  // server render can drop those activities from the kitchen-run planner
+  // and raw-material analyzer. Phase 4l.7.
   function persist(next: MutationsMap) {
     writeMutationsToStorage(next);
+    writeMutationsCookie(next);
     return next;
   }
   function dismiss(stableId: string) {
@@ -554,12 +1071,35 @@ export function CalendarApp(props: CalendarAppProps) {
     setUnplaceableIds([]);
   }
   function editQuantity(stableId: string, qty: number) {
-    setMutations((curr) => persist(applyEditQuantity(curr, stableId, qty)));
+    // Phase 4l.10: persist BEFORE setMutations so the cookie write
+    // happens synchronously, not deferred inside a React state updater.
+    // Then trigger a server re-render so the supply-cap pass and kitchen
+    // sizing re-derive against the new quantity. Without this, editing a
+    // packaging chip leaves the kitchen chip stale; editing a kitchen
+    // chip leaves downstream packaging un-capped.
+    const next = applyEditQuantity(mutations, stableId, qty);
+    persist(next);
+    setMutations(next);
     setUnplaceableIds([]);
+    // Diagnostic: log to browser console so we can verify the click reached
+    // here, the next map has the edit, and the cookie write didn't throw.
+    // Remove once the bidirectional-link bug is resolved.
+    console.log('[editQuantity] called', {
+      stableId,
+      qty,
+      mutationsBefore: Object.keys(mutations).length,
+      mutationsAfter: Object.keys(next).length,
+      cookieAfter:
+        typeof document !== 'undefined' ? document.cookie : '(no document)',
+    });
+    router.refresh();
   }
   function clearEdit(stableId: string) {
-    setMutations((curr) => persist(applyClearEdit(curr, stableId)));
+    const next = applyClearEdit(mutations, stableId);
+    persist(next);
+    setMutations(next);
     setUnplaceableIds([]);
+    router.refresh();
   }
   /** Edit lead time on a PO. Always passed the place-by chip's stableId. */
   function editLeadTime(placeByStableId: string, days: number) {
@@ -570,8 +1110,20 @@ export function CalendarApp(props: CalendarAppProps) {
     setMutations((curr) => persist(applyClearLeadTime(curr, placeByStableId)));
     setUnplaceableIds([]);
   }
+  function editStation(stableId: string, newStation: Station) {
+    setMutations((curr) => persist(applyEditStation(curr, stableId, newStation)));
+    setUnplaceableIds([]);
+  }
+  function clearStation(stableId: string) {
+    setMutations((curr) => persist(applyClearStation(curr, stableId)));
+    setUnplaceableIds([]);
+  }
   function clearStaleMutations() {
     setMutations((curr) => persist(clearStale(curr, validStableIds)));
+    setUnplaceableIds([]);
+  }
+  function clearAllMutations() {
+    setMutations(persist({}));
     setUnplaceableIds([]);
   }
 
@@ -602,6 +1154,10 @@ export function CalendarApp(props: CalendarAppProps) {
       // Pull-supplier floor: never pull a chip earlier than the planning
       // horizon's first day. (For 'push' this argument is ignored.)
       earliestDate: horizon.startWeek,
+      // SOH-aware detection so resolver and UI agree on what's a conflict.
+      initialSohByCode: conflictInitialSohByCode,
+      consumesQtyMap,
+      supplyQtyByActivity,
     });
     setMutations(persist(result.mutations));
     setUnplaceableIds(result.unplaceableStableIds);
@@ -650,9 +1206,61 @@ export function CalendarApp(props: CalendarAppProps) {
   //
   // The projection logic itself lives in `calendar-mutations` so the engine
   // resolver can use the same code path; here we just memoise the result.
+  //
+  // Phase 4l.7 also corrects per-chip changeoverMinutes after mutations.
+  // The planner-assigned values are based on the planner's original
+  // sequence; rescheduling chips around can make them stale. We re-run
+  // the changeover engine over each (date, station) sequence in its
+  // current mutated order — handling same-product (→ 0), different-
+  // product same-extendedFamily (→ extendedFamily / familySameSize /
+  // sizeSwitch), and full-clean cases via the same matrix the planner used.
   const mutatedActivities = useMemo(() => {
-    return applyMutationsToActivities(activitiesWithPo, mutations);
-  }, [activitiesWithPo, mutations]);
+    const applied = applyMutationsToActivities(activitiesWithPo, mutations);
+    type Bucket = CalendarActivity[];
+    const buckets = new Map<string, Bucket>();
+    for (const a of applied) {
+      if (a.kind !== 'packaging' || !a.station) continue;
+      const key = `${a.date}|${a.station}`;
+      let arr = buckets.get(key);
+      if (!arr) { arr = []; buckets.set(key, arr); }
+      arr.push(a);
+    }
+    const overrideByStableId = new Map<string, number>();
+    const toChangeoverProduct = (a: CalendarActivity) => ({
+      productCode: a.productCode,
+      family: a.family,
+      // `costToSwitch` only reads these for the equality / null-fallback
+      // branches; the type system narrows further but the values come
+      // from the planner's projection so they match `ProductMeta` shape.
+      extendedFamily: a.extendedFamily as ExtendedFamily | null,
+      packageSize: (a.packageSize ?? 'OTHER') as PackageSize,
+    });
+    for (const arr of buckets.values()) {
+      arr.sort((a, b) => a.orderInWeek - b.orderInWeek);
+      let prev: CalendarActivity | null = null;
+      for (const curr of arr) {
+        if (curr.station) {
+          const recomputed = costToSwitch(
+            prev ? toChangeoverProduct(prev) : null,
+            toChangeoverProduct(curr),
+            curr.station,
+            changeoverMatrix,
+          );
+          if (recomputed !== curr.changeoverMinutes) {
+            overrideByStableId.set(curr.stableId, recomputed);
+          }
+        }
+        prev = curr;
+      }
+    }
+    if (overrideByStableId.size === 0) return applied;
+    return applied.map((a) => {
+      const o = overrideByStableId.get(a.stableId);
+      return o !== undefined && o !== a.changeoverMinutes
+        ? { ...a, changeoverMinutes: o }
+        : a;
+    });
+  }, [activitiesWithPo, mutations, changeoverMatrix]);
 
   // Number of dismissed activities present in the current plan.
   const dismissedCount = useMemo(
@@ -660,8 +1268,143 @@ export function CalendarApp(props: CalendarAppProps) {
     [activities, mutations],
   );
 
+  // Counts for the PO sub-toggles (Phase 4l.8). Drawn from activitiesWithPo
+  // so synthetic + Unleashed po-receiving chips both contribute.
+  const poCounts = useMemo(() => {
+    let placed = 0;
+    let receiving = 0;
+    let urgent = 0;
+    for (const a of activitiesWithPo) {
+      if (isDismissed(mutations, a.stableId)) continue;
+      if (a.kind === 'po-placed') placed += 1;
+      else if (a.kind === 'po-receiving') receiving += 1;
+      else continue;
+      if (a.poInfo?.overdue) urgent += 1;
+    }
+    return { placed, receiving, urgent };
+  }, [activitiesWithPo, mutations]);
+
+  // Mutations indicator entries (Phase 4l.8). One row per kind of change
+  // on each stableId, so a single chip with both a reschedule and a qty edit
+  // gets two rows. Each row knows how to clear just its own change.
+  interface MutationEntry {
+    key: string;
+    stableId: string;
+    productCode: string;
+    productName: string;
+    description: string;
+    onClear: () => void;
+  }
+  const mutationEntries = useMemo<MutationEntry[]>(() => {
+    const byStableId = new Map<string, CalendarActivity>();
+    for (const a of activitiesWithPo) byStableId.set(a.stableId, a);
+    const out: MutationEntry[] = [];
+    for (const [stableId, m] of Object.entries(mutations)) {
+      const ref = byStableId.get(stableId);
+      const productCode = ref?.productCode ?? stableId.split('|')[1] ?? stableId;
+      const productName = ref?.productName ?? '';
+      if (m.dismissed) {
+        out.push({
+          key: `${stableId}|dismiss`,
+          stableId,
+          productCode,
+          productName,
+          description: 'Dismissed',
+          onClear: () => undismiss(stableId),
+        });
+      }
+      if (typeof m.rescheduledTo === 'string') {
+        const orig = ref?.date ? fmtDate(ref.date) : '?';
+        out.push({
+          key: `${stableId}|reschedule`,
+          stableId,
+          productCode,
+          productName,
+          description: `Rescheduled to ${fmtDate(m.rescheduledTo)} (was ${orig})`,
+          onClear: () => clearReschedule(stableId),
+        });
+      }
+      if (typeof m.editedQuantity === 'number') {
+        const orig = ref?.quantity ?? '?';
+        out.push({
+          key: `${stableId}|qty`,
+          stableId,
+          productCode,
+          productName,
+          description: `Qty → ${m.editedQuantity} (was ${orig})`,
+          onClear: () => clearEdit(stableId),
+        });
+      }
+      if (typeof m.editedLeadTimeDays === 'number') {
+        out.push({
+          key: `${stableId}|leadtime`,
+          stableId,
+          productCode,
+          productName,
+          description: `Lead time → ${m.editedLeadTimeDays} days`,
+          onClear: () => clearLeadTime(stableId),
+        });
+      }
+      if (typeof m.editedStation === 'string' && m.editedStation) {
+        const wasStation = ref?.station ? STATION_LABELS[ref.station as Station] : '?';
+        const nowLabel = STATION_LABELS[m.editedStation as Station] ?? m.editedStation;
+        out.push({
+          key: `${stableId}|station`,
+          stableId,
+          productCode,
+          productName,
+          description: `Station → ${nowLabel} (was ${wasStation})`,
+          onClear: () => clearStation(stableId),
+        });
+      }
+    }
+    // Phase 4l.8: manual activities (user-created via drag from Infeasible).
+    for (const m of manualActivities) {
+      out.push({
+        key: `manual-${m.id}`,
+        stableId: `manual|${m.id}`,
+        productCode: m.productCode,
+        productName: m.productName,
+        description: `Manually scheduled ×${Math.round(m.quantity)} on ${fmtDate(m.date)} (${STATION_LABELS[m.station] ?? m.station})`,
+        onClear: () => removeManualActivity(m.id),
+      });
+    }
+    return out;
+  }, [mutations, activitiesWithPo, manualActivities]);
+
+  // Close the mutations dropdown on outside click.
+  const mutationsDropdownRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!mutationsOpen) return;
+    function onDocClick(e: MouseEvent) {
+      const el = mutationsDropdownRef.current;
+      if (el && !el.contains(e.target as Node)) setMutationsOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [mutationsOpen]);
+
   // Schedule conflicts: re-detect on every mutation change so dragging a
   // chip immediately surfaces (or clears) downstream dependency breaks.
+  // Phase 4l.3: SOH-aware. The detector walks a per-ingredient SOH+supply
+  // timeline so that consumers covered by existing stock aren't flagged just
+  // because some later PO arrives late.
+  const supplyQtyByActivity = useMemo<Record<string, number>>(() => {
+    const out: Record<string, number> = {};
+    for (const a of mutatedActivities) {
+      // Yield applies to anything the kitchen produces, whether system-planned
+      // (kitchen-required) or already entered in Unleashed (kitchen).
+      if (a.kind !== 'kitchen-required' && a.kind !== 'kitchen') continue;
+      const yieldRate = yieldRateByCode[a.productCode];
+      if (typeof yieldRate === 'number' && yieldRate > 0 && yieldRate !== 1) {
+        out[a.stableId] = a.quantity * yieldRate;
+      }
+      // No entry → detector defaults to a.quantity, which is correct when
+      // yield is 1 or unknown. PO receipts likewise default to a.quantity.
+    }
+    return out;
+  }, [mutatedActivities, yieldRateByCode]);
+
   const conflicts = useMemo<ScheduleConflict[]>(() => {
     const dismissedSet = new Set<string>();
     for (const a of activities) {
@@ -671,8 +1414,19 @@ export function CalendarApp(props: CalendarAppProps) {
       activities: mutatedActivities,
       consumesMap,
       dismissedStableIds: dismissedSet,
+      initialSohByCode: conflictInitialSohByCode,
+      consumesQtyMap,
+      supplyQtyByActivity,
     });
-  }, [mutatedActivities, consumesMap, mutations, activities]);
+  }, [
+    mutatedActivities,
+    consumesMap,
+    mutations,
+    activities,
+    conflictInitialSohByCode,
+    consumesQtyMap,
+    supplyQtyByActivity,
+  ]);
 
   // Index conflicts by stableId for fast chip-render lookup. A consumer can
   // have multiple conflicts (one per missing ingredient).
@@ -689,74 +1443,167 @@ export function CalendarApp(props: CalendarAppProps) {
     return out;
   }, [conflicts]);
 
-  // ─── Hover-arrow relationship map (Phase 4l.5) ──────────────
-  // For every activity, what other activities supply or consume it. Used by
-  // the calendar to draw dependency arrows when the user hovers a chip.
+  // ─── FIFO supply-allocation for arrow drawing (Phase 4l.6) ──
+  // Replaces the old "every supplier finishing before me is my supplier"
+  // approach (which over-drew arrows) with a per-ingredient FIFO walk.
   //
-  // Two filters apply, both of which match the conflict-detector semantics
-  // so the arrows match what the planner considers a "real" relationship:
-  //   1. Dismissed chips don't appear (dropped on either side).
-  //   2. **Temporal feasibility**: a supplier S is only a real supplier of
-  //      consumer C when S.finishDate < C.date (the 1-day buffer rule).
-  //      Without this filter we'd draw arrows from kitchen runs to packaging
-  //      chips that are actually too early to use them — e.g. a 5/15 IMK run
-  //      "supplying" a 5/8 packaging chip purely because they share the
-  //      product-code relationship in the BOM.
-  //
-  // The filter is applied on each (consumer, supplier) PAIR, not per chip,
-  // so the same supplier may appear for some consumers and not others.
+  // Algorithm: for each ingredient code, walk consumers in date order and
+  // satisfy each consumer's demand from:
+  //   1. initial SOH (no arrow — SOH isn't a chip)
+  //   2. scheduled supplier chips in finish-date order, only those whose
+  //      finish strictly precedes the consumer's date (1-day buffer)
+  // Each consumer only sees arrows from the supplier(s) that actually fed it.
+  // If a consumer goes partly unfilled (SOH+supply < need), the conflict
+  // detector flags it; we still record the suppliers that DID feed it.
   type RelKind = 'supplier' | 'consumer';
-  interface RelEntry { stableId: string; kind: RelKind; }
+  interface RelEntry {
+    stableId: string;
+    kind: RelKind;
+    /** Phase 4l.11: phantom rel = consumer was starved (got 0 supply at
+     * its scheduled date) but COULD have pulled from this supplier if
+     * earlier consumers hadn't drained the pool first. Renderer draws
+     * these dashed-red so the visual story stays honest about the
+     * supply shortage rather than leaving the chip silently arrowless. */
+    phantom?: boolean;
+  }
   const relatedByStableId = useMemo<Map<string, RelEntry[]>>(() => {
-    // Group non-dismissed activities by productCode for O(1) supplier lookup.
-    const byProductCode = new Map<string, CalendarActivity[]>();
-    for (const a of mutatedActivities) {
-      if (isDismissed(mutations, a.stableId)) continue;
-      let arr = byProductCode.get(a.productCode);
-      if (!arr) { arr = []; byProductCode.set(a.productCode, arr); }
-      arr.push(a);
-    }
-    // Build the inverse consumesMap: ingredient → list of parent codes that
-    // consume it. Lets us find consumers without scanning every chip.
-    const consumedBy = new Map<string, string[]>();
-    for (const [parent, ingredients] of Object.entries(consumesMap)) {
-      for (const ing of ingredients) {
-        let arr = consumedBy.get(ing);
-        if (!arr) { arr = []; consumedBy.set(ing, arr); }
-        arr.push(parent);
-      }
-    }
-    /** Mirrors `finishDateOf` in schedule-conflicts.ts. */
     const finishOf = (a: CalendarActivity) => a.finishDate ?? a.date;
+    const isConsumerKind = (k: CalendarActivity['kind']) =>
+      k === 'packaging' || k === 'kitchen-required' || k === 'kitchen';
+    const qtyPerUnit = (consumerCode: string, ingredient: string) =>
+      consumesQtyMap[consumerCode]?.[ingredient] ?? 1;
+    const supplyQty = (a: CalendarActivity) =>
+      supplyQtyByActivity[a.stableId] ?? a.quantity ?? 0;
+
+    // Set of ingredients that appear on the right-hand side of consumesMap.
+    const ingredients = new Set<string>();
+    for (const codes of Object.values(consumesMap)) {
+      for (const c of codes) ingredients.add(c);
+    }
+
+    // Per-ingredient FIFO walk → list of (supplierStableId, consumerStableId)
+    // allocations. `phantom: true` = consumer was starved (got no real
+    // supply at its date); the arrow is drawn dashed-red as a visual hint
+    // that there's a supply problem.
+    const allocations: Array<{ supplier: string; consumer: string; phantom: boolean }> = [];
+    for (const ing of ingredients) {
+      const consumers: CalendarActivity[] = [];
+      const suppliers: CalendarActivity[] = [];
+      for (const a of mutatedActivities) {
+        if (isDismissed(mutations, a.stableId)) continue;
+        if (isConsumerKind(a.kind) && (consumesMap[a.productCode] ?? []).includes(ing)) {
+          consumers.push(a);
+        }
+        if (a.kind !== 'po-placed' && a.productCode === ing) {
+          suppliers.push(a);
+        }
+      }
+      if (consumers.length === 0) continue;
+      // Phase 4l.11 — profit-first tiebreaker on same-date consumers.
+      // Without this, two consumers sharing a date are processed in
+      // stable-array-order, which gives one consumer all the supply and
+      // starves the other deterministically but arbitrarily. Now the
+      // higher-profit-per-unit consumer wins ties, mirroring the supply-
+      // cap pass (Phase 4l.9). Null profit ranks last.
+      consumers.sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        const pa = a.profitPerItem ?? 0;
+        const pb = b.profitPerItem ?? 0;
+        return pb - pa;
+      });
+      suppliers.sort((a, b) => finishOf(a).localeCompare(finishOf(b)));
+
+      const supplierRemaining = new Map<string, number>();
+      for (const s of suppliers) supplierRemaining.set(s.stableId, supplyQty(s));
+      let sohRemaining = conflictInitialSohByCode[ing] ?? 0;
+
+      for (const c of consumers) {
+        let need = qtyPerUnit(c.productCode, ing) * c.quantity;
+        if (need <= 0) continue;
+        const initialNeed = need;
+        // Pull from initial SOH first — no arrow (SOH isn't a chip).
+        if (sohRemaining > 0) {
+          const drawn = Math.min(need, sohRemaining);
+          sohRemaining -= drawn;
+          need -= drawn;
+        }
+        let realAllocations = 0;
+        if (need > 0) {
+          // Pull from scheduled suppliers in FIFO order.
+          for (const s of suppliers) {
+            if (need <= 0) break;
+            if (finishOf(s) >= c.date) break; // remainder are too late
+            const rem = supplierRemaining.get(s.stableId) ?? 0;
+            if (rem <= 0) continue;
+            const drawn = Math.min(need, rem);
+            supplierRemaining.set(s.stableId, rem - drawn);
+            need -= drawn;
+            allocations.push({
+              supplier: s.stableId,
+              consumer: c.stableId,
+              phantom: false,
+            });
+            realAllocations += 1;
+          }
+        }
+        // Phase 4l.11 — phantom arrow for starved consumers. If we drew
+        // ZERO real arrows (no SOH allocation either, since SOH doesn't
+        // produce an arrow), the chip would silently appear orphan on
+        // the calendar. Emit a phantom link to the supplier that WOULD
+        // have fed this consumer if earlier ones hadn't drained the pool:
+        // the latest-finishing valid supplier (most recent, highest
+        // information density for the user). Dashed-red on the canvas.
+        if (
+          realAllocations === 0 &&
+          initialNeed > sohRemaining + 0 && // not satisfied by SOH alone
+          need > 0
+        ) {
+          // Find the most-recent supplier that still finishes before us
+          // (= last valid candidate in the FIFO walk).
+          let phantomSupplier: CalendarActivity | null = null;
+          for (const s of suppliers) {
+            if (finishOf(s) < c.date) phantomSupplier = s;
+            else break;
+          }
+          if (phantomSupplier) {
+            allocations.push({
+              supplier: phantomSupplier.stableId,
+              consumer: c.stableId,
+              phantom: true,
+            });
+          }
+        }
+      }
+    }
+
+    // Build bidirectional map, deduped (same pair can show up across
+    // multiple ingredients when a product feeds via several pathways).
+    // A real (non-phantom) allocation overrides a phantom one with the
+    // same (from, to, kind) pair — phantom is the fallback for starved
+    // consumers, real wins when both exist.
     const out = new Map<string, RelEntry[]>();
-    for (const a of mutatedActivities) {
-      if (isDismissed(mutations, a.stableId)) continue;
-      const rels: RelEntry[] = [];
-      // Suppliers — chips whose productCode is one of `a`'s ingredients
-      // AND whose finishDate strictly precedes `a`'s date (1-day buffer).
-      for (const ing of consumesMap[a.productCode] ?? []) {
-        for (const s of byProductCode.get(ing) ?? []) {
-          if (s.stableId === a.stableId) continue;
-          if (finishOf(s) < a.date) {
-            rels.push({ stableId: s.stableId, kind: 'supplier' });
-          }
-        }
+    const addRel = (
+      from: string,
+      to: string,
+      kind: RelKind,
+      phantom: boolean,
+    ) => {
+      let arr = out.get(from);
+      if (!arr) { arr = []; out.set(from, arr); }
+      const existing = arr.find((r) => r.stableId === to && r.kind === kind);
+      if (existing) {
+        // Upgrade phantom → real if a real allocation comes through later.
+        if (existing.phantom && !phantom) existing.phantom = false;
+        return;
       }
-      // Consumers — chips whose product consumes `a.productCode` AND whose
-      // date is strictly AFTER `a`'s finish.
-      const aFinish = finishOf(a);
-      for (const parent of consumedBy.get(a.productCode) ?? []) {
-        for (const c of byProductCode.get(parent) ?? []) {
-          if (c.stableId === a.stableId) continue;
-          if (aFinish < c.date) {
-            rels.push({ stableId: c.stableId, kind: 'consumer' });
-          }
-        }
-      }
-      if (rels.length > 0) out.set(a.stableId, rels);
+      arr.push({ stableId: to, kind, phantom });
+    };
+    for (const a of allocations) {
+      addRel(a.consumer, a.supplier, 'supplier', a.phantom);
+      addRel(a.supplier, a.consumer, 'consumer', a.phantom);
     }
     return out;
-  }, [mutatedActivities, mutations, consumesMap]);
+  }, [mutatedActivities, mutations, consumesMap, consumesQtyMap, supplyQtyByActivity, conflictInitialSohByCode]);
 
   // Currently-hovered chip — drives arrow drawing. null = no arrows.
   const [hoveredStableId, setHoveredStableId] = useState<string | null>(null);
@@ -777,11 +1624,35 @@ export function CalendarApp(props: CalendarAppProps) {
       if (a.kind === 'packaging' && !showPackaging) return false;
       if (a.kind === 'kitchen' && (!showKitchen || !showKitchenScheduled)) return false;
       if (a.kind === 'kitchen-required' && (!showKitchen || !showKitchenRequired)) return false;
-      // PO toggle: hides BOTH placed and receiving chips together.
-      if ((a.kind === 'po-placed' || a.kind === 'po-receiving') && !showPO) return false;
+      // PO master + sub-toggles (Phase 4l.8). A chip is visible iff:
+      //   1. master `showPO` is on
+      //   2. at least one of its applicable sub-toggles is on
+      //      — `showPoPlaced` if kind=po-placed
+      //      — `showPoReceiving` if kind=po-receiving
+      //      — `showPoUrgent` if poInfo.overdue (additional overlay)
+      if (a.kind === 'po-placed' || a.kind === 'po-receiving') {
+        if (!showPO) return false;
+        const isUrgent = a.poInfo?.overdue === true;
+        const matchesKind =
+          (a.kind === 'po-placed' && showPoPlaced) ||
+          (a.kind === 'po-receiving' && showPoReceiving);
+        const matchesUrgent = isUrgent && showPoUrgent;
+        if (!matchesKind && !matchesUrgent) return false;
+      }
       // Per-station toggle within packaging
       if (a.kind === 'packaging' && a.station && !visibleStations.has(a.station)) return false;
       if (!showDismissed && isDismissed(mutations, a.stableId)) return false;
+      // Phase 4l.10: a packaging chip capped to zero by upstream supply is
+      // treated functionally like dismissed — hidden behind the "Show
+      // dismissed" toggle so the operator can see what got bumped.
+      if (
+        !showDismissed &&
+        a.kind === 'packaging' &&
+        a.supplyCappedFrom !== undefined &&
+        a.quantity <= 0
+      ) {
+        return false;
+      }
       return true;
     });
   }, [
@@ -790,15 +1661,346 @@ export function CalendarApp(props: CalendarAppProps) {
     showPackaging,
     showKitchen,
     showKitchenScheduled,
+    showPoPlaced,
+    showPoReceiving,
+    showPoUrgent,
     showKitchenRequired,
     showPO,
     mutations,
     showDismissed,
   ]);
-  const activitiesByDate = useMemo(
-    () => groupByDate(visibleActivities),
-    [visibleActivities],
-  );
+  const activitiesByDate = useMemo(() => {
+    const grouped = groupByDate(visibleActivities);
+    // Phase 4l.11/4l.12 — sort each day's chips into three layers
+    // (packaging → kitchen → po) and then by total chip profit
+    // (profitPerItem × quantity) descending within each layer.
+    //
+    // 4l.12: distinguish "missing profit data" from "zero profit".
+    // Previously both treated `profitPerItem ?? 0` → zero → sunk to
+    // the bottom of the layer. Now missing-data chips sit ABOVE zero
+    // chips (they might be high-value but we don't know) and BELOW
+    // chips with known positive profit. Within the missing-data tier
+    // we use the global median chip profit as a heuristic position so
+    // a 1000-unit run isn't ranked next to a 50-unit one. Tiebreak by
+    // productCode for determinism.
+    const layerOf = (a: CalendarActivity): number => {
+      if (a.kind === 'packaging') return 0;
+      if (a.kind === 'kitchen' || a.kind === 'kitchen-required') return 1;
+      return 2; // po-placed, po-receiving
+    };
+    // Compute a median profit-per-item across packaging chips with
+    // known profit so we can place missing-data chips at a reasonable
+    // tier within their layer.
+    const knownPpi: number[] = [];
+    for (const list of grouped.values()) {
+      for (const a of list) {
+        if (a.profitPerItem != null && Number.isFinite(a.profitPerItem) && a.profitPerItem > 0) {
+          knownPpi.push(a.profitPerItem);
+        }
+      }
+    }
+    knownPpi.sort((x, y) => x - y);
+    const medianPpi =
+      knownPpi.length > 0 ? knownPpi[Math.floor(knownPpi.length / 2)] : 0;
+    const chipSortValue = (a: CalendarActivity): number => {
+      if (a.profitPerItem != null && Number.isFinite(a.profitPerItem)) {
+        // Known data — including zero/negative (real claim).
+        return a.profitPerItem * a.quantity;
+      }
+      // Missing data — assume median profit-per-item but penalise
+      // slightly so known-positive chips outrank unknown ones at
+      // similar scale.
+      return medianPpi * a.quantity * 0.9;
+    };
+    for (const list of grouped.values()) {
+      list.sort((a, b) => {
+        const la = layerOf(a);
+        const lb = layerOf(b);
+        if (la !== lb) return la - lb;
+        const av = chipSortValue(a);
+        const bv = chipSortValue(b);
+        if (bv !== av) return bv - av;
+        return a.productCode.localeCompare(b.productCode);
+      });
+    }
+    return grouped;
+  }, [visibleActivities]);
+
+  // ─── Phase 4l.11: per-product inventory timeline ───────────
+  // Walk each product's inventory day-by-day across the horizon.
+  // Drives the SVG sparkline overlay on every chip kind (packaging,
+  // kitchen, kitchen-required, po-placed, po-receiving).
+  //
+  // Inventory model per day:
+  //   inv[day] = inv[day-1]
+  //              + supply events landing on `day` (packaging output,
+  //                kitchen output, PO arrivals)
+  //              − daily demand for this product, which is the sum of:
+  //                  • forecast demand spread over 7 (packaging FGs)
+  //                  • BOM-driven demand: any consumer chip on `day`
+  //                    contributes consumer.qty × bom_ratio
+  // Floored at 0 (negative = unmet demand → conflict-detector territory).
+  //
+  // Initial SOH: prefers `initialInventoryByProduct` (= what the planner
+  // used for FGs). Falls back to `sohByProductCode` summed across all
+  // warehouses for intermediates / raw materials.
+  const inventoryTimelineByProduct = useMemo(() => {
+    const out = new Map<
+      string,
+      {
+        byDate: Map<string, number>;
+        shortageByDate: Map<string, number>;
+        /** Phase 4l.12: per-day target SOH floor (= SOH_FLOOR_DAYS of
+         *  forward demand at that day's local demand rate). Used to draw
+         *  a dashed reference line on each chip's inventory sparkline. */
+        floorByDate: Map<string, number>;
+        peak: number;
+        peakShortage: number;
+      }
+    >();
+    const horizonStart = horizon.startWeek;
+    const horizonDays = horizon.weeks * 7;
+    // Supply events: packaging output, kitchen output, PO arrivals.
+    const productionByCodeDate = new Map<string, Map<string, number>>();
+    // BOM-driven consumer demand: per consumer chip, for each ingredient,
+    // add (consumer.qty × ratio) to that ingredient on the consumer's date.
+    const consumerDemandByCodeDate = new Map<string, Map<string, number>>();
+    for (const a of mutatedActivities) {
+      if (isDismissed(mutations, a.stableId)) continue;
+      // Supply contributions
+      if (
+        a.kind === 'packaging' ||
+        a.kind === 'kitchen' ||
+        a.kind === 'kitchen-required' ||
+        a.kind === 'po-receiving'
+      ) {
+        let m = productionByCodeDate.get(a.productCode);
+        if (!m) {
+          m = new Map();
+          productionByCodeDate.set(a.productCode, m);
+        }
+        m.set(a.date, (m.get(a.date) ?? 0) + a.quantity);
+      }
+      // Demand contributions (consumer pulls from its ingredients)
+      if (a.kind === 'packaging' || a.kind === 'kitchen-required') {
+        const consumes = consumesQtyMap[a.productCode];
+        if (consumes) {
+          for (const [ingredient, ratio] of Object.entries(consumes)) {
+            const amount = a.quantity * ratio;
+            if (amount <= 0) continue;
+            let m = consumerDemandByCodeDate.get(ingredient);
+            if (!m) {
+              m = new Map();
+              consumerDemandByCodeDate.set(ingredient, m);
+            }
+            m.set(a.date, (m.get(a.date) ?? 0) + amount);
+          }
+        }
+      }
+    }
+    // Every code that appears in forecast, production, or BOM demand.
+    const allCodes = new Set<string>([
+      ...Object.keys(weeklyDemandByProduct),
+      ...productionByCodeDate.keys(),
+      ...consumerDemandByCodeDate.keys(),
+    ]);
+    const startDate = fromISO(horizonStart);
+    for (const code of allCodes) {
+      // Daily demand = forecast (per 7-day week) + BOM-driven consumer demand.
+      const dailyDemand = new Map<string, number>();
+      for (const w of weeklyDemandByProduct[code] ?? []) {
+        const wDate = fromISO(w.weekStart);
+        const perDay = w.quantity / 7;
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(wDate);
+          d.setDate(wDate.getDate() + i);
+          const iso = toISO(d);
+          dailyDemand.set(iso, (dailyDemand.get(iso) ?? 0) + perDay);
+        }
+      }
+      const consumerDemand = consumerDemandByCodeDate.get(code);
+      if (consumerDemand) {
+        for (const [date, qty] of consumerDemand.entries()) {
+          dailyDemand.set(date, (dailyDemand.get(date) ?? 0) + qty);
+        }
+      }
+      const productionByDate = productionByCodeDate.get(code) ?? new Map();
+      // Initial SOH: prefer planner's value, fall back to summed warehouse SOH.
+      let initial = initialInventoryByProduct[code] ?? 0;
+      if (initial === 0 && sohByProductCode[code]) {
+        for (const qty of Object.values(sohByProductCode[code])) {
+          initial += qty;
+        }
+      }
+      let inv = initial;
+      let peak = inv;
+      let peakShortage = 0;
+      const byDate = new Map<string, number>();
+      const shortageByDate = new Map<string, number>();
+      // Phase 4l.12: floor target per day = `SOH_FLOOR_DAYS` × daily
+      // demand rate on that day. Mirrors the DP's per-week floor target
+      // but at daily granularity. Falls back to 0 on days with no
+      // demand data.
+      const floorByDate = new Map<string, number>();
+      const cursor = new Date(startDate);
+      for (let i = 0; i < horizonDays; i++) {
+        const iso = toISO(cursor);
+        inv += productionByDate.get(iso) ?? 0;
+        if (inv > peak) peak = inv;
+        inv -= dailyDemand.get(iso) ?? 0;
+        if (inv >= 0) {
+          byDate.set(iso, inv);
+          shortageByDate.set(iso, 0);
+        } else {
+          // Demand exceeded supply on this day. Carry the deficit forward
+          // (= a real backlog: future supply must pay down the debt before
+          // building positive inventory again). The inverted sparkline
+          // shows the magnitude of this debt over time.
+          const shortage = -inv;
+          byDate.set(iso, 0);
+          shortageByDate.set(iso, shortage);
+          if (shortage > peakShortage) peakShortage = shortage;
+        }
+        const dailyRate = dailyDemand.get(iso) ?? 0;
+        floorByDate.set(iso, dailyRate * SOH_FLOOR_DAYS);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      if (peak > 0 || peakShortage > 0) {
+        out.set(code, { byDate, shortageByDate, floorByDate, peak, peakShortage });
+      }
+    }
+    return out;
+  }, [
+    mutatedActivities,
+    mutations,
+    weeklyDemandByProduct,
+    initialInventoryByProduct,
+    sohByProductCode,
+    consumesQtyMap,
+    horizon,
+  ]);
+
+  // ─── Phase 4l.11 — per-chip availability sample arrays ─────
+  // For each packaging chip, build a daily inventory-ratio array
+  // spanning horizon start → horizon end. The chip's BG renders as a
+  // multi-stop gradient using these samples — one stop per day. Sharp
+  // inventory transitions (batch landings) appear as sharp colour
+  // steps; gradual drain days fade smoothly. Same product → same
+  // gradient (the inventory journey is shared); the chip's calendar
+  // position tells you WHICH batch within the journey.
+  //
+  // Index 0 = horizon start SOH ratio. Each subsequent index = next day
+  // end-of-day inventory ÷ peak. Floor of 0 → pale; peak → vivid.
+  const chipAvailabilityByStableId = useMemo(() => {
+    const out = new Map<
+      string,
+      {
+        ratios: number[];
+        shortageRatios: number[] | null;
+        floorRatios: number[] | null;
+        chipDateIndex: number;
+      }
+    >();
+    const horizonStart = fromISO(horizon.startWeek);
+    const horizonDays = horizon.weeks * 7;
+    // Pre-compute per-product ratio arrays once. Inventory normalised to
+    // peak; shortage normalised independently to peakShortage so the
+    // inverted line shows the relative severity of the deficit period.
+    // Phase 4l.12: floor normalised to the SAME peak as inventory so the
+    // reference line sits at its true relative height on the sparkline.
+    const ratiosByProduct = new Map<
+      string,
+      { ratios: number[]; shortageRatios: number[] | null; floorRatios: number[] | null }
+    >();
+    for (const [code, timeline] of inventoryTimelineByProduct.entries()) {
+      const peak = timeline.peak;
+      const peakShortage = timeline.peakShortage;
+      if (peak <= 0 && peakShortage <= 0) continue;
+      const ratios: number[] = [];
+      const shortageRatios: number[] = [];
+      const floorRatios: number[] = [];
+      // Index 0 = horizon start (initial SOH baseline, no shortage yet).
+      const initialInv = initialInventoryByProduct[code] ?? 0;
+      ratios.push(peak > 0 ? Math.max(0, Math.min(1, initialInv / peak)) : 0);
+      shortageRatios.push(0);
+      // Floor at index 0 — peek at day 0's daily-demand to derive the
+      // initial floor reference (matches the per-day computation below).
+      const day0Iso = toISO(horizonStart);
+      const day0Floor = timeline.floorByDate.get(day0Iso) ?? 0;
+      floorRatios.push(peak > 0 ? Math.max(0, Math.min(1, day0Floor / peak)) : 0);
+      // Indices 1..horizonDays = end-of-day inventory / shortage per day.
+      const cursor = new Date(horizonStart);
+      let anyFloor = day0Floor > 0;
+      for (let i = 0; i < horizonDays; i++) {
+        const iso = toISO(cursor);
+        const inv = timeline.byDate.get(iso) ?? 0;
+        const sh = timeline.shortageByDate.get(iso) ?? 0;
+        const fl = timeline.floorByDate.get(iso) ?? 0;
+        if (fl > 0) anyFloor = true;
+        ratios.push(peak > 0 ? Math.max(0, Math.min(1, inv / peak)) : 0);
+        shortageRatios.push(
+          peakShortage > 0 ? Math.max(0, Math.min(1, sh / peakShortage)) : 0,
+        );
+        floorRatios.push(peak > 0 ? Math.max(0, Math.min(1, fl / peak)) : 0);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      ratiosByProduct.set(code, {
+        ratios,
+        shortageRatios: peakShortage > 0 ? shortageRatios : null,
+        floorRatios: anyFloor ? floorRatios : null,
+      });
+    }
+    // Every chip kind (packaging, kitchen, kitchen-required, po-placed,
+    // po-receiving) gets its product's full ratio array plus the index
+    // within that array corresponding to its own date (for the vertical
+    // marker on the sparkline). Kitchen chips trace the intermediate's
+    // inventory curve; PO chips trace the raw material's.
+    for (const a of mutatedActivities) {
+      const entry = ratiosByProduct.get(a.productCode);
+      if (!entry) continue;
+      const chipDay = fromISO(a.date);
+      const daysFromStart = Math.round(
+        (chipDay.getTime() - horizonStart.getTime()) / 86400000,
+      );
+      const chipDateIndex = Math.max(
+        0,
+        Math.min(entry.ratios.length - 1, daysFromStart),
+      );
+      out.set(a.stableId, {
+        ratios: entry.ratios,
+        shortageRatios: entry.shortageRatios,
+        floorRatios: entry.floorRatios,
+        chipDateIndex,
+      });
+    }
+    return out;
+  }, [
+    mutatedActivities,
+    inventoryTimelineByProduct,
+    initialInventoryByProduct,
+    horizon,
+  ]);
+
+  // ─── Cluster computation (Phase 4l.6) ──────────────────────
+  // Two or more visible chips sharing (date, productCode, kind) collapse
+  // into one ClusterChip on the calendar. We compute the membership map
+  // once so each cell, each constituent's hover/select state and the
+  // drawer can look up siblings cheaply.
+  const clusterMembersByStableId = useMemo<Map<string, CalendarActivity[]>>(() => {
+    const groups = new Map<string, CalendarActivity[]>();
+    for (const a of visibleActivities) {
+      const key = `${a.date}|${a.kind}|${a.productCode}`;
+      let arr = groups.get(key);
+      if (!arr) { arr = []; groups.set(key, arr); }
+      arr.push(a);
+    }
+    const out = new Map<string, CalendarActivity[]>();
+    for (const arr of groups.values()) {
+      if (arr.length < 2) continue;
+      for (const a of arr) out.set(a.stableId, arr);
+    }
+    return out;
+  }, [visibleActivities]);
 
   // Aggregate per-day load across visible stations, EXCLUDING dismissed
   // activities and using the MUTATED activities (so reschedule and edit
@@ -850,7 +2052,12 @@ export function CalendarApp(props: CalendarAppProps) {
     for (const a of mutatedActivities) {
       if (a.kind !== 'kitchen-required') continue;
       if (isDismissed(mutations, a.stableId)) continue;
-      const cost = kitchenMinutesByProductCode[a.productCode] ?? KITCHEN_DEFAULT_CHIP_MINUTES;
+      // Phase 4l.10: prefer per-chip minutes (computed server-side from
+      // recipe × quantity). Fallback to map-by-code, then to default.
+      const cost =
+        a.kitchenMinutes ??
+        kitchenMinutesByProductCode[a.productCode] ??
+        KITCHEN_DEFAULT_CHIP_MINUTES;
       used.set(a.date, (used.get(a.date) ?? 0) + cost);
     }
     for (const [date, mins] of used.entries()) {
@@ -862,6 +2069,47 @@ export function CalendarApp(props: CalendarAppProps) {
     }
     return out;
   }, [mutatedActivities, mutations, showKitchen, showKitchenRequired, kitchenMinutesByProductCode]);
+
+  // Phase 4l.10 — per-day dehydrator-tray load. Each kitchen chip whose
+  // recipe has dehydHours > 0 carries `dehydratorTrays` and a calendar-
+  // day window `[dehydratorOccupiesFrom, dehydratorOccupiesTo]`. The
+  // dehydrator equipment runs through weekends, so we charge every day
+  // in that window — not just workdays. Utilisation = sum trays / pool
+  // (~605 from the Kitchen capacities sheet).
+  const dehydratorLoadByDate = useMemo(() => {
+    const out = new Map<
+      string,
+      { usedTrays: number; capacityTrays: number; utilisation: number }
+    >();
+    if (dehydratorTotalTrays <= 0) return out;
+    const trayUsed = new Map<string, number>();
+    for (const a of mutatedActivities) {
+      if (a.kind !== 'kitchen-required' && a.kind !== 'kitchen') continue;
+      if (isDismissed(mutations, a.stableId)) continue;
+      const trays = a.dehydratorTrays;
+      if (!trays || trays <= 0) continue;
+      const from = a.dehydratorOccupiesFrom;
+      const to = a.dehydratorOccupiesTo;
+      if (!from || !to) continue;
+      // Walk every calendar day in [from, to] inclusive.
+      const fromDate = new Date(from + 'T00:00:00');
+      const toDate = new Date(to + 'T00:00:00');
+      const cursor = new Date(fromDate);
+      while (cursor.getTime() <= toDate.getTime()) {
+        const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+        trayUsed.set(iso, (trayUsed.get(iso) ?? 0) + trays);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+    for (const [date, trays] of trayUsed.entries()) {
+      out.set(date, {
+        usedTrays: trays,
+        capacityTrays: dehydratorTotalTrays,
+        utilisation: trays / dehydratorTotalTrays,
+      });
+    }
+    return out;
+  }, [mutatedActivities, mutations, dehydratorTotalTrays]);
 
   // Per-station counts (for the chip labels in the rail) — count BEFORE
   // filtering so the user can see what they'd un-hide. Kitchen activities
@@ -879,11 +2127,33 @@ export function CalendarApp(props: CalendarAppProps) {
     return counts;
   }, [activities]);
 
-  // Build the date grid: full horizon as a flat list, grouped by week and month.
-  const dates = useMemo(
-    () => horizonDates(horizon.startWeek, horizon.weeks),
-    [horizon],
-  );
+  // Build the date grid: planner's horizon plus an optional backward
+  // extension when `planFromDate` is in the future (Phase 4l.8). The
+  // extension shows the weeks between real-today's Monday and the
+  // planner's anchor, so chips can be dragged backwards onto today even
+  // though the planner itself isn't scheduling anything there.
+  const dates = useMemo(() => {
+    // Monday on or before `realToday`. Day-of-week: 0=Sun,1=Mon,...,6=Sat.
+    const [y, m, d] = realToday.split('-').map(Number);
+    const rt = new Date(y, m - 1, d);
+    const back = (rt.getDay() + 6) % 7; // Mon → 0, ..., Sun → 6
+    rt.setDate(rt.getDate() - back);
+    const realTodayMonday = toLocalISODate(rt);
+
+    if (realTodayMonday >= horizon.startWeek) {
+      // Planner anchor is on or before real today — no backward extension.
+      return horizonDates(horizon.startWeek, horizon.weeks);
+    }
+    // Extend backwards: compute extra weeks between real-today's Monday and
+    // the planner's start week.
+    const startMs = rt.getTime();
+    const [hy, hm, hd] = horizon.startWeek.split('-').map(Number);
+    const horizonStart = new Date(hy, hm - 1, hd);
+    const diffWeeks = Math.round(
+      (horizonStart.getTime() - startMs) / (1000 * 60 * 60 * 24 * 7),
+    );
+    return horizonDates(realTodayMonday, horizon.weeks + diffWeeks);
+  }, [horizon, realToday]);
 
   // Per-week per-station utilisation, from mutated activities. Used by the
   // capacity heatmap panel below the calendar. For each (week, station)
@@ -905,7 +2175,11 @@ export function CalendarApp(props: CalendarAppProps) {
         }
         stMap.set(a.station, (stMap.get(a.station) ?? 0) + a.durationMinutes + a.changeoverMinutes);
       } else if (a.kind === 'kitchen-required') {
-        const cost = kitchenMinutesByProductCode[a.productCode] ?? KITCHEN_DEFAULT_CHIP_MINUTES;
+        // Phase 4l.10: prefer per-chip minutes (quantity-aware).
+        const cost =
+          a.kitchenMinutes ??
+          kitchenMinutesByProductCode[a.productCode] ??
+          KITCHEN_DEFAULT_CHIP_MINUTES;
         usedByDateKitchen.set(
           a.date,
           (usedByDateKitchen.get(a.date) ?? 0) + cost,
@@ -1069,7 +2343,11 @@ export function CalendarApp(props: CalendarAppProps) {
           >
             {STATIONS.map((s) => {
               const on = visibleStations.has(s);
-              const colors = STATION_COLORS[s];
+              // Phase 4l.11: legend uses a mid-band sat/lit (band 10 of
+              // 20, ~$7000 profit chip) so the dot reads as a
+              // representative packaging green without being maximally
+              // vivid or faded.
+              const colors = packagingChipColor(s, 60, 67);
               return (
                 <label
                   key={s}
@@ -1237,6 +2515,116 @@ export function CalendarApp(props: CalendarAppProps) {
               </span>
             </label>
           )}
+          {/* Phase 4l.8 — PO sub-toggles. Mirrors the kitchen master's
+              nested scheduled/required pattern. Three independent slices:
+              Place-by chips, Receive-by chips, and Urgent (overdue).
+              Indented under the master to signal the parent-child link. */}
+          {purchaseRequirements.length > 0 && (
+            <div style={{ paddingLeft: 18, marginBottom: 4 }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '4px 0',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  opacity: showPO && showPoPlaced ? 1 : 0.4,
+                  userSelect: 'none',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={showPoPlaced}
+                  onChange={() => setShowPoPlaced((v) => !v)}
+                  disabled={!showPO}
+                />
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: PO_PLACED_COLOR.dot,
+                    display: 'inline-block',
+                  }}
+                />
+                <span style={{ flex: 1 }}>To place</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                  {poCounts.placed}
+                </span>
+              </label>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '4px 0',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  opacity: showPO && showPoReceiving ? 1 : 0.4,
+                  userSelect: 'none',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={showPoReceiving}
+                  onChange={() => setShowPoReceiving((v) => !v)}
+                  disabled={!showPO}
+                />
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: PO_RECEIVING_COLOR.dot,
+                    display: 'inline-block',
+                  }}
+                />
+                <span style={{ flex: 1 }}>To receive</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                  {poCounts.receiving}
+                </span>
+              </label>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '4px 0',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  opacity: showPO && showPoUrgent ? 1 : 0.4,
+                  userSelect: 'none',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={showPoUrgent}
+                  onChange={() => setShowPoUrgent((v) => !v)}
+                  disabled={!showPO}
+                />
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: '#dc2626',
+                    display: 'inline-block',
+                  }}
+                />
+                <span style={{ flex: 1 }}>Urgent (overdue)</span>
+                <span
+                  style={{
+                    color: poCounts.urgent > 0 ? '#dc2626' : 'var(--text-muted)',
+                    fontWeight: poCounts.urgent > 0 ? 600 : 400,
+                    fontSize: 11,
+                  }}
+                >
+                  {poCounts.urgent}
+                </span>
+              </label>
+            </div>
+          )}
           {dismissedCount > 0 && (
             <label
               style={{
@@ -1300,11 +2688,27 @@ export function CalendarApp(props: CalendarAppProps) {
                 {infeasibleProducts.map((p) => (
                   <li
                     key={p.productCode}
+                    draggable
+                    onDragStart={(e) => {
+                      // Phase 4l.8: drag-to-place. Drop on a day cell to
+                      // create a manual packaging chip.
+                      e.dataTransfer.setData(
+                        'application/byron-manual-add',
+                        JSON.stringify({
+                          productCode: p.productCode,
+                          productName: p.productName,
+                          quantity: Math.max(1, Math.round(p.unmetUnits)),
+                          station: p.station,
+                        }),
+                      );
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
                     style={{
                       padding: '6px 0',
                       borderBottom: '0.5px solid var(--border)',
+                      cursor: 'grab',
                     }}
-                    title={p.reason}
+                    title={`${p.reason}\n\nDrag onto a day to schedule manually.`}
                   >
                     <div style={{ fontWeight: 500 }}>{p.productCode}</div>
                     <div style={{ color: 'var(--text-muted)' }}>
@@ -1480,6 +2884,70 @@ export function CalendarApp(props: CalendarAppProps) {
         <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <h1 style={{ fontSize: 20, fontWeight: 600 }}>Production Calendar</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Plan from: anchor date for the planner. Defaults to today; when
+                set via URL ?from=YYYY-MM-DD the planner treats that day as
+                today — horizon starts there, today-floors clamp there, PO
+                overdue checks reference it. Phase 4l.8. */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)' }}>
+              <span>Plan from:</span>
+              <input
+                type="date"
+                value={todayLocal}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const url = new URL(window.location.href);
+                  if (!v) {
+                    url.searchParams.delete('from');
+                  } else {
+                    url.searchParams.set('from', v);
+                  }
+                  window.location.assign(url.toString());
+                }}
+                disabled={isReplanning || refreshingSoh}
+                style={{
+                  padding: '4px 6px',
+                  fontSize: 12,
+                  border: '0.5px solid var(--border)',
+                  borderRadius: 3,
+                  background: 'var(--bg-page)',
+                  color: 'inherit',
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                  // Make non-default state visually obvious so the user
+                  // remembers they're not on today.
+                  fontWeight: planFromDate ? 600 : 400,
+                }}
+                title={
+                  planFromDate
+                    ? `Planning from ${fmtDate(planFromDate)} — click "Reset" to go back to today`
+                    : "Anchor date for the planner (defaults to today)"
+                }
+              />
+              {planFromDate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('from');
+                    window.location.assign(url.toString());
+                  }}
+                  disabled={isReplanning || refreshingSoh}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#1e40af',
+                    fontSize: 11,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    fontFamily: 'inherit',
+                    padding: 0,
+                  }}
+                  title="Reset to today"
+                >
+                  Reset
+                </button>
+              )}
+            </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)' }}>
               <span>Horizon:</span>
               <select
@@ -1550,7 +3018,7 @@ export function CalendarApp(props: CalendarAppProps) {
             <button
               type="button"
               onClick={refreshAssemblies}
-              disabled={refreshingSoh || refreshingSO || refreshingAssemblies || isReplanning}
+              disabled={refreshingSoh || refreshingSO || refreshingAssemblies || refreshingPo || isReplanning}
               style={{
                 padding: '6px 12px',
                 fontSize: 13,
@@ -1565,6 +3033,157 @@ export function CalendarApp(props: CalendarAppProps) {
             >
               {refreshingAssemblies ? 'Refreshing kitchen…' : 'Refresh kitchen'}
             </button>
+            <button
+              type="button"
+              onClick={refreshPurchaseOrders}
+              disabled={refreshingSoh || refreshingSO || refreshingAssemblies || refreshingPo || isReplanning}
+              style={{
+                padding: '6px 12px',
+                fontSize: 13,
+                background: 'var(--bg-page)',
+                color: 'inherit',
+                border: '0.5px solid var(--border)',
+                borderRadius: 4,
+                cursor: refreshingPo ? 'wait' : 'pointer',
+                fontFamily: 'inherit',
+              }}
+              title="Pull outstanding Open + PartiallyReceived purchase orders from Unleashed"
+            >
+              {refreshingPo ? 'Refreshing POs…' : 'Refresh POs'}
+            </button>
+            {mutationEntries.length > 0 && (
+              <div ref={mutationsDropdownRef} style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setMutationsOpen((o) => !o)}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: 13,
+                    background: 'var(--bg-page)',
+                    color: 'inherit',
+                    border: '0.5px solid var(--border)',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                  title="Active manual changes — click to view and clear"
+                >
+                  ⚙ {mutationEntries.length} change{mutationEntries.length === 1 ? '' : 's'}{' '}
+                  {mutationsOpen ? '▴' : '▾'}
+                </button>
+                {mutationsOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 4px)',
+                      right: 0,
+                      width: 360,
+                      maxHeight: 420,
+                      overflowY: 'auto',
+                      background: 'var(--bg-page)',
+                      border: '0.5px solid var(--border)',
+                      borderRadius: 4,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                      zIndex: 50,
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: '8px 12px',
+                        borderBottom: '0.5px solid var(--border)',
+                        fontSize: 11,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        color: 'var(--text-muted)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <span>Active changes</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearAllMutations();
+                          setMutationsOpen(false);
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#dc2626',
+                          fontSize: 11,
+                          cursor: 'pointer',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          fontFamily: 'inherit',
+                          padding: 0,
+                        }}
+                      >
+                        Clear all
+                      </button>
+                    </div>
+                    {mutationEntries.map((e) => (
+                      <div
+                        key={e.key}
+                        style={{
+                          padding: '8px 12px',
+                          borderBottom: '0.5px solid var(--border)',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'baseline',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 500,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {e.productCode}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: 'var(--text-muted)',
+                              marginTop: 2,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {e.description}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={e.onClear}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#1e40af',
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            fontFamily: 'inherit',
+                            padding: 0,
+                            flexShrink: 0,
+                          }}
+                          title="Undo this change"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <button
               type="button"
               onClick={replan}
@@ -1630,6 +3249,21 @@ export function CalendarApp(props: CalendarAppProps) {
             }}
           >
             ⚠ Kitchen-assemblies refresh failed: {assembliesRefreshError}
+          </div>
+        )}
+        {poRefreshError && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '8px 12px',
+              background: '#fef2f2',
+              border: '0.5px solid #fecaca',
+              borderRadius: 4,
+              fontSize: 12,
+              color: '#991b1b',
+            }}
+          >
+            ⚠ Purchase-orders refresh failed: {poRefreshError}
           </div>
         )}
 
@@ -1812,20 +3446,33 @@ export function CalendarApp(props: CalendarAppProps) {
             activitiesByDate={activitiesByDate}
             peakLoadByDate={peakLoadByDate}
             kitchenLoadByDate={kitchenLoadByDate}
+            dehydratorLoadByDate={dehydratorLoadByDate}
+            chipAvailabilityByStableId={chipAvailabilityByStableId}
             onSelect={setSelected}
             selectedId={selected?.id ?? null}
+            selectedStableId={selected?.stableId ?? null}
             mutations={mutations}
             conflictsByConsumer={conflictsByConsumer}
             unplaceableSet={unplaceableSet}
             hoveredStableId={hoveredStableId}
             onChipHover={onChipHover}
             relatedByStableId={relatedByStableId}
+            clusterMembersByStableId={clusterMembersByStableId}
             onDropOnDate={(stableId, date) => {
               // No-op when dropped on the same day the activity is already on.
               const found = mutatedActivities.find((a) => a.stableId === stableId);
               if (!found || found.date === date) return;
+              // Phase 4l.8: defensive guard against drops on past dates.
+              // MonthBlock's cells also reject these via onDragOver, this
+              // catches anything that slips through.
+              if (date < clientToday) return;
               reschedule(stableId, date);
             }}
+            onManualAdd={(input) => {
+              if (input.date < clientToday) return;
+              addManualActivity(input);
+            }}
+            today={clientToday}
           />
         ))}
 
@@ -1892,16 +3539,41 @@ export function CalendarApp(props: CalendarAppProps) {
           vendor={vendorByCode[selected.productCode] ?? null}
           stationDailyMinutes={selected.station ? stationDailyMinutes[selected.station] ?? 480 : 480}
           kitchenChipMinutes={
-            selected.kind === 'kitchen-required'
-              ? kitchenMinutesByProductCode[selected.productCode] ?? KITCHEN_DEFAULT_CHIP_MINUTES
+            selected.kind === 'kitchen-required' || selected.kind === 'kitchen'
+              ? selected.kitchenMinutes ??
+                kitchenMinutesByProductCode[selected.productCode] ??
+                KITCHEN_DEFAULT_CHIP_MINUTES
               : null
           }
           productOverride={productOverrides[selected.productCode]}
           stationDailyOutput={productStationDailyOutput[selected.productCode] ?? 0}
           globalShelfLifeDays={globalDefaults.shelfLifeDays}
           sohBreakdown={sohByProductCode[selected.productCode] ?? null}
-          eligibleWarehouses={eligibleWarehouses}
-          plannerInitialInventory={initialInventoryByProduct[selected.productCode] ?? 0}
+          eligibleWarehouses={
+            // Phase 4l.12 — pick the eligibility rule that matches what
+            // the planner ACTUALLY uses for this chip kind, so the
+            // drawer's "excluded" label is accurate. For finished goods
+            // we use the FG fulfilment list (TBC + MF Packaging + MF
+            // Operations etc); for intermediates we use the intermediate
+            // list (Lundberg + MF Packaging + MF Operations); for PO
+            // chips (raw materials) everything counts.
+            selected.kind === 'kitchen' || selected.kind === 'kitchen-required'
+              ? [...intermediateEligibleWarehouses]
+              : selected.kind === 'po-placed' || selected.kind === 'po-receiving'
+              ? Array.from(
+                  new Set([
+                    ...eligibleWarehouses,
+                    ...intermediateEligibleWarehouses,
+                    ...availableWarehouses,
+                  ]),
+                )
+              : eligibleWarehouses
+          }
+          plannerInitialInventory={
+            selected.kind === 'kitchen' || selected.kind === 'kitchen-required'
+              ? intermediateSohByCode[selected.productCode] ?? 0
+              : initialInventoryByProduct[selected.productCode] ?? 0
+          }
           salesOrders={salesOrdersByProduct[selected.productCode] ?? []}
           totalCommitted={committedByProduct[selected.productCode] ?? 0}
           conflicts={conflictsByConsumer.get(selected.stableId) ?? []}
@@ -1926,6 +3598,45 @@ export function CalendarApp(props: CalendarAppProps) {
                 : selected.stableId;
             clearLeadTime(placeId);
           }}
+          onEditStation={(s) => editStation(selected.stableId, s)}
+          onClearStation={() => clearStation(selected.stableId)}
+          stationOverridden={editedStationOf(mutations, selected.stableId) !== null}
+          originalStation={
+            (activitiesWithPo.find((a) => a.stableId === selected.stableId)?.station as Station | null) ?? null
+          }
+          clusterMembers={clusterMembersByStableId.get(selected.stableId) ?? null}
+          onSelectClusterMember={(a) => setSelected(a)}
+          relatedChips={(() => {
+            // Phase 4l.12 — resolve relatedByStableId entries to actual
+            // CalendarActivity objects so the drawer can display each
+            // related chip's productCode + date + qty + kind. We look up
+            // against the full activity list (incl. mutated qty) so the
+            // drawer reflects the current state. Entries that can't be
+            // resolved (= chip was filtered out / dismissed) are dropped.
+            const rels = relatedByStableId.get(selected.stableId) ?? [];
+            if (rels.length === 0) return [];
+            const byStableId = new Map<string, CalendarActivity>();
+            for (const a of activitiesWithPo) byStableId.set(a.stableId, a);
+            // Also overlay mutated qty so the displayed numbers match what
+            // the user has edited.
+            for (const a of mutatedActivities) byStableId.set(a.stableId, a);
+            const out: Array<{
+              activity: CalendarActivity;
+              direction: 'supplier' | 'consumer';
+              phantom: boolean;
+            }> = [];
+            for (const r of rels) {
+              const a = byStableId.get(r.stableId);
+              if (!a) continue;
+              out.push({
+                activity: a,
+                direction: r.kind,
+                phantom: r.phantom ?? false,
+              });
+            }
+            return out;
+          })()}
+          onSelectRelatedChip={(a) => setSelected(a)}
           onClose={() => setSelected(null)}
         />
       )}
@@ -2042,15 +3753,21 @@ function MonthBlock({
   activitiesByDate,
   peakLoadByDate,
   kitchenLoadByDate,
+  dehydratorLoadByDate,
+  chipAvailabilityByStableId,
   onSelect,
   selectedId,
+  selectedStableId,
   mutations,
   conflictsByConsumer,
   unplaceableSet,
   hoveredStableId,
   onChipHover,
   relatedByStableId,
+  clusterMembersByStableId,
   onDropOnDate,
+  onManualAdd,
+  today,
 }: {
   label: string;
   dates: string[];
@@ -2058,8 +3775,25 @@ function MonthBlock({
   peakLoadByDate: Map<string, { utilisation: number; usedMinutes: number; capacityMinutes: number; station: Station }>;
   /** Per-day kitchen-team utilisation (Phase 4l.7). */
   kitchenLoadByDate: Map<string, { usedMinutes: number; capacityMinutes: number; utilisation: number }>;
+  /** Per-day dehydrator-tray utilisation (Phase 4l.10). */
+  dehydratorLoadByDate: Map<string, { usedTrays: number; capacityTrays: number; utilisation: number }>;
+  /** Phase 4l.11 — per-chip per-day availability + shortage ratios driving the inventory sparkline and the inverted shortage sparkline. */
+  chipAvailabilityByStableId: ReadonlyMap<
+    string,
+    {
+      ratios: number[];
+      shortageRatios: number[] | null;
+      floorRatios: number[] | null;
+      chipDateIndex: number;
+    }
+  >;
   onSelect: (a: CalendarActivity) => void;
+  /** Activity.id of the currently-selected chip; drives chip "selected" styling. */
   selectedId: string | null;
+  /** Activity.stableId of the currently-selected chip; drives persistent arrow drawing. */
+  selectedStableId: string | null;
+  /** stableId → list of cluster sibling activities (incl. itself). Empty entries omitted (singletons). */
+  clusterMembersByStableId: ReadonlyMap<string, CalendarActivity[]>;
   mutations: MutationsMap;
   /** Map of stableId → conflicts (used to highlight chips with red borders). */
   conflictsByConsumer: Map<string, ScheduleConflict[]>;
@@ -2070,9 +3804,19 @@ function MonthBlock({
   /** Hover handler — pass id on enter, null on leave. */
   onChipHover: (id: string | null) => void;
   /** stableId → list of related chips with direction. */
-  relatedByStableId: ReadonlyMap<string, ReadonlyArray<{ stableId: string; kind: 'supplier' | 'consumer' }>>;
+  relatedByStableId: ReadonlyMap<string, ReadonlyArray<{ stableId: string; kind: 'supplier' | 'consumer'; phantom?: boolean }>>;
   /** Called when a chip is dropped onto a day cell. Skip same-day drops upstream. */
   onDropOnDate: (stableId: string, date: string) => void;
+  /** Phase 4l.8: called when an infeasible-products row is dropped on a day. */
+  onManualAdd: (input: {
+    productCode: string;
+    productName: string;
+    quantity: number;
+    station: Station;
+    date: string;
+  }) => void;
+  /** Today as YYYY-MM-DD local — used to disable drops on past-date cells (Phase 4l.8). */
+  today: string;
 }) {
   // Local state: which day is currently drag-over, for visual highlighting.
   // Per-month — the user can only drag one thing at a time, so it's enough to
@@ -2089,31 +3833,64 @@ function MonthBlock({
     else chipRefs.current.delete(stableId);
   }, []);
 
-  // Computed arrows for the current hover. Coords are relative to containerRef.
-  type Arrow = { id: string; x1: number; y1: number; x2: number; y2: number; kind: 'supplier' | 'consumer' };
+  // Effective arrow target: hover takes precedence (lets the user peek at
+  // other chips' relationships without losing their selection), and falls
+  // back to the selected chip so clicking a chip keeps its arrows on screen
+  // after the mouse leaves.
+  // Note: `selectedId` is the activity's `id` (used for chip selected styling),
+  // whereas arrows are keyed by `stableId` — so we use `selectedStableId` here.
+  const arrowTargetId = hoveredStableId ?? selectedStableId;
+
+  // Computed arrows for the current target. Coords are relative to containerRef.
+  // `flowsInto` colour-codes by the consumer's activity kind:
+  //   'into-packaging' (green) — line ends at a packaging chip (the focused
+  //     chip or a related one)
+  //   'into-kitchen'   (orange) — line ends at a kitchen or kitchen-required
+  //     chip
+  type FlowKind = 'into-packaging' | 'into-kitchen';
+  type Arrow = {
+    id: string;
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    flowsInto: FlowKind;
+    /** Phase 4l.11: phantom = consumer was starved; rendered dashed-red. */
+    phantom: boolean;
+  };
   const [arrows, setArrows] = useState<Arrow[]>([]);
-  // Re-measure on every layout pass while hover is active. Trigger when:
-  //   - hoveredStableId changes (different chip hovered)
+  // Re-measure on every layout pass while a target is active. Trigger when:
+  //   - arrowTargetId changes (hover or selection moved)
   //   - activitiesByDate changes (chips moved → DOM positions changed)
   //   - relatedByStableId changes (relationships updated)
   useLayoutEffect(() => {
-    if (!hoveredStableId) {
+    if (!arrowTargetId) {
       if (arrows.length > 0) setArrows([]);
       return;
     }
     const container = containerRef.current;
-    const sourceEl = chipRefs.current.get(hoveredStableId);
+    const sourceEl = chipRefs.current.get(arrowTargetId);
     if (!container || !sourceEl) {
-      // Hovered chip isn't in this month's grid → no arrows here.
+      // Target chip isn't in this month's grid → no arrows here.
       if (arrows.length > 0) setArrows([]);
       return;
     }
+    // Build stableId → kind lookup for chips in this month — needed to
+    // decide each arrow's colour based on what kind of chip it ends at.
+    const kindByStableId = new Map<string, CalendarActivity['kind']>();
+    for (const list of activitiesByDate.values()) {
+      for (const a of list) kindByStableId.set(a.stableId, a.kind);
+    }
+    const flowFor = (consumerKind: CalendarActivity['kind'] | undefined): FlowKind =>
+      consumerKind === 'packaging' ? 'into-packaging' : 'into-kitchen';
+
     const cRect = container.getBoundingClientRect();
     const sRect = sourceEl.getBoundingClientRect();
     const sCx = (sRect.left + sRect.right) / 2 - cRect.left;
     const sCy = (sRect.top + sRect.bottom) / 2 - cRect.top;
+    const sourceKind = kindByStableId.get(arrowTargetId);
     const out: Arrow[] = [];
-    for (const rel of relatedByStableId.get(hoveredStableId) ?? []) {
+    for (const rel of relatedByStableId.get(arrowTargetId) ?? []) {
       const relEl = chipRefs.current.get(rel.stableId);
       if (!relEl) continue; // related chip not in this month
       const rRect = relEl.getBoundingClientRect();
@@ -2122,27 +3899,38 @@ function MonthBlock({
       // Direction: arrow always flows supplier → consumer.
       // - rel.kind === 'supplier': rel is the supplier, source is the consumer.
       // - rel.kind === 'consumer': source is the supplier, rel is the consumer.
+      // Colour is the destination chip's kind.
       if (rel.kind === 'supplier') {
-        out.push({ id: rel.stableId, x1: rCx, y1: rCy, x2: sCx, y2: sCy, kind: 'supplier' });
+        out.push({
+          id: rel.stableId,
+          x1: rCx, y1: rCy, x2: sCx, y2: sCy,
+          flowsInto: flowFor(sourceKind),
+          phantom: rel.phantom ?? false,
+        });
       } else {
-        out.push({ id: rel.stableId, x1: sCx, y1: sCy, x2: rCx, y2: rCy, kind: 'consumer' });
+        out.push({
+          id: rel.stableId,
+          x1: sCx, y1: sCy, x2: rCx, y2: rCy,
+          flowsInto: flowFor(kindByStableId.get(rel.stableId)),
+          phantom: rel.phantom ?? false,
+        });
       }
     }
     setArrows(out);
     // We intentionally exclude `arrows` from deps to avoid re-running on our own setState.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hoveredStableId, activitiesByDate, relatedByStableId]);
+  }, [arrowTargetId, activitiesByDate, relatedByStableId]);
 
-  // Set of stableIds currently related to the hovered chip — used to highlight
+  // Set of stableIds currently related to the active target — used to highlight
   // related chips with a colored ring. Computed cheaply once per render.
   const relatedHighlight = useMemo(() => {
     const out = new Map<string, 'supplier' | 'consumer'>();
-    if (!hoveredStableId) return out;
-    for (const rel of relatedByStableId.get(hoveredStableId) ?? []) {
+    if (!arrowTargetId) return out;
+    for (const rel of relatedByStableId.get(arrowTargetId) ?? []) {
       out.set(rel.stableId, rel.kind);
     }
     return out;
-  }, [hoveredStableId, relatedByStableId]);
+  }, [arrowTargetId, relatedByStableId]);
 
   // Pad the front of the first week so calendar columns align with day-of-week.
   const first = fromISO(dates[0]);
@@ -2195,10 +3983,17 @@ function MonthBlock({
           const dayActivities = activitiesByDate.get(cell.date) ?? [];
           const dow = (fromISO(cell.date).getDay() + 6) % 7;
           const isWeekend = dow >= 5;
+          // Phase 4l.8: past-date cells reject drops so users can't (re)create
+          // zombie reschedules. Today and future remain valid drop targets.
+          const isPastDay = cell.date < today;
           const peakLoad = peakLoadByDate.get(cell.date);
           const kitchenLoad = kitchenLoadByDate.get(cell.date);
+          const dehydratorLoad = dehydratorLoadByDate.get(cell.date);
           const overrun = peakLoad ? peakLoad.utilisation > 1 : false;
           const kitchenOverrun = kitchenLoad ? kitchenLoad.utilisation > 1 : false;
+          const dehydratorOverrun = dehydratorLoad
+            ? dehydratorLoad.utilisation > 1
+            : false;
           const isHover = hoverDate === cell.date;
           // We need a deterministic cellKey so the drop-state computation
           // closes over the right date. Captured below.
@@ -2207,6 +4002,11 @@ function MonthBlock({
             <div
               key={cell.date}
               onDragOver={(e) => {
+                if (isPastDay) {
+                  // Skip preventDefault → browser shows the no-drop cursor.
+                  e.dataTransfer.dropEffect = 'none';
+                  return;
+                }
                 // preventDefault is what makes the cell a valid drop target;
                 // without it the browser rejects the drop with cursor=no-drop.
                 e.preventDefault();
@@ -2219,6 +4019,32 @@ function MonthBlock({
               onDrop={(e) => {
                 e.preventDefault();
                 setHoverDate(null);
+                if (isPastDay) return;
+                // Phase 4l.8: drag-from-infeasible-list payload wins over
+                // the stableId-reschedule payload when both are set.
+                const manualRaw = e.dataTransfer.getData('application/byron-manual-add');
+                if (manualRaw) {
+                  try {
+                    const parsed = JSON.parse(manualRaw);
+                    if (
+                      parsed &&
+                      typeof parsed.productCode === 'string' &&
+                      typeof parsed.productName === 'string' &&
+                      typeof parsed.quantity === 'number' &&
+                      parsed.quantity > 0 &&
+                      typeof parsed.station === 'string'
+                    ) {
+                      onManualAdd({
+                        productCode: parsed.productCode,
+                        productName: parsed.productName,
+                        quantity: parsed.quantity,
+                        station: parsed.station as Station,
+                        date: dropDate,
+                      });
+                      return;
+                    }
+                  } catch {/* ignore malformed */}
+                }
                 const stableId = e.dataTransfer.getData('text/plain');
                 if (stableId) onDropOnDate(stableId, dropDate);
               }}
@@ -2229,10 +4055,10 @@ function MonthBlock({
                 borderBottom: '0.5px solid var(--border)',
                 background: isHover
                   ? '#eff6ff'
-                  : isWeekend
+                  : isPastDay || isWeekend
                   ? 'var(--bg-page)'
                   : 'transparent',
-                opacity: isWeekend && !isHover ? 0.5 : 1,
+                opacity: isPastDay ? 0.4 : isWeekend && !isHover ? 0.5 : 1,
                 position: 'relative',
                 outline: isHover
                   ? '1.5px dashed #3b82f6'
@@ -2242,6 +4068,7 @@ function MonthBlock({
                 outlineOffset: -1,
                 transition: 'background 80ms ease',
               }}
+              title={isPastDay ? "Past date — drops not allowed" : undefined}
             >
               <div
                 style={{
@@ -2271,6 +4098,22 @@ function MonthBlock({
                       K{Math.round(kitchenLoad.utilisation * 100)}%
                     </span>
                   )}
+                  {dehydratorLoad && (
+                    <span
+                      style={{
+                        fontSize: 9,
+                        color: dehydratorOverrun
+                          ? '#dc2626'
+                          : dehydratorLoad.utilisation > 0.85
+                          ? '#d97706'
+                          : 'var(--text-muted)',
+                        fontWeight: dehydratorOverrun ? 600 : 400,
+                      }}
+                      title={`Dehydrator trays: ${dehydratorLoad.usedTrays}/${dehydratorLoad.capacityTrays} (${Math.round(dehydratorLoad.utilisation * 100)}%)`}
+                    >
+                      D{Math.round(dehydratorLoad.utilisation * 100)}%
+                    </span>
+                  )}
                   {peakLoad && (
                     <span
                       style={{
@@ -2278,28 +4121,80 @@ function MonthBlock({
                         color: overrun ? '#dc2626' : peakLoad.utilisation > 0.85 ? '#d97706' : 'var(--text-muted)',
                         fontWeight: overrun ? 600 : 400,
                       }}
-                      title={`Peak load: ${peakLoad.station} at ${peakLoad.usedMinutes}/${peakLoad.capacityMinutes} min`}
+                      title={`Packaging peak: ${peakLoad.station} at ${peakLoad.usedMinutes}/${peakLoad.capacityMinutes} min (${Math.round(peakLoad.utilisation * 100)}%)`}
                     >
-                      {Math.round(peakLoad.utilisation * 100)}%
+                      P{Math.round(peakLoad.utilisation * 100)}%
                     </span>
                   )}
                 </div>
               </div>
-              {dayActivities.map((a) => (
-                <ActivityChip
-                  key={a.id}
-                  activity={a}
-                  selected={a.id === selectedId}
-                  dismissed={isDismissed(mutations, a.stableId)}
-                  conflicted={conflictsByConsumer.has(a.stableId)}
-                  unplaceable={unplaceableSet.has(a.stableId)}
-                  relatedKind={relatedHighlight.get(a.stableId) ?? null}
-                  isHoveredSource={hoveredStableId === a.stableId}
-                  registerRef={registerChipRef}
-                  onHover={onChipHover}
-                  onClick={() => onSelect(a)}
-                />
-              ))}
+              {(() => {
+                // Render each (date, kind, productCode) group as either a
+                // single ActivityChip (singleton) or a ClusterChip (≥2 members).
+                // Tracks seen stableIds so cluster members aren't rendered twice.
+                //
+                // Phase 4l.11 — also dedupe by cluster key directly so a
+                // stale memo state, repeated chip objects in dayActivities,
+                // or stableId collisions can't ever produce two ClusterChips
+                // with the same React key (which trips a React warning and
+                // makes one of them effectively invisible).
+                const rendered: React.ReactElement[] = [];
+                const seen = new Set<string>();
+                const pushedClusterKeys = new Set<string>();
+                for (const a of dayActivities) {
+                  if (seen.has(a.stableId)) continue;
+                  const cluster = clusterMembersByStableId.get(a.stableId);
+                  if (cluster && cluster.length >= 2) {
+                    const clusterKey = `cluster|${a.date}|${a.kind}|${a.productCode}`;
+                    if (pushedClusterKeys.has(clusterKey)) {
+                      // Already rendered this group — mark this chip's
+                      // stableId to suppress a singleton fallback below.
+                      seen.add(a.stableId);
+                      continue;
+                    }
+                    pushedClusterKeys.add(clusterKey);
+                    for (const m of cluster) seen.add(m.stableId);
+                    rendered.push(
+                      <ClusterChip
+                        key={clusterKey}
+                        members={cluster}
+                        selectedId={selectedId}
+                        mutations={mutations}
+                        conflictsByConsumer={conflictsByConsumer}
+                        unplaceableSet={unplaceableSet}
+                        relatedHighlight={relatedHighlight}
+                        hoveredStableId={hoveredStableId}
+                        registerRef={registerChipRef}
+                        onHover={onChipHover}
+                        onSelect={onSelect}
+                      />
+                    );
+                    continue;
+                  }
+                  seen.add(a.stableId);
+                  const supplyZeroed =
+                    a.kind === 'packaging' &&
+                    a.supplyCappedFrom !== undefined &&
+                    a.quantity <= 0;
+                  rendered.push(
+                    <ActivityChip
+                      key={a.id}
+                      activity={a}
+                      selected={a.id === selectedId}
+                      dismissed={isDismissed(mutations, a.stableId) || supplyZeroed}
+                      conflicted={conflictsByConsumer.has(a.stableId)}
+                      unplaceable={unplaceableSet.has(a.stableId)}
+                      relatedKind={relatedHighlight.get(a.stableId) ?? null}
+                      isHoveredSource={hoveredStableId === a.stableId}
+                      registerRef={registerChipRef}
+                      onHover={onChipHover}
+                      onClick={() => onSelect(a)}
+                      availability={chipAvailabilityByStableId.get(a.stableId) ?? null}
+                    />
+                  );
+                }
+                return rendered;
+              })()}
               {(peakLoad || kitchenLoad) && (
                 <div
                   style={{
@@ -2381,7 +4276,7 @@ function MonthBlock({
           >
             <defs>
               <marker
-                id={`arrow-supplier-${label}`}
+                id={`arrow-into-packaging-${label}`}
                 viewBox="0 0 10 10"
                 refX="9"
                 refY="5"
@@ -2392,7 +4287,7 @@ function MonthBlock({
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#059669" />
               </marker>
               <marker
-                id={`arrow-consumer-${label}`}
+                id={`arrow-into-kitchen-${label}`}
                 viewBox="0 0 10 10"
                 refX="9"
                 refY="5"
@@ -2405,17 +4300,33 @@ function MonthBlock({
             </defs>
             {arrows.map((a) => (
               <line
-                key={a.id + a.kind}
+                key={a.id + a.flowsInto + (a.phantom ? '-phantom' : '')}
                 x1={a.x1}
                 y1={a.y1}
                 x2={a.x2}
                 y2={a.y2}
-                stroke={a.kind === 'supplier' ? '#059669' : '#d97706'}
-                strokeWidth={1.5}
-                strokeOpacity={0.8}
-                strokeDasharray="4 3"
-                markerEnd={`url(#arrow-${a.kind}-${label})`}
-              />
+                stroke={
+                  a.phantom
+                    ? '#dc2626' // red — phantom (starved consumer)
+                    : a.flowsInto === 'into-packaging'
+                    ? '#059669'
+                    : '#d97706'
+                }
+                strokeWidth={a.phantom ? 1.25 : 1.5}
+                strokeOpacity={a.phantom ? 0.55 : 0.8}
+                strokeDasharray={a.phantom ? '2 4' : '4 3'}
+                markerEnd={
+                  a.phantom ? undefined : `url(#arrow-${a.flowsInto}-${label})`
+                }
+              >
+                {a.phantom && (
+                  <title>
+                    Supply shortage — this consumer was starved at its scheduled
+                    date. Would have pulled from this supplier if earlier
+                    consumers hadn&apos;t drained the pool.
+                  </title>
+                )}
+              </line>
             ))}
           </svg>
         )}
@@ -2435,6 +4346,7 @@ function ActivityChip({
   registerRef,
   onHover,
   onClick,
+  availability,
 }: {
   activity: CalendarActivity;
   selected: boolean;
@@ -2450,22 +4362,60 @@ function ActivityChip({
   /** Hover handler — id on enter, null on leave. */
   onHover: (id: string | null) => void;
   onClick: () => void;
+  /**
+   * Phase 4l.11: per-chip per-day inventory ratio samples spanning the
+   * full horizon, plus optional shortage ratios (when demand exceeded
+   * supply at any point) and the chip's own day-index for the marker.
+   * Drives the SVG sparkline overlay — main curve at the bottom for
+   * inventory, inverted curve hanging from the top for shortage.
+   */
+  availability: {
+    ratios: number[];
+    shortageRatios: number[] | null;
+    /** Phase 4l.12: per-day SOH floor target normalised to the same
+     *  peak as `ratios`. Null when the product has no demand-derived
+     *  floor (= no forecast → no sensible target). */
+    floorRatios: number[] | null;
+    chipDateIndex: number;
+  } | null;
 }) {
   const colors = colorOf(activity);
+  // Phase 4l.11 — solid chip background plus a tiny SVG inventory
+  // sparkline at the bottom. Applies to ALL chip kinds (packaging,
+  // kitchen, kitchen-required, po-placed, po-receiving): each shows
+  // its product's inventory journey across the horizon. The dashed
+  // vertical marker on the sparkline indicates where THIS chip's date
+  // falls in that journey.
+  const hasInventoryData = availability != null && availability.ratios.length > 1;
+  const bgStyle = colors.bg;
+  const chipTextColor = colors.text;
+  const chipTextShadow: string | undefined = undefined;
+  const chipTextWeight = 500;
+  const chipLetterSpacing: string | undefined = undefined;
   // Local "is dragging" state controls opacity feedback. Reset on dragend.
   const [isDragging, setIsDragging] = useState(false);
   // PO chips have derived dates (computed from kitchen demand + lead time)
   // and aren't draggable — moving them would mislead the user about what
   // actually changes the timeline.
   const isPo = activity.kind === 'po-placed' || activity.kind === 'po-receiving';
+  // Unleashed-resident POs (Phase 4l.5) are view-only — committed in
+  // Unleashed, can't be edited in the planner. We render a "U" badge on
+  // the chip and a different drawer below.
+  const isUnleashedPo = activity.poInfo?.source === 'unleashed_po';
   // Compose the box-shadow: conflict (red) + related (green/orange) +
-  // hovered-source (blue) can stack.
+  // hovered-source (blue) + SELECTED (dark + lift) can stack.
   const shadows: string[] = [];
   if (conflicted) shadows.push('inset 0 0 0 1.5px #dc2626');
   if (relatedKind === 'supplier') shadows.push('inset 0 0 0 1.5px #059669');
   if (relatedKind === 'consumer') shadows.push('inset 0 0 0 1.5px #d97706');
   if (isHoveredSource) shadows.push('0 0 0 2px #3b82f6');
   if (unplaceable) shadows.push('inset 0 0 0 1.5px #d97706');
+  // Phase 4l.12 — selected chip gets a strong drop-shadow + thicker
+  // dark outline so it visually "lifts" off the calendar. The previous
+  // 1.5px chip-coloured outline blended in with chips that share the
+  // border colour (most of the green packaging chips have ~the same
+  // dark-green border). The new style is colour-independent.
+  if (selected) shadows.push('0 6px 16px rgba(0, 0, 0, 0.35)');
   return (
     <button
       type="button"
@@ -2496,12 +4446,20 @@ function ActivityChip({
         padding: '2px 6px',
         margin: '1px 0',
         fontSize: 11,
-        background: colors.bg,
-        color: colors.text,
+        fontWeight: chipTextWeight,
+        letterSpacing: chipLetterSpacing,
+        background: bgStyle,
+        color: chipTextColor,
+        textShadow: chipTextShadow,
         borderRadius: 3,
         border: 'none',
-        borderLeft: `3px solid ${colors.border}`,
-        outline: selected ? `1.5px solid ${colors.border}` : 'none',
+        // Phase 4l.12 — selected chip: thick dark outline that ignores
+        // chip colour, so it stands out against any background. Paired
+        // with the drop-shadow above and a z-index lift so the chip
+        // pops forward of its neighbours.
+        borderLeft: selected ? `5px solid #111827` : `3px solid ${colors.border}`,
+        outline: selected ? `2.5px solid #111827` : 'none',
+        outlineOffset: selected ? 1 : 0,
         cursor: isPo ? 'pointer' : isDragging ? 'grabbing' : 'grab',
         fontFamily: 'inherit',
         whiteSpace: 'nowrap',
@@ -2511,11 +4469,16 @@ function ActivityChip({
         textDecoration: dismissed ? 'line-through' : 'none',
         boxShadow: shadows.length > 0 ? shadows.join(', ') : undefined,
         position: 'relative',
-        zIndex: isHoveredSource ? 2 : 'auto',
+        zIndex: selected ? 3 : isHoveredSource ? 2 : 'auto',
+        transform: selected ? 'scale(1.02)' : undefined,
+        transformOrigin: 'left center',
+        transition: 'transform 100ms ease, box-shadow 100ms ease',
       }}
       title={
         activity.kind === 'po-placed'
           ? `PLACE PO · ${activity.productCode} — ${activity.productName}\nQty ${Math.round(activity.quantity).toLocaleString()}\nPlace by ${activity.poInfo ? fmtDate(activity.poInfo.placeByDate) : '?'}, arrives ${activity.poInfo ? fmtDate(activity.poInfo.arriveByDate) : '?'} (${activity.poInfo?.leadTimeDays}-day lead time)${activity.poInfo?.overdue ? '\n⚠ OVERDUE — placeBy is in the past' : ''}`
+          : activity.kind === 'po-receiving' && isUnleashedPo
+          ? `UNLEASHED PO · ${activity.productCode} — ${activity.productName}\nQty ${Math.round(activity.quantity).toLocaleString()}\nPO #${activity.poInfo?.purchaseOrderNumber} (${activity.poInfo?.status})\nSupplier: ${activity.poInfo?.supplierName ?? '?'}\nExpected: ${fmtDate(activity.date)}\n(view-only — edit in Unleashed)`
           : activity.kind === 'po-receiving'
           ? `RECEIVE PO · ${activity.productCode} — ${activity.productName}\nQty ${Math.round(activity.quantity).toLocaleString()}\nArrive by ${activity.poInfo ? fmtDate(activity.poInfo.arriveByDate) : '?'}, place by ${activity.poInfo ? fmtDate(activity.poInfo.placeByDate) : '?'} (${activity.poInfo?.leadTimeDays}-day lead time)${activity.poInfo?.overdue ? '\n⚠ Linked PO is OVERDUE' : ''}`
           : activity.kind === 'kitchen-required'
@@ -2527,7 +4490,66 @@ function ActivityChip({
           : `${activity.productCode} — ${activity.productName} (${activity.quantity} units, ${Math.round(activity.durationMinutes)} min)`
       }
     >
-      <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {/* Phase 4l.11 — shortage sparkline hangs from the chip's TOP border.
+          Absolutely positioned overlay (no reserved height) — passes
+          through the chip content if it has to. Only rendered when
+          demand exceeded supply at some point in the horizon. */}
+      {hasInventoryData && availability && (() => {
+        const VIEW_W = 100;
+        const VIEW_H = 6;
+        const sgeom = buildShortageGeometry(
+          availability.shortageRatios,
+          VIEW_W,
+          VIEW_H,
+        );
+        if (!sgeom) return null;
+        const SHORTAGE_LINE = '#dc2626';
+        const SHORTAGE_FILL = 'rgba(220, 38, 38, 0.28)';
+        return (
+          <svg
+            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              width: '100%',
+              height: 6,
+              overflow: 'visible',
+              pointerEvents: 'none',
+            }}
+          >
+            <path d={sgeom.fillPath} fill={SHORTAGE_FILL} stroke="none" />
+            <polyline
+              points={sgeom.points}
+              fill="none"
+              stroke={SHORTAGE_LINE}
+              strokeWidth={1}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+        );
+      })()}
+      <div
+        style={{
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          position: 'relative',
+          zIndex: 1,
+          // Chip-bg-coloured halo punches the text through any sparkline
+          // pixels underneath. Stacked shadows in 4 directions make it
+          // read like a thin outline rather than a soft glow.
+          // Crisp 1px outline: zero-blur shadows in 4 cardinal directions.
+// Sharper and thinner than blurred glow — text looks "stencilled"
+// through the sparkline beneath.
+textShadow: `1px 0 0 ${colors.bg}, -1px 0 0 ${colors.bg}, 0 1px 0 ${colors.bg}, 0 -1px 0 ${colors.bg}`,
+        }}
+      >
         {conflicted && <span style={{ marginRight: 3 }}>⚠</span>}
         {unplaceable && !conflicted && <span style={{ marginRight: 3 }}>⚠</span>}
         {activity.kind === 'po-placed' && (
@@ -2538,9 +4560,80 @@ function ActivityChip({
         {activity.kind === 'po-receiving' && (
           <span style={{ marginRight: 3, fontWeight: 600 }}>
             {activity.poInfo?.overdue ? '⚠ ' : ''}↓PO
+            {isUnleashedPo && (
+              <span
+                title="Unleashed PO (view-only)"
+                style={{
+                  marginLeft: 2,
+                  padding: '0 3px',
+                  borderRadius: 2,
+                  background: '#1e40af',
+                  color: '#fff',
+                  fontSize: 9,
+                  fontWeight: 700,
+                }}
+              >
+                U
+              </span>
+            )}
           </span>
         )}
         {activity.productCode} <span style={{ opacity: 0.7 }}>×{Math.round(activity.quantity)}</span>
+        {activity.kind === 'packaging' && activity.profitPerItem == null && (
+          <span
+            title="Profit data missing for this SKU — add it to data/_profit-gaps-todo.tsv (then re-run scripts/build-profit.js). Chip is sorted by a median-profit heuristic until then."
+            style={{
+              marginLeft: 3,
+              opacity: 0.6,
+              fontSize: 9,
+              fontWeight: 600,
+            }}
+          >
+            ?$
+          </span>
+        )}
+        {activity.orphan && (
+          <span
+            title="ORPHAN — this Unleashed assembly's intermediate isn't consumed by any current packaging chip. Likely stale; close out in Unleashed."
+            style={{
+              marginLeft: 4,
+              padding: '0 4px',
+              borderRadius: 2,
+              background: '#92400e',
+              color: '#fff',
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+            }}
+          >
+            ORPHAN
+          </span>
+        )}
+        {activity.kind === 'kitchen-required' && activity.redundantWithUnleashed && activity.redundantWithUnleashed.length > 0 && (
+          <span
+            title={`Unleashed already has ${activity.redundantWithUnleashed.length} assembly(ies) for this intermediate landing LATER in the horizon — if rescheduled earlier they'd satisfy this gap. ${activity.redundantWithUnleashed.slice(0, 3).map((u) => `${u.assembly} (${u.quantity}kg, ${u.date})`).join(', ')}${activity.redundantWithUnleashed.length > 3 ? ` …+${activity.redundantWithUnleashed.length - 3} more` : ''}`}
+            style={{
+              marginLeft: 4,
+              padding: '0 4px',
+              borderRadius: 2,
+              background: '#a16207',
+              color: '#fff',
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+            }}
+          >
+            UNLEASHED↗
+          </span>
+        )}
+        {activity.kind === 'packaging' && activity.supplyCappedFrom !== undefined && (
+          <span
+            style={{ marginLeft: 4, opacity: 0.7, fontSize: 9 }}
+            title={`Capped from ${Math.round(activity.supplyCappedFrom)} by ${activity.supplyCappedBy ?? 'upstream'} supply (Phase 4l.10 supply-cap)`}
+          >
+            ↓{Math.round(activity.supplyCappedFrom)}
+          </span>
+        )}
         {activity.kind === 'kitchen-required' && activity.durationDays && activity.durationDays > 1 && (
           <span style={{ opacity: 0.7 }}> · {activity.durationDays}d</span>
         )}
@@ -2555,9 +4648,242 @@ function ActivityChip({
             textOverflow: 'ellipsis',
             marginTop: 1,
             lineHeight: 1.2,
+            position: 'relative',
+            zIndex: 1,
+            // Crisp 1px outline: zero-blur shadows in 4 cardinal directions.
+// Sharper and thinner than blurred glow — text looks "stencilled"
+// through the sparkline beneath.
+textShadow: `1px 0 0 ${colors.bg}, -1px 0 0 ${colors.bg}, 0 1px 0 ${colors.bg}, 0 -1px 0 ${colors.bg}`,
           }}
         >
           {activity.productName}
+        </div>
+      )}
+      {/* Phase 4l.11 — inventory sparkline overlay for packaging chips.
+          Absolutely positioned along the chip's BOTTOM edge so it costs
+          no vertical space — it passes through the chip text if the
+          chip is short. A vertical dashed marker indicates where this
+          chip's date lands on the inventory journey. */}
+      {hasInventoryData && availability && (() => {
+        const VIEW_W = 100;
+        const VIEW_H = 14;
+        const geom = buildSparklineGeometry(
+          availability.ratios,
+          availability.chipDateIndex,
+          VIEW_W,
+          VIEW_H,
+        );
+        const floorPoints = buildFloorPoints(
+          availability.floorRatios,
+          VIEW_W,
+          VIEW_H,
+        );
+        const lineColor = colors.border;
+        const fillColor = `${colors.border}33`; // ~20% alpha hex suffix
+        return (
+          <svg
+            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              width: '100%',
+              height: 14,
+              overflow: 'visible',
+              pointerEvents: 'none',
+            }}
+          >
+            <path d={geom.fillPath} fill={fillColor} stroke="none" />
+            <polyline
+              points={geom.points}
+              fill="none"
+              stroke={lineColor}
+              strokeWidth={1}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+            {/* Phase 4l.12 — SOH floor reference line. Dashed amber so it
+                reads as a "target, not actual" line. Inventory dropping
+                below this line visually flags an unmet floor target. */}
+            {floorPoints && (
+              <polyline
+                points={floorPoints}
+                fill="none"
+                stroke="#d97706"
+                strokeWidth={0.8}
+                strokeOpacity={0.7}
+                strokeDasharray="2 2"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+            {geom.markerX != null && (
+              <line
+                x1={geom.markerX}
+                y1={0}
+                x2={geom.markerX}
+                y2={VIEW_H}
+                stroke="rgba(0, 0, 0, 0.5)"
+                strokeWidth={1}
+                strokeDasharray="2 2"
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+          </svg>
+        );
+      })()}
+    </button>
+  );
+}
+
+/**
+ * Cluster chip (Phase 4l.6) — renders a single chip in place of N chips
+ * that share (date, productCode, kind). Click selects the first member;
+ * the drawer surfaces the full cluster so the user can drill in.
+ *
+ * Not draggable (which constituent would move?). Conflict / unplaceable /
+ * related-highlight flags are OR'd across members.
+ */
+function ClusterChip({
+  members,
+  selectedId,
+  mutations,
+  conflictsByConsumer,
+  unplaceableSet,
+  relatedHighlight,
+  hoveredStableId,
+  registerRef,
+  onHover,
+  onSelect,
+}: {
+  members: ReadonlyArray<CalendarActivity>;
+  selectedId: string | null;
+  mutations: MutationsMap;
+  conflictsByConsumer: Map<string, ScheduleConflict[]>;
+  unplaceableSet: ReadonlySet<string>;
+  relatedHighlight: ReadonlyMap<string, 'supplier' | 'consumer'>;
+  hoveredStableId: string | null;
+  registerRef: (stableId: string, el: HTMLElement | null) => void;
+  onHover: (id: string | null) => void;
+  onSelect: (a: CalendarActivity) => void;
+}) {
+  const first = members[0];
+  const colors = colorOf(first);
+  const totalQty = members.reduce((s, m) => s + m.quantity, 0);
+  const allDismissed = members.every((m) => isDismissed(mutations, m.stableId));
+  const anyConflict = members.some((m) => conflictsByConsumer.has(m.stableId));
+  const anyUnplaceable = members.some((m) => unplaceableSet.has(m.stableId));
+  const anyRelated = (() => {
+    for (const m of members) {
+      const k = relatedHighlight.get(m.stableId);
+      if (k) return k;
+    }
+    return null;
+  })();
+  const anyHovered = members.some((m) => hoveredStableId === m.stableId);
+  const anySelected = members.some((m) => m.id === selectedId);
+
+  // Register the SAME DOM node under every member's stableId so arrows
+  // pointing to any constituent resolve to this cluster chip.
+  const refSetter = (el: HTMLElement | null) => {
+    for (const m of members) registerRef(m.stableId, el);
+  };
+  // Hover: pick the first member's stableId so the arrow drawer has
+  // something to look up. Future: union relationships across members.
+  const onMouseEnter = () => onHover(first.stableId);
+  const onMouseLeave = () => onHover(null);
+
+  const shadows: string[] = [];
+  if (anyConflict) shadows.push('inset 0 0 0 1.5px #dc2626');
+  if (anyRelated === 'supplier') shadows.push('inset 0 0 0 1.5px #059669');
+  if (anyRelated === 'consumer') shadows.push('inset 0 0 0 1.5px #d97706');
+  if (anyHovered) shadows.push('0 0 0 2px #3b82f6');
+  if (anyUnplaceable) shadows.push('inset 0 0 0 1.5px #d97706');
+  if (anySelected) shadows.push('0 6px 16px rgba(0, 0, 0, 0.35)');
+
+  const titleLines = [
+    `${first.productCode} · ${members.length} chips on ${fmtDate(first.date)}`,
+    `Combined qty: ${Math.round(totalQty).toLocaleString()}`,
+    '',
+    ...members.map((m, i) => `${i + 1}. ${Math.round(m.quantity)} units (id: ${m.stableId})`),
+    '',
+    'Click to open drawer — switch between cluster members from there.',
+  ];
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(first)}
+      ref={refSetter}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      draggable={false}
+      style={{
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        padding: '2px 6px',
+        margin: '1px 0',
+        fontSize: 11,
+        background: colors.bg,
+        color: colors.text,
+        borderRadius: 3,
+        border: 'none',
+        borderLeft: anySelected ? `5px solid #111827` : `3px solid ${colors.border}`,
+        outline: anySelected ? `2.5px solid #111827` : 'none',
+        outlineOffset: anySelected ? 1 : 0,
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        opacity: allDismissed ? 0.35 : 1,
+        textDecoration: allDismissed ? 'line-through' : 'none',
+        boxShadow: shadows.length > 0 ? shadows.join(', ') : undefined,
+        position: 'relative',
+        zIndex: anySelected ? 3 : anyHovered ? 2 : 'auto',
+        transform: anySelected ? 'scale(1.02)' : undefined,
+        transformOrigin: 'left center',
+        transition: 'transform 100ms ease, box-shadow 100ms ease',
+      }}
+      title={titleLines.join('\n')}
+    >
+      <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {anyConflict && <span style={{ marginRight: 3 }}>⚠</span>}
+        {first.productCode}{' '}
+        <span style={{ opacity: 0.7 }}>×{Math.round(totalQty)}</span>{' '}
+        <span
+          style={{
+            marginLeft: 2,
+            padding: '0 4px',
+            borderRadius: 2,
+            background: colors.border,
+            color: '#fff',
+            fontSize: 9,
+            fontWeight: 700,
+          }}
+        >
+          ⊕{members.length}
+        </span>
+      </div>
+      {first.productName && first.productName !== first.productCode && (
+        <div
+          style={{
+            fontSize: 9,
+            opacity: 0.65,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            marginTop: 1,
+            lineHeight: 1.2,
+          }}
+        >
+          {first.productName}
         </div>
       )}
     </button>
@@ -2593,6 +4919,14 @@ function ActivityDrawer({
   onClearEdit,
   onEditLeadTime,
   onClearLeadTime,
+  onEditStation,
+  onClearStation,
+  stationOverridden,
+  originalStation,
+  clusterMembers,
+  onSelectClusterMember,
+  relatedChips,
+  onSelectRelatedChip,
   onClose,
 }: {
   activity: CalendarActivity;
@@ -2642,6 +4976,32 @@ function ActivityDrawer({
   /** Apply a lead-time override (PO chips). */
   onEditLeadTime: (days: number) => void;
   onClearLeadTime: () => void;
+  /** Phase 4l.8: change the packaging station for this chip. */
+  onEditStation: (station: Station) => void;
+  /** Phase 4l.8: revert station to the planner's original assignment. */
+  onClearStation: () => void;
+  /** Whether the current station is a user override (drawer shows "modified" badge). */
+  stationOverridden: boolean;
+  /** Planner-original station (shown as "was" tag when overridden). */
+  originalStation: Station | null;
+  /** Sibling activities sharing (date, productCode, kind), or null when singleton. */
+  clusterMembers: ReadonlyArray<CalendarActivity> | null;
+  /** Switch the drawer to a different cluster member. */
+  onSelectClusterMember: (a: CalendarActivity) => void;
+  /**
+   * Phase 4l.12 — chips supplying/consuming this chip via the BOM,
+   * resolved to their CalendarActivity (so we can display productCode,
+   * date, qty, kind). `phantom: true` = starved consumer (red dashed
+   * arrow on the canvas). null when the activity isn't in the visible
+   * activity list (= it was dismissed or filtered).
+   */
+  relatedChips: ReadonlyArray<{
+    activity: CalendarActivity;
+    direction: 'supplier' | 'consumer';
+    phantom: boolean;
+  }>;
+  /** Click handler to jump the drawer to a related chip. */
+  onSelectRelatedChip: (a: CalendarActivity) => void;
   onClose: () => void;
 }) {
   const colors = colorOf(activity);
@@ -2735,6 +5095,64 @@ function ActivityDrawer({
           : '—'}
       </div>
 
+      {activity.orphan && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: '8px 10px',
+            background: '#fef3c7',
+            border: '0.5px solid #92400e',
+            borderRadius: 4,
+            fontSize: 11,
+            lineHeight: 1.5,
+          }}
+        >
+          <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 2 }}>
+            ORPHAN ASSEMBLY
+          </div>
+          This Unleashed assembly is producing an intermediate
+          (<code style={{ fontFamily: 'monospace' }}>{activity.productCode}</code>)
+          that isn't consumed by any current packaging chip in the plan.
+          Likely cause: the downstream FG was removed from the family sheet,
+          dropped from forecast, or this assembly is stale.
+          <br />
+          <strong>Action</strong>: close out this assembly in Unleashed
+          (or confirm the missing FG should re-enter the plan).
+        </div>
+      )}
+      {activity.kind === 'kitchen-required' && activity.redundantWithUnleashed && activity.redundantWithUnleashed.length > 0 && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: '8px 10px',
+            background: '#fef9c3',
+            border: '0.5px solid #a16207',
+            borderRadius: 4,
+            fontSize: 11,
+            lineHeight: 1.5,
+          }}
+        >
+          <div style={{ fontWeight: 700, color: '#a16207', marginBottom: 4 }}>
+            POSSIBLY REDUNDANT WITH UNLEASHED
+          </div>
+          Unleashed already has the following assembly(ies) for{' '}
+          <code style={{ fontFamily: 'monospace' }}>{activity.productCode}</code>
+          {' '}landing AFTER this run's required-by date
+          (<strong>{activity.requiredByDate ? fmtDate(activity.requiredByDate) : '—'}</strong>):
+          <ul style={{ margin: '6px 0 6px 14px', padding: 0 }}>
+            {activity.redundantWithUnleashed.map((u) => (
+              <li key={u.assembly}>
+                <code style={{ fontFamily: 'monospace' }}>{u.assembly}</code> —{' '}
+                {Math.round(u.quantity)} units on {fmtDate(u.date)}
+              </li>
+            ))}
+          </ul>
+          If you can pull one of these forward in Unleashed, this new
+          kitchen run becomes unnecessary. Otherwise both will produce
+          → carried inventory at horizon end.
+        </div>
+      )}
+
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Product
@@ -2744,6 +5162,170 @@ function ActivityDrawer({
           {activity.productCode}
         </div>
       </div>
+
+      {/* Cluster picker (Phase 4l.6): when this activity is part of a
+          same-day same-product cluster, list its siblings so the user can
+          switch focus. */}
+      {clusterMembers && clusterMembers.length >= 2 && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: '8px 10px',
+            background: 'var(--bg-page)',
+            border: '0.5px dashed var(--border)',
+            borderRadius: 4,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              color: 'var(--text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginBottom: 4,
+            }}
+          >
+            Cluster · {clusterMembers.length} chips for {activity.productCode} on {fmtDate(activity.date)}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {clusterMembers.map((m, i) => {
+              const isSelf = m.stableId === activity.stableId;
+              return (
+                <button
+                  key={m.stableId}
+                  type="button"
+                  onClick={() => onSelectClusterMember(m)}
+                  disabled={isSelf}
+                  style={{
+                    padding: '2px 8px',
+                    fontSize: 11,
+                    border: '0.5px solid var(--border)',
+                    borderRadius: 3,
+                    background: isSelf ? colors.bg : 'transparent',
+                    color: isSelf ? colors.text : 'inherit',
+                    cursor: isSelf ? 'default' : 'pointer',
+                    fontFamily: 'inherit',
+                    fontWeight: isSelf ? 600 : 400,
+                  }}
+                  title={`Switch drawer to ${m.stableId}`}
+                >
+                  #{i + 1} · {Math.round(m.quantity)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Phase 4l.12 — Related chips (suppliers + consumers via BOM). */}
+      {relatedChips.length > 0 && (() => {
+        const suppliers = relatedChips.filter((r) => r.direction === 'supplier');
+        const consumers = relatedChips.filter((r) => r.direction === 'consumer');
+        const sortByDate = (
+          a: { activity: CalendarActivity },
+          b: { activity: CalendarActivity },
+        ) => a.activity.date.localeCompare(b.activity.date);
+        suppliers.sort(sortByDate);
+        consumers.sort(sortByDate);
+        const renderRel = (r: {
+          activity: CalendarActivity;
+          direction: 'supplier' | 'consumer';
+          phantom: boolean;
+        }) => (
+          <button
+            key={r.activity.stableId}
+            type="button"
+            onClick={() => onSelectRelatedChip(r.activity)}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              width: '100%',
+              padding: '4px 8px',
+              margin: '2px 0',
+              fontSize: 11,
+              fontFamily: 'inherit',
+              textAlign: 'left',
+              background: r.phantom ? 'rgba(220, 38, 38, 0.08)' : 'var(--bg-page)',
+              border: r.phantom ? '0.5px dashed #dc2626' : '0.5px solid var(--border)',
+              borderRadius: 3,
+              cursor: 'pointer',
+              color: 'inherit',
+            }}
+            title={
+              r.phantom
+                ? `Starved consumer — no upstream supply finishes before ${fmtDate(r.activity.date)}. Phantom arrow on calendar.`
+                : `Jump drawer to ${r.activity.stableId}`
+            }
+          >
+            <span style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
+              <span style={{ fontWeight: 600 }}>{r.activity.productCode}</span>
+              <span style={{ opacity: 0.7 }}>×{Math.round(r.activity.quantity)}</span>
+              {r.phantom && (
+                <span style={{ fontSize: 9, color: '#dc2626', fontWeight: 600 }}>
+                  PHANTOM
+                </span>
+              )}
+            </span>
+            <span style={{ opacity: 0.7, fontSize: 10 }}>
+              {fmtDate(r.activity.date)}
+            </span>
+          </button>
+        );
+        return (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '8px 10px',
+              background: 'var(--bg-page)',
+              border: '0.5px dashed var(--border)',
+              borderRadius: 4,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: 6,
+              }}
+            >
+              Related · {suppliers.length} supplier
+              {suppliers.length === 1 ? '' : 's'} · {consumers.length} consumer
+              {consumers.length === 1 ? '' : 's'}
+            </div>
+            {suppliers.length > 0 && (
+              <div style={{ marginBottom: 6 }}>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: 'var(--text-muted)',
+                    marginBottom: 2,
+                  }}
+                >
+                  ← Suppliers (feeds this chip)
+                </div>
+                {suppliers.map(renderRel)}
+              </div>
+            )}
+            {consumers.length > 0 && (
+              <div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: 'var(--text-muted)',
+                    marginBottom: 2,
+                  }}
+                >
+                  → Consumers (this chip feeds)
+                </div>
+                {consumers.map(renderRel)}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13, marginBottom: 16 }}>
         <Field
@@ -2776,11 +5358,30 @@ function ActivityDrawer({
             value={`${kitchenChipMinutes} min on start day`}
           />
         )}
-        {/* Purchase order details (Phase 4m.2 + 4m.4). Shows the EFFECTIVE
+        {/* Unleashed PO (Phase 4l.5) — view-only details. */}
+        {(activity.kind === 'po-placed' || activity.kind === 'po-receiving') &&
+          activity.poInfo &&
+          activity.poInfo.source === 'unleashed_po' && (
+            <>
+              <Field label="Source" value="Unleashed (view-only)" />
+              <Field
+                label="PO #"
+                value={activity.poInfo.purchaseOrderNumber ?? '—'}
+              />
+              <Field
+                label="Supplier"
+                value={activity.poInfo.supplierName ?? '—'}
+              />
+              <Field label="Status" value={activity.poInfo.status ?? '—'} />
+              <Field label="Expected" value={fmtDate(activity.date)} />
+            </>
+          )}
+        {/* Synthetic PO details (Phase 4m.2 + 4m.4). Shows the EFFECTIVE
             dates (computed with any lead-time override) plus the ideal
             file-default values for context. */}
         {(activity.kind === 'po-placed' || activity.kind === 'po-receiving') &&
-          activity.poInfo && (
+          activity.poInfo &&
+          activity.poInfo.source !== 'unleashed_po' && (
             <>
               <Field
                 label="Place by"
@@ -2833,11 +5434,241 @@ function ActivityDrawer({
               label="Changeover"
               value={`${Math.round(activity.changeoverMinutes)} min`}
             />
+            {/* Station dropdown (Phase 4l.8): re-allocate this chip's
+                packaging station. Auto-routed chips often need this — they
+                land on hand-packing by default but might really belong on
+                bottlo / dust / elephant. */}
+            <div style={{ gridColumn: 'span 2' }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: 4,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                }}
+              >
+                <span>
+                  Station
+                  {stationOverridden && (
+                    <span
+                      style={{
+                        marginLeft: 4,
+                        padding: '0 4px',
+                        fontSize: 9,
+                        background: '#fef3c7',
+                        color: '#92400e',
+                        borderRadius: 2,
+                        fontWeight: 600,
+                      }}
+                    >
+                      MODIFIED
+                    </span>
+                  )}
+                </span>
+                {stationOverridden && originalStation && (
+                  <button
+                    type="button"
+                    onClick={onClearStation}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#1e40af',
+                      fontSize: 10,
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      fontFamily: 'inherit',
+                      padding: 0,
+                    }}
+                    title={`Reset to planner's original: ${STATION_LABELS[originalStation]}`}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <select
+                value={activity.station ?? ''}
+                onChange={(e) => onEditStation(e.target.value as Station)}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  fontSize: 13,
+                  border: '0.5px solid var(--border)',
+                  borderRadius: 3,
+                  background: 'var(--bg-page)',
+                  color: 'inherit',
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                  fontWeight: stationOverridden ? 600 : 400,
+                }}
+              >
+                {STATIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {STATION_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+              {stationOverridden && originalStation && (
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: 'var(--text-muted)',
+                    marginTop: 4,
+                  }}
+                >
+                  Was: {STATION_LABELS[originalStation]}
+                </div>
+              )}
+            </div>
+            {/* Profit (Phase 4l.9) — surfaces the joint profit × demand
+                signal the day-assigner uses for overflow ranking. Two
+                columns: per-unit profit, batch total. `null` means the
+                SKU is missing from `data/_profit-input.tsv` and the
+                day-assigner ranks it as $0 (= drop first on overflow). */}
+            {activity.profitPerItem !== null && activity.profitPerItem !== undefined ? (
+              <>
+                <Field
+                  label="Profit / unit"
+                  value={`$${activity.profitPerItem.toFixed(2)}`}
+                />
+                <Field
+                  label="Batch profit"
+                  value={`$${(activity.profitPerItem * activity.quantity).toFixed(0)}`}
+                />
+              </>
+            ) : (
+              <div
+                style={{
+                  gridColumn: 'span 2',
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                  padding: '4px 8px',
+                  background: '#fef3c7',
+                  border: '0.5px dashed #d97706',
+                  borderRadius: 3,
+                }}
+                title="Add this SKU's profit-per-item to data/_profit-input.tsv and re-run scripts/build-profit.js. The day-assigner ranks blank-profit SKUs as $0 → first to be dropped when a week overflows."
+              >
+                ⚠ No profit data — dropped first on capacity overflow
+              </div>
+            )}
           </>
         )}
         <Field label="Family" value={activity.family ?? '—'} />
         <Field label="Extended family" value={activity.extendedFamily ?? '—'} />
       </div>
+
+      {/* ─── Supply-capped (Phase 4l.10) ──────────────── */}
+      {activity.kind === 'packaging' && activity.supplyCappedFrom !== undefined && (
+        <div
+          style={{
+            marginBottom: 14,
+            padding: '8px 10px',
+            fontSize: 12,
+            background: activity.quantity <= 0 ? '#e5e7eb' : '#fef3c7',
+            border: `0.5px solid ${activity.quantity <= 0 ? '#6b7280' : '#d97706'}`,
+            borderRadius: 4,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: activity.quantity <= 0 ? '#374151' : '#92400e',
+              marginBottom: 4,
+            }}
+          >
+            {activity.quantity <= 0
+              ? '⛔ Supply-capped to zero'
+              : '⚠ Supply-capped'}
+          </div>
+          <div style={{ color: activity.quantity <= 0 ? '#4b5563' : '#78350f' }}>
+            Optimiser planned <strong>{Math.round(activity.supplyCappedFrom)}</strong>{' '}
+            units; cut to <strong>{Math.round(activity.quantity)}</strong> because{' '}
+            <code style={{ fontFamily: 'inherit' }}>{activity.supplyCappedBy}</code>{' '}
+            output was short. Higher-profit chips on the same intermediate took
+            their full demand first.
+          </div>
+          {activity.quantity <= 0 && (
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 11,
+                color: '#374151',
+                fontStyle: 'italic',
+              }}
+            >
+              This run isn't scheduled — increase the upstream kitchen run or
+              reduce a higher-profit consumer to restore supply.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Label / printed bag blocked (Phase 4l.10) ──── */}
+      {activity.kind === 'packaging' &&
+        activity.labelBlocking &&
+        activity.labelBlocking.length > 0 && (
+          <div
+            style={{
+              marginBottom: 14,
+              padding: '8px 10px',
+              fontSize: 12,
+              background: '#fef3c7',
+              border: '0.5px solid #d97706',
+              borderRadius: 4,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: '#92400e',
+                marginBottom: 4,
+              }}
+            >
+              ⚠ Packaging material short
+            </div>
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {activity.labelBlocking.map((lb) => (
+                <li key={lb.code} style={{ marginBottom: 4, color: '#78350f' }}>
+                  <div style={{ fontWeight: 500 }}>
+                    {lb.kind === 'label' ? 'Label' : 'Printed bag'} ·{' '}
+                    <code style={{ fontFamily: 'inherit' }}>{lb.code}</code>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {lb.name}
+                  </div>
+                  <div style={{ fontSize: 11, marginTop: 2 }}>
+                    {lb.arriveByDate ? (
+                      <>
+                        PO arrives <strong>{fmtDate(lb.arriveByDate)}</strong>
+                        {lb.arriveByDate > activity.date && (
+                          <span style={{ color: '#b91c1c' }}>
+                            {' '}
+                            — after this run ({fmtDate(activity.date)})
+                          </span>
+                        )}
+                        {lb.placeByOverdue && lb.placeByDate && (
+                          <div style={{ color: '#b91c1c' }}>
+                            Place-by {fmtDate(lb.placeByDate)} — OVERDUE
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ color: '#b91c1c' }}>
+                        No PO planned — order this material before the run.
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
       {/* ─── Stock on hand (per-warehouse) ─────────────── */}
       <div style={{ marginBottom: 14 }}>
@@ -2884,7 +5715,13 @@ function ActivityDrawer({
           </ul>
         )}
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-          Planner used: {plannerInitialInventory.toLocaleString()} units (sum of eligible warehouses)
+          Planner used: {plannerInitialInventory.toLocaleString()} units (sum of{' '}
+          {activity.kind === 'kitchen' || activity.kind === 'kitchen-required'
+            ? 'intermediate-eligible warehouses: Lundberg + MF Packaging + MF Operations'
+            : activity.kind === 'po-placed' || activity.kind === 'po-receiving'
+            ? 'all warehouses (raw materials)'
+            : 'fulfilment-eligible warehouses: TBC + TBC Height + MF Packaging + MF Operations'}
+          )
         </div>
       </div>
 
@@ -2975,6 +5812,12 @@ function ActivityDrawer({
             min={1}
             value={qtyInput}
             onChange={(e) => setQtyInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && qtyValid && qtyChanged) {
+                e.preventDefault();
+                onEditQuantity(parsedQty);
+              }
+            }}
             style={{
               flex: 1,
               padding: '6px 8px',
@@ -3031,10 +5874,10 @@ function ActivityDrawer({
       </div>
 
       {/* ─── Edit lead time (Phase 4m.4) ──────────────────
-          Only on PO chips. Shifts both place-by and arrive-by chips by
-          the difference between the override and the file default.
-          Useful for transient shipping delays the user knows about. */}
-      {isPo && activity.poInfo && (
+          Only on synthetic PO chips. Shifts both place-by and arrive-by
+          chips by the difference between the override and the file default.
+          Unleashed POs are view-only — dates come from Unleashed. */}
+      {isPo && activity.poInfo && activity.poInfo.source !== 'unleashed_po' && (
         <div style={{ marginBottom: 14 }}>
           <div
             style={{

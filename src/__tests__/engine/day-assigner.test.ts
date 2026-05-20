@@ -22,6 +22,8 @@ function meta(o: Partial<ProductMeta> & { productCode: string }): ProductMeta {
     packageSize: o.packageSize ?? 'MED',
     station: o.station ?? 'bottlo',
     rateUnitsPerHour: o.rateUnitsPerHour ?? 200,
+    // Forward profitPerItem so per-batch fixtures can drive Phase 4l.9 trim ranking.
+    profitPerItem: 'profitPerItem' in o ? o.profitPerItem! : undefined,
   };
 }
 
@@ -227,6 +229,83 @@ describe('assignBatchesToDays', () => {
       const overflowWarnings = r.warnings.filter((w) => w.kind === 'week_overflow');
       expect(overflowWarnings).toHaveLength(1);
       expect((overflowWarnings[0] as { productCode: string }).productCode).toBe('F');
+    });
+
+    test('profit-aware trim drops lowest-profit batch first when week overflows (Phase 4l.9)', () => {
+      // 6 batches at 480 min each → 2880 min demanded, 2400 available (5 × 480).
+      // Profits chosen so the *least* valuable batch is C (not the trailing F).
+      // The trim should drop C even though it sits in the middle.
+      const profits: Record<string, number> = { A: 10, B: 8, C: 1, D: 9, E: 7, F: 6 };
+      const batches = ['A', 'B', 'C', 'D', 'E', 'F'].map((p) => ({
+        productCode: p,
+        weekStart: MONDAY,
+        quantity: 1600, // 480 min production
+        changeover: 0,
+        productMeta: { profitPerItem: profits[p] },
+      }));
+      const tl = syntheticTimeline('bottlo', batches);
+      const perStation = new Map<Station, StationTimeline>();
+      perStation.set('bottlo', tl);
+      const r = assignBatchesToDays({ perStation });
+      const overflowWarnings = r.warnings.filter((w) => w.kind === 'week_overflow');
+      expect(overflowWarnings).toHaveLength(1);
+      expect((overflowWarnings[0] as { productCode: string }).productCode).toBe('C');
+      expect((overflowWarnings[0] as { reason: string }).reason).toBe('profit_trim');
+      // The 5 priced survivors should all be assigned (no second drop).
+      const bottlo = r.perStation.get('bottlo')!;
+      const assignedCodes = new Set<string>();
+      for (const dl of bottlo.byDay.values()) {
+        for (const b of dl.batches) assignedCodes.add(b.productCode);
+      }
+      expect(assignedCodes).toEqual(new Set(['A', 'B', 'D', 'E', 'F']));
+    });
+
+    test('joint profit × quantity ranking: tiny-demand high-margin survives, low-margin filler drops first', () => {
+      // 6 batches × 480 min = 2880 demanded, 2400 capacity → trim 480+ min.
+      // HiMargin (small qty, big $/unit) batch profit = 100 × $50 = $5000 over 30 min → $166/min
+      // BigDemand batch profit = 1600 × $5 = $8000 over 480 min → $16.7/min
+      // The four FillerN priced at $1, $0.7, $0.5, $0.3 per unit (batch profit $1600/$1120/$800/$480 → $3.3 / $2.3 / $1.7 / $1 per min)
+      // Ranking ascending: Filler4 (1.0), Filler3 (1.7), Filler2 (2.3), Filler1 (3.3), BigDemand (16.7), HiMargin (166).
+      // We need to free ≥ 480 min. Drop Filler4 (480 min) → deficit 0. Single drop.
+      const batches = [
+        { productCode: 'HiMargin', weekStart: MONDAY, quantity: 100, changeover: 0, productMeta: { profitPerItem: 50 } },
+        { productCode: 'BigDemand', weekStart: MONDAY, quantity: 1600, changeover: 0, productMeta: { profitPerItem: 5 } },
+        { productCode: 'Filler1', weekStart: MONDAY, quantity: 1600, changeover: 0, productMeta: { profitPerItem: 1 } },
+        { productCode: 'Filler2', weekStart: MONDAY, quantity: 1600, changeover: 0, productMeta: { profitPerItem: 0.7 } },
+        { productCode: 'Filler3', weekStart: MONDAY, quantity: 1600, changeover: 0, productMeta: { profitPerItem: 0.5 } },
+        { productCode: 'Filler4', weekStart: MONDAY, quantity: 1600, changeover: 0, productMeta: { profitPerItem: 0.3 } },
+      ];
+      const tl = syntheticTimeline('bottlo', batches);
+      const perStation = new Map<Station, StationTimeline>();
+      perStation.set('bottlo', tl);
+      const r = assignBatchesToDays({ perStation });
+      const overflowCodes = r.warnings
+        .filter((w) => w.kind === 'week_overflow')
+        .map((w) => (w as { productCode: string }).productCode);
+      // Filler4 (lowest $/min) drops; HiMargin (tiny but high-margin) and BigDemand (high total $) survive.
+      expect(overflowCodes).toEqual(['Filler4']);
+    });
+
+    test('SKUs with no profit data drop first when overflowing (Phase 4l.9)', () => {
+      // 6 batches each 480 min total, capacity 2400. Must drop one.
+      // A-E priced, F has null profitPerItem → ranks at $0/min → drops first.
+      const batches = ['A', 'B', 'C', 'D', 'E', 'F'].map((p, i) => ({
+        productCode: p,
+        weekStart: MONDAY,
+        quantity: 1600,
+        changeover: 0,
+        productMeta: p === 'F' ? { profitPerItem: null } : { profitPerItem: 10 - i },
+      }));
+      const tl = syntheticTimeline('bottlo', batches);
+      const perStation = new Map<Station, StationTimeline>();
+      perStation.set('bottlo', tl);
+      const r = assignBatchesToDays({ perStation });
+      const overflow = r.warnings.find((w) => w.kind === 'week_overflow') as
+        | { productCode: string; batchProfit: number | null; reason: string }
+        | undefined;
+      expect(overflow?.productCode).toBe('F');
+      expect(overflow?.batchProfit).toBeNull();
+      expect(overflow?.reason).toBe('profit_trim');
     });
   });
 

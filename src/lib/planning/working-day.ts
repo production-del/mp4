@@ -170,3 +170,39 @@ export function formatISOShort(iso: string): string {
   if (isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
 }
+
+// ─── Workday helpers ────────────────────────────────────────
+
+/** True iff the ISO date falls on Mon-Fri (local). */
+export function isWorkday(iso: string): boolean {
+  const d = fromLocalISODate(iso);
+  const dow = d.getDay();
+  return dow >= 1 && dow <= 5;
+}
+
+/**
+ * If `iso` falls on a weekend, return the most-recent preceding Friday.
+ * Otherwise return `iso` unchanged. Used by the kitchen-run planner so
+ * recipe START dates always land on a working day (passive
+ * soak/dehydrate steps may still span weekends).
+ */
+export function previousWorkday(iso: string): string {
+  const d = fromLocalISODate(iso);
+  while (d.getDay() === 0 || d.getDay() === 6) {
+    d.setDate(d.getDate() - 1);
+  }
+  return toLocalISODate(d);
+}
+
+/**
+ * If `iso` falls on a weekend, return the next Monday. Otherwise return
+ * `iso` unchanged. Used when clamping forward (e.g. today-floor lands
+ * on a weekend → push to the next working day).
+ */
+export function nextWorkday(iso: string): string {
+  const d = fromLocalISODate(iso);
+  while (d.getDay() === 0 || d.getDay() === 6) {
+    d.setDate(d.getDate() + 1);
+  }
+  return toLocalISODate(d);
+}

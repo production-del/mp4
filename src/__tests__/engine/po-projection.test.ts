@@ -72,8 +72,8 @@ describe('projectPoChips', () => {
       purchaseRequirements: [
         req({
           rawMaterialCode: 'RAW_X',
-          placeByDate: '2026-05-10',
-          arriveByDate: '2026-05-24',
+          placeByDate: '2026-05-11', // Mon — avoid weekend-pullback ambiguity
+          arriveByDate: '2026-05-25', // Mon
           leadTimeDays: 14,
           quantity: 100,
         }),
@@ -84,9 +84,9 @@ describe('projectPoChips', () => {
     const place = chips.find((c) => c.kind === 'po-placed')!;
     const receive = chips.find((c) => c.kind === 'po-receiving')!;
     // Place stays at the ideal placeBy because it's still after today.
-    expect(place.date).toBe('2026-05-10');
-    // Receive uses the OVERRIDE (21 days), not the ideal 14.
-    expect(receive.date).toBe('2026-05-31');
+    expect(place.date).toBe('2026-05-11');
+    // Receive uses the OVERRIDE (21 days), not the ideal 14. 05-11 + 21 = 06-01 (Mon).
+    expect(receive.date).toBe('2026-06-01');
     // poInfo.leadTimeDays still reflects the FILE default for drawer comparison.
     expect(place.poInfo?.leadTimeDays).toBe(14);
   });
@@ -117,8 +117,8 @@ describe('projectPoChips', () => {
       purchaseRequirements: [
         req({
           rawMaterialCode: 'RAW_X',
-          placeByDate: '2026-05-10',
-          arriveByDate: '2026-05-24',
+          placeByDate: '2026-05-11', // Mon
+          arriveByDate: '2026-05-25', // Mon
           leadTimeDays: 14,
           quantity: 100,
         }),
@@ -127,8 +127,8 @@ describe('projectPoChips', () => {
       leadTimeOverrideDaysByCode: { RAW_X: NaN as unknown as number },
     });
     const receive = chips.find((c) => c.kind === 'po-receiving')!;
-    // Falls back to file default 14.
-    expect(receive.date).toBe('2026-05-24');
+    // Falls back to file default 14. 05-11 + 14 = 05-25 (Mon).
+    expect(receive.date).toBe('2026-05-25');
   });
 
   test('negative override ignored', () => {
@@ -136,8 +136,8 @@ describe('projectPoChips', () => {
       purchaseRequirements: [
         req({
           rawMaterialCode: 'RAW_X',
-          placeByDate: '2026-05-10',
-          arriveByDate: '2026-05-24',
+          placeByDate: '2026-05-11', // Mon
+          arriveByDate: '2026-05-25', // Mon
           leadTimeDays: 14,
           quantity: 100,
         }),
@@ -146,7 +146,7 @@ describe('projectPoChips', () => {
       leadTimeOverrideDaysByCode: { RAW_X: -5 },
     });
     const receive = chips.find((c) => c.kind === 'po-receiving')!;
-    expect(receive.date).toBe('2026-05-24');
+    expect(receive.date).toBe('2026-05-25');
   });
 
   test('multiple requirements emit independent chip pairs', () => {
@@ -161,5 +161,45 @@ describe('projectPoChips', () => {
     expect(chips.map((c) => c.stableId).sort()).toEqual(
       ['po-placed|A', 'po-placed|B', 'po-receiving|A', 'po-receiving|B'].sort(),
     );
+  });
+
+  // ─── Weekend pullback (Phase 4l.8) ────────────────────────
+
+  test('place-by on Sunday is pulled back to Friday', () => {
+    const chips = projectPoChips({
+      purchaseRequirements: [
+        req({
+          rawMaterialCode: 'RAW_X',
+          placeByDate: '2026-05-10', // Sun
+          arriveByDate: '2026-05-24', // Sun
+          leadTimeDays: 14,
+          quantity: 100,
+        }),
+      ],
+      today: '2026-04-01',
+    });
+    const place = chips.find((c) => c.kind === 'po-placed')!;
+    const receive = chips.find((c) => c.kind === 'po-receiving')!;
+    expect(place.date).toBe('2026-05-08'); // Fri before Sun 10
+    // arrive recomputed from pulled-back place: 05-08 + 14 = 05-22 (Fri).
+    expect(receive.date).toBe('2026-05-22');
+  });
+
+  test('arrive-by landing on Saturday is also pulled back to Friday', () => {
+    const chips = projectPoChips({
+      purchaseRequirements: [
+        req({
+          rawMaterialCode: 'RAW_X',
+          placeByDate: '2026-05-04', // Mon
+          arriveByDate: '2026-05-09', // Sat
+          leadTimeDays: 5,
+          quantity: 100,
+        }),
+      ],
+      today: '2026-04-01',
+    });
+    const receive = chips.find((c) => c.kind === 'po-receiving')!;
+    // place stays Mon 05-04; arrive 05-04 + 5 = 05-09 (Sat) → Fri 05-08.
+    expect(receive.date).toBe('2026-05-08');
   });
 });

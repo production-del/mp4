@@ -63,6 +63,26 @@ export interface RawMaterialDemandEvent {
   };
 }
 
+/**
+ * Scheduled supply for a raw material — typically an outstanding Unleashed
+ * PO line landing on its expected delivery date. Credited to running SOH
+ * BEFORE same-date demand is deducted (Phase 4l.5).
+ */
+export interface RawMaterialSupplyEvent {
+  rawMaterialCode: string;
+  rawMaterialName: string;
+  quantity: number;
+  /** YYYY-MM-DD when the supply becomes available. */
+  availableDate: string;
+  /** Provenance for diagnostics / chip drilldown. */
+  source: {
+    kind: 'unleashed_po';
+    purchaseOrderNumber: string;
+    lineNumber: number;
+    supplierName: string;
+  };
+}
+
 export interface RawMaterialShortage {
   rawMaterialCode: string;
   rawMaterialName: string;
@@ -70,6 +90,13 @@ export interface RawMaterialShortage {
   shortageDate: string;
   /** Quantity short on the shortage date (positive number). */
   shortageQuantity: number;
+  /**
+   * Cumulative shortage at the end of the projection window =
+   * `max(0, totalDemand - initialSoh)`. Drives PO sizing in
+   * `derivePurchaseRequirements` so a single PO covers the whole horizon's
+   * demand rather than just the first shortfall.
+   */
+  cumulativeShortage: number;
   /** Total demand across the projected window (for context). */
   totalDemand: number;
   /** Initial SOH at the start of the projection. */
@@ -106,6 +133,11 @@ export interface AnalyzeInput {
   dismissedStableIds?: ReadonlySet<string>;
   /** Per-raw-material starting SOH (sum across whatever warehouses the caller chose). */
   initialSohByCode: Record<string, number>;
+  /**
+   * Scheduled supply (e.g. outstanding Unleashed PO line items) credited
+   * to SOH on their `availableDate`. Optional; Phase 4l.5.
+   */
+  supplyEvents?: ReadonlyArray<RawMaterialSupplyEvent>;
   /** Per-material lead time in days; missing entries use `defaultLeadTimeDays`. */
   leadTimeDaysByCode?: Record<string, number>;
   /** Default lead time when a material isn't in the map. Default 14. */
@@ -183,50 +215,81 @@ export function deriveRawMaterialDemand(input: {
 }
 
 /**
- * Walk forward through demand events chronologically, deducting from SOH.
- * Emit one shortage row per raw material at the FIRST date its projected
- * SOH would go below zero. Subsequent demand on the same material is
- * accumulated into the same shortage's `totalDemand` for context.
+ * Walk forward through demand + supply events chronologically, simulating
+ * SOH. Emit one shortage row per raw material at the FIRST date its
+ * projected SOH would go below zero. Subsequent demand on the same material
+ * is accumulated into `totalDemand` for context, and total scheduled supply
+ * into `totalSupply`.
+ *
+ * Supply events (e.g. Unleashed PO outstanding lines, Phase 4l.5) credit
+ * SOH on their `availableDate`. Same-date ordering: supplies before demands
+ * so a PO arriving on day X is available to cover demand on day X.
  */
 export function projectRawMaterialSoh(input: {
   events: ReadonlyArray<RawMaterialDemandEvent>;
+  supplyEvents?: ReadonlyArray<RawMaterialSupplyEvent>;
   initialSohByCode: Record<string, number>;
 }): RawMaterialShortage[] {
-  // Group events by raw-material code; keep them sorted by date for the
-  // walk-forward simulation.
-  const byCode = new Map<string, RawMaterialDemandEvent[]>();
+  // Group demand + supply events by raw-material code.
+  type TimelineEvent =
+    | { kind: 'demand'; date: string; quantity: number; ref: RawMaterialDemandEvent }
+    | { kind: 'supply'; date: string; quantity: number; ref: RawMaterialSupplyEvent };
+  const byCode = new Map<string, TimelineEvent[]>();
   for (const ev of input.events) {
     let arr = byCode.get(ev.rawMaterialCode);
     if (!arr) {
       arr = [];
       byCode.set(ev.rawMaterialCode, arr);
     }
-    arr.push(ev);
+    arr.push({ kind: 'demand', date: ev.requiredByDate, quantity: ev.quantity, ref: ev });
+  }
+  for (const sv of input.supplyEvents ?? []) {
+    let arr = byCode.get(sv.rawMaterialCode);
+    if (!arr) {
+      arr = [];
+      byCode.set(sv.rawMaterialCode, arr);
+    }
+    arr.push({ kind: 'supply', date: sv.availableDate, quantity: sv.quantity, ref: sv });
   }
   const out: RawMaterialShortage[] = [];
-  for (const [code, events] of byCode.entries()) {
-    events.sort((a, b) => a.requiredByDate.localeCompare(b.requiredByDate));
+  for (const [code, evs] of byCode.entries()) {
+    // Sort by date asc, with supplies before demands on the same date so
+    // a PO arriving day-of credits SOH before that day's consumption.
+    evs.sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      if (a.kind !== b.kind) return a.kind === 'supply' ? -1 : 1;
+      return 0;
+    });
     const initialSoh = input.initialSohByCode[code] ?? 0;
     let soh = initialSoh;
     let shortageDate: string | null = null;
     let shortageQty = 0;
     let totalDemand = 0;
+    let totalSupply = 0;
+    let firstName = '';
     const drivenBy: string[] = [];
-    for (const ev of events) {
+    for (const ev of evs) {
+      if (!firstName) firstName = ev.kind === 'demand' ? ev.ref.rawMaterialName : ev.ref.rawMaterialName;
+      if (ev.kind === 'supply') {
+        soh += ev.quantity;
+        totalSupply += ev.quantity;
+        continue;
+      }
       soh -= ev.quantity;
       totalDemand += ev.quantity;
-      drivenBy.push(ev.drivenBy.stableId);
+      drivenBy.push(ev.ref.drivenBy.stableId);
       if (shortageDate === null && soh < 0) {
-        shortageDate = ev.requiredByDate;
+        shortageDate = ev.date;
         shortageQty = -soh; // amount short on this date
       }
     }
     if (shortageDate) {
       out.push({
         rawMaterialCode: code,
-        rawMaterialName: events[0].rawMaterialName,
+        rawMaterialName: firstName,
         shortageDate,
         shortageQuantity: shortageQty,
+        cumulativeShortage: Math.max(0, totalDemand - initialSoh - totalSupply),
         totalDemand,
         initialSoh,
         drivenBy,
@@ -248,10 +311,11 @@ export function projectRawMaterialSoh(input: {
  * time. Default 14 calendar days; per-material overrides take precedence
  * when present.
  *
- * v1 simplification: quantity = shortage quantity. A real procurement
- * policy would batch multiple shortages of the same material into one PO
- * sized by the next demand window, possibly with safety stock — that's a
- * later refinement.
+ * Phase 4l.4: quantity now = `cumulativeShortage` (total horizon shortfall
+ * = totalDemand − initialSoh, clamped ≥ 0). A single PO covers the whole
+ * projected window's demand rather than just the first shortfall — closer
+ * to real procurement behaviour. Safety stock is still future work.
+ * `shortageQuantity` is retained on the shortage row for display.
  */
 export function derivePurchaseRequirements(input: {
   shortages: ReadonlyArray<RawMaterialShortage>;
@@ -263,6 +327,13 @@ export function derivePurchaseRequirements(input: {
   const ltMap = input.leadTimeDaysByCode ?? {};
   const out: PurchaseRequirement[] = [];
   for (const s of input.shortages) {
+    // Skip zero-qty requirements (Phase 4l.8). A shortage row exists
+    // whenever projected SOH goes negative at some point in the walk, but
+    // if later supply (e.g. an Unleashed PO arriving in horizon) covers
+    // the cumulative deficit, `cumulativeShortage` is 0 and no new PO is
+    // needed. Timing-of-existing-supplies issues surface via the conflict
+    // detector — we don't paper over them with a phantom zero-qty PO.
+    if (s.cumulativeShortage <= 0) continue;
     const lt = ltMap[s.rawMaterialCode] ?? defaultLT;
     // Arrive AT LEAST one day before the shortage date so the material is
     // on hand the morning the kitchen needs it. Mirrors the consumer-side
@@ -276,7 +347,7 @@ export function derivePurchaseRequirements(input: {
       arriveByDate,
       placeByDate,
       leadTimeDays: lt,
-      quantity: s.shortageQuantity,
+      quantity: s.cumulativeShortage,
       overdue,
       drivenBy: s.drivenBy,
     });
@@ -295,6 +366,7 @@ export function analyzeRawMaterials(input: AnalyzeInput): AnalyzeResult {
   });
   const shortages = projectRawMaterialSoh({
     events,
+    supplyEvents: input.supplyEvents,
     initialSohByCode: input.initialSohByCode,
   });
   const requirements = derivePurchaseRequirements({

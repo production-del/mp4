@@ -234,6 +234,145 @@ describe('projectRawMaterialSoh', () => {
     });
     expect(shortages.map((s) => s.rawMaterialCode)).toEqual(['C', 'A', 'B']);
   });
+
+  test('cumulativeShortage tracks final shortfall, distinct from first-shortage qty', () => {
+    // SOH=10, demands [5, 6, 8]:
+    //   day1: soh 10→5 (no shortage)
+    //   day2: soh 5→-1 (shortageDate=day2, shortageQuantity=1)
+    //   day3: soh -1→-9
+    // totalDemand=19, cumulativeShortage=19-10=9 (covers all three).
+    const events: RawMaterialDemandEvent[] = [
+      makeEvent('RAW_X', '2026-05-15', 5, 'A1'),
+      makeEvent('RAW_X', '2026-05-16', 6, 'A2'),
+      makeEvent('RAW_X', '2026-05-17', 8, 'A3'),
+    ];
+    const shortages = projectRawMaterialSoh({
+      events,
+      initialSohByCode: { RAW_X: 10 },
+    });
+    expect(shortages[0].shortageQuantity).toBe(1);
+    expect(shortages[0].cumulativeShortage).toBe(9);
+    expect(shortages[0].totalDemand).toBe(19);
+  });
+
+  test('cumulativeShortage clamps at 0 (no shortage emitted when SOH covers everything)', () => {
+    const events: RawMaterialDemandEvent[] = [
+      makeEvent('RAW_X', '2026-05-15', 50, 'A1'),
+    ];
+    const shortages = projectRawMaterialSoh({
+      events,
+      initialSohByCode: { RAW_X: 100 },
+    });
+    expect(shortages).toEqual([]);
+  });
+
+  // ─── Supply events (Phase 4l.5) ──────────────────────────
+
+  test('Unleashed PO arriving BEFORE demand prevents the shortage', () => {
+    // SOH=0, demand 100 on 5/20. Unleashed PO 100 arrives 5/18 → covers.
+    const shortages = projectRawMaterialSoh({
+      events: [makeEvent('RAW_X', '2026-05-20', 100, 'A1')],
+      supplyEvents: [
+        {
+          rawMaterialCode: 'RAW_X',
+          rawMaterialName: 'Raw X',
+          quantity: 100,
+          availableDate: '2026-05-18',
+          source: {
+            kind: 'unleashed_po',
+            purchaseOrderNumber: 'PO-1',
+            lineNumber: 1,
+            supplierName: 'Acme',
+          },
+        },
+      ],
+      initialSohByCode: { RAW_X: 0 },
+    });
+    expect(shortages).toEqual([]);
+  });
+
+  test('Unleashed PO arriving AFTER demand does NOT prevent the shortage', () => {
+    const shortages = projectRawMaterialSoh({
+      events: [makeEvent('RAW_X', '2026-05-15', 100, 'A1')],
+      supplyEvents: [
+        {
+          rawMaterialCode: 'RAW_X',
+          rawMaterialName: 'Raw X',
+          quantity: 100,
+          availableDate: '2026-05-25',
+          source: {
+            kind: 'unleashed_po',
+            purchaseOrderNumber: 'PO-1',
+            lineNumber: 1,
+            supplierName: 'Acme',
+          },
+        },
+      ],
+      initialSohByCode: { RAW_X: 0 },
+    });
+    expect(shortages).toHaveLength(1);
+    expect(shortages[0].shortageDate).toBe('2026-05-15');
+    // Cumulative shortage = totalDemand 100 - SOH 0 - totalSupply 100 = 0
+    expect(shortages[0].cumulativeShortage).toBe(0);
+  });
+
+  test('same-date PO arrival credits BEFORE same-date consumption', () => {
+    // SOH=0. PO 100 arrives 5/20. Demand 100 on 5/20 — both same date.
+    // Supply-first ordering means PO covers demand, no shortage.
+    const shortages = projectRawMaterialSoh({
+      events: [makeEvent('RAW_X', '2026-05-20', 100, 'A1')],
+      supplyEvents: [
+        {
+          rawMaterialCode: 'RAW_X',
+          rawMaterialName: 'Raw X',
+          quantity: 100,
+          availableDate: '2026-05-20',
+          source: {
+            kind: 'unleashed_po',
+            purchaseOrderNumber: 'PO-1',
+            lineNumber: 1,
+            supplierName: 'Acme',
+          },
+        },
+      ],
+      initialSohByCode: { RAW_X: 0 },
+    });
+    expect(shortages).toEqual([]);
+  });
+
+  test('partial PO coverage: PO reduces cumulativeShortage but doesn\'t fully cover', () => {
+    // SOH=10, demand 50 on 5/15 + 50 on 5/20. PO 30 arrives 5/18.
+    //   5/15: soh 10 → -40 (shortage emitted, shortageQty=40)
+    //   5/18: PO supply +30 → -10
+    //   5/20: demand -50 → -60
+    // totalDemand=100, totalSupply=30, initialSoh=10.
+    // cumulativeShortage = 100 - 10 - 30 = 60.
+    const shortages = projectRawMaterialSoh({
+      events: [
+        makeEvent('RAW_X', '2026-05-15', 50, 'A1'),
+        makeEvent('RAW_X', '2026-05-20', 50, 'A2'),
+      ],
+      supplyEvents: [
+        {
+          rawMaterialCode: 'RAW_X',
+          rawMaterialName: 'Raw X',
+          quantity: 30,
+          availableDate: '2026-05-18',
+          source: {
+            kind: 'unleashed_po',
+            purchaseOrderNumber: 'PO-1',
+            lineNumber: 1,
+            supplierName: 'Acme',
+          },
+        },
+      ],
+      initialSohByCode: { RAW_X: 10 },
+    });
+    expect(shortages).toHaveLength(1);
+    expect(shortages[0].shortageDate).toBe('2026-05-15');
+    expect(shortages[0].shortageQuantity).toBe(40);
+    expect(shortages[0].cumulativeShortage).toBe(60);
+  });
 });
 
 // ─── derivePurchaseRequirements ──────────────────────────────
@@ -247,6 +386,7 @@ describe('derivePurchaseRequirements', () => {
           rawMaterialName: 'Raw X',
           shortageDate: '2026-05-20',
           shortageQuantity: 30,
+          cumulativeShortage: 30,
           totalDemand: 130,
           initialSoh: 100,
           drivenBy: ['A1'],
@@ -268,6 +408,7 @@ describe('derivePurchaseRequirements', () => {
           rawMaterialName: 'Slow Vendor',
           shortageDate: '2026-05-20',
           shortageQuantity: 30,
+          cumulativeShortage: 30,
           totalDemand: 30,
           initialSoh: 0,
           drivenBy: [],
@@ -289,6 +430,7 @@ describe('derivePurchaseRequirements', () => {
           rawMaterialName: 'Raw X',
           shortageDate: '2026-05-10',
           shortageQuantity: 30,
+          cumulativeShortage: 30,
           totalDemand: 30,
           initialSoh: 0,
           drivenBy: [],
@@ -309,6 +451,7 @@ describe('derivePurchaseRequirements', () => {
           rawMaterialName: 'Raw X',
           shortageDate: '2026-06-15',
           shortageQuantity: 30,
+          cumulativeShortage: 30,
           totalDemand: 30,
           initialSoh: 0,
           drivenBy: [],
@@ -328,6 +471,7 @@ describe('derivePurchaseRequirements', () => {
           rawMaterialName: 'Raw X',
           shortageDate: '2025-01-01', // ancient
           shortageQuantity: 30,
+          cumulativeShortage: 30,
           totalDemand: 30,
           initialSoh: 0,
           drivenBy: [],
@@ -336,6 +480,48 @@ describe('derivePurchaseRequirements', () => {
       defaultLeadTimeDays: 14,
     });
     expect(reqs[0].overdue).toBe(false);
+  });
+
+  test('zero cumulativeShortage skips the PO entirely (covered by other supply)', () => {
+    // Shortage flagged (temporary SOH dip) but cumulative covered → no PO.
+    // This avoids the phantom "qty 0" chip a user reported.
+    const reqs = derivePurchaseRequirements({
+      shortages: [
+        {
+          rawMaterialCode: 'ABHPP',
+          rawMaterialName: 'ABHPP',
+          shortageDate: '2026-05-11',
+          shortageQuantity: 5,
+          cumulativeShortage: 0, // later Unleashed PO covers horizon total
+          totalDemand: 100,
+          initialSoh: 50,
+          drivenBy: ['x'],
+        },
+      ],
+      defaultLeadTimeDays: 14,
+    });
+    expect(reqs).toEqual([]);
+  });
+
+  test('PO quantity = cumulativeShortage, not just first-shortage quantity', () => {
+    // First shortage is small (1), but the projected horizon needs 9 total
+    // → PO must cover 9 to avoid follow-up shortages.
+    const reqs = derivePurchaseRequirements({
+      shortages: [
+        {
+          rawMaterialCode: 'RAW_X',
+          rawMaterialName: 'Raw X',
+          shortageDate: '2026-05-16',
+          shortageQuantity: 1,
+          cumulativeShortage: 9,
+          totalDemand: 19,
+          initialSoh: 10,
+          drivenBy: ['A1', 'A2', 'A3'],
+        },
+      ],
+      defaultLeadTimeDays: 14,
+    });
+    expect(reqs[0].quantity).toBe(9);
   });
 });
 

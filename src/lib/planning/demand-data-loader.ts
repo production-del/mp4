@@ -32,6 +32,13 @@ import { join } from 'path';
 export interface MonthlyDemandData {
   /** productCode → monthly AVE (rounded). */
   rates: Record<string, number>;
+  /**
+   * productCode → product group (from the "Unleashed Product Group" column
+   * or any column matching "product group"). Phase 4l.8: used to filter
+   * customer-specific (TBC-prefixed) and other non-Byron groups before
+   * planning. Missing entries = empty string (no filter applies).
+   */
+  groups: Record<string, string>;
   /** Where the data came from — either an absolute file path or the sheet URL. */
   sourcePath: string;
   /** ISO timestamp of the file's mtime, or fetch time for the sheet, or null when unknown. */
@@ -91,9 +98,10 @@ export async function loadFromSheet(input: {
     );
   }
   const text = await res.text();
-  const rates = parseDemandCsv(text);
+  const { rates, groups } = parseDemandCsv(text);
   return {
     rates,
+    groups,
     sourcePath: url,
     sourceMtime: new Date().toISOString(),
     source: 'sheet',
@@ -107,14 +115,14 @@ export function loadFromFile(
   const csvPath = join(cwd, 'data', 'demand.csv');
   if (!existsSync(csvPath)) return null;
   const text = readFileSync(csvPath, 'utf-8');
-  const rates = parseDemandCsv(text);
+  const { rates, groups } = parseDemandCsv(text);
   let mtime: string | null = null;
   try {
     mtime = statSync(csvPath).mtime.toISOString();
   } catch {
     /* ignore */
   }
-  return { rates, sourcePath: csvPath, sourceMtime: mtime, source: 'file' };
+  return { rates, groups, sourcePath: csvPath, sourceMtime: mtime, source: 'file' };
 }
 
 // ─── Internals ───────────────────────────────────────────────
@@ -125,9 +133,12 @@ export function loadFromFile(
  * code appears multiple times, the LARGEST value wins (defensive against
  * the source occasionally producing two rows for one SKU).
  */
-export function parseDemandCsv(text: string): Record<string, number> {
+export function parseDemandCsv(text: string): {
+  rates: Record<string, number>;
+  groups: Record<string, string>;
+} {
   const rows = parseCSV(text);
-  if (rows.length < 2) return {};
+  if (rows.length < 2) return { rates: {}, groups: {} };
   const headers = rows[0].map((h) => h.toLowerCase().trim());
   const codeCol = headers.findIndex(
     (h) => h === 'product code' || h === 'productcode' || h === 'sku',
@@ -135,8 +146,17 @@ export function parseDemandCsv(text: string): Record<string, number> {
   const aveCol = headers.findIndex(
     (h) => h === 'ave' || h === 'average' || h === 'demand',
   );
-  if (codeCol === -1 || aveCol === -1) return {};
+  // Group column is optional. Match common variants.
+  const groupCol = headers.findIndex(
+    (h) =>
+      h === 'product group' ||
+      h === 'productgroup' ||
+      h === 'unleashed product group' ||
+      h === 'group',
+  );
+  if (codeCol === -1 || aveCol === -1) return { rates: {}, groups: {} };
   const rates: Record<string, number> = {};
+  const groups: Record<string, string> = {};
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     const code = (row[codeCol] || '').trim().toUpperCase();
@@ -146,8 +166,12 @@ export function parseDemandCsv(text: string): Record<string, number> {
     if (rates[code] === undefined || value > rates[code]) {
       rates[code] = Math.round(value);
     }
+    if (groupCol !== -1) {
+      const g = (row[groupCol] || '').trim();
+      if (g && !groups[code]) groups[code] = g;
+    }
   }
-  return rates;
+  return { rates, groups };
 }
 
 /**

@@ -26,6 +26,7 @@
 
 import type { CalendarActivity } from './calendar-projection';
 import type { PurchaseRequirement } from '@/lib/engine/raw-material-demand';
+import { previousWorkday } from './working-day';
 
 // ─── Public API ──────────────────────────────────────────────
 
@@ -55,9 +56,14 @@ export function projectPoChips(input: ProjectPoChipsInput): CalendarActivity[] {
       typeof overrideRaw === 'number' && Number.isFinite(overrideRaw) && overrideRaw >= 0
         ? Math.round(overrideRaw)
         : req.leadTimeDays;
-    const effectivePlaceBy =
+    // Weekend → preceding Friday (Phase 4l.8). POs aren't placed or received
+    // on weekends in this operation, so any computed weekend date pulls back
+    // to the most-recent Friday. Applies to both place-by and arrive-by.
+    const rawPlaceBy =
       req.placeByDate < input.today ? input.today : req.placeByDate;
-    const effectiveArriveBy = isoAddDays(effectivePlaceBy, effectiveLeadTime);
+    const effectivePlaceBy = previousWorkday(rawPlaceBy);
+    const rawArriveBy = isoAddDays(effectivePlaceBy, effectiveLeadTime);
+    const effectiveArriveBy = previousWorkday(rawArriveBy);
     const overdue = req.placeByDate < input.today;
     const sharedInfo = {
       placeByDate: req.placeByDate, // ideal (may be past)

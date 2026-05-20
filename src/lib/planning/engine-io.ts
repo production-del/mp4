@@ -244,6 +244,13 @@ export interface ProductMeta {
   station: Station;
   /** Station's default rate, with optional per-product override applied. */
   rateUnitsPerHour: number;
+  /**
+   * AUD profit per packaged unit (gross), from `data/product-profit.json`.
+   * `null` when the SKU has no profit entry — treated as 0 by the optimiser's
+   * profit-aware overflow ranking (Phase 4l.9). Optional so legacy ProductMeta
+   * constructors (tests, older capacity parsers) don't need to set it.
+   */
+  profitPerItem?: number | null;
 }
 
 /**

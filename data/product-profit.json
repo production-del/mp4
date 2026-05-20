@@ -1,0 +1,1278 @@
+{
+  "_comment": "Per-product packaging station + profit-per-item. Station letter mapping: H=Hand, E=Elephant, D=Dust, O=bottlO, B=Bulk (mapped to hand-packing in planner). profitPerItem = AUD profit per packaged unit (gross). Used as the auto-route default when a SKU isn't in the family sheet, and as the optimiser's tie-breaker when packaging capacity is constrained (higher profit wins). Edit data/_profit-input.tsv and re-run scripts/build-profit.js to refresh.",
+  "stationLetterMap": {
+    "H": "hand-packing",
+    "E": "elephant",
+    "D": "dust",
+    "O": "bottlo",
+    "B": "hand-packing"
+  },
+  "byCode": {
+    "MFLBALMB.8": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFCLOVWXL": {
+      "profitPerItem": null,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "SDSCHISSM": {
+      "profitPerItem": 11.97,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFYUMMBB12": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "SDASTRASM": {
+      "profitPerItem": 17.03,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFBIRPBLG": {
+      "profitPerItem": 5.83,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "SDASHWASM": {
+      "profitPerItem": 15.54,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCELTSME": {
+      "profitPerItem": 3.95,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFWILDCLG": {
+      "profitPerItem": 20.59,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFWILDCSM": {
+      "profitPerItem": 12.02,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFOATSRB5": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFLOTUSME": {
+      "profitPerItem": 11.91,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCECACSM": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFLINSEB6.5": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFYERBAME": {
+      "profitPerItem": 5.62,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFMATCHSM": {
+      "profitPerItem": 14.27,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFPECANME": {
+      "profitPerItem": 5.5,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFGOLDGXL": {
+      "profitPerItem": 8.53,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFROSHBSM": {
+      "profitPerItem": 7.55,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFBKCHOCB9": {
+      "profitPerItem": 62.67,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFKELPMME": {
+      "profitPerItem": 8.4,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFBIRPBXL": {
+      "profitPerItem": 5.48,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "SDPORIGLG": {
+      "profitPerItem": 8.58,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFBKCARABG": {
+      "profitPerItem": 3.11,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFGINGGSM": {
+      "profitPerItem": 6.27,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFBLUBUSM": {
+      "profitPerItem": 6.91,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFASHWPSM": {
+      "profitPerItem": 8.16,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFALMONLG": {
+      "profitPerItem": 10.28,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "SDYELLOSM": {
+      "profitPerItem": 7.16,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFJASMIME": {
+      "profitPerItem": null,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCELTSSM": {
+      "profitPerItem": 2.53,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCACAPME": {
+      "profitPerItem": 4.6,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "ABCSG": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFCHOCLLG": {
+      "profitPerItem": 7.36,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCACBPXL": {
+      "profitPerItem": 10.98,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCINNQXL": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFBKBRYB9": {
+      "profitPerItem": 60.35,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCORNFME": {
+      "profitPerItem": 6.51,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCURNTME": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFBRAZNXL": {
+      "profitPerItem": 18.92,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFTURMESM": {
+      "profitPerItem": 3.76,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFGINSEME": {
+      "profitPerItem": 19.98,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFSPEARME": {
+      "profitPerItem": 3.26,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCYNPEPSM": {
+      "profitPerItem": 7.73,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFKBBQMME": {
+      "profitPerItem": 5.55,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFALMONSM": {
+      "profitPerItem": 3.12,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFLINSEME": {
+      "profitPerItem": 3.88,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCASHEME": {
+      "profitPerItem": 3.99,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFHEMPSB5.5": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "SDYELLOLG": {
+      "profitPerItem": 24.95,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFPASSIME": {
+      "profitPerItem": 6.78,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFMAPLEB10": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFBLPEPSM": {
+      "profitPerItem": 4.82,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFCHOCLSM": {
+      "profitPerItem": 3.63,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFBKCHOCBG": {
+      "profitPerItem": 3.11,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCACBPLG": {
+      "profitPerItem": 4.86,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFFENUWSM": {
+      "profitPerItem": 9.39,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFKELPMSM": {
+      "profitPerItem": 8.35,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFASHWAME": {
+      "profitPerItem": 19.78,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCHILBME": {
+      "profitPerItem": 6.19,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFCACBPB5": {
+      "profitPerItem": 104.95,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFRASFDME": {
+      "profitPerItem": 11.66,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFEROLVB4.5": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFTUMMTME": {
+      "profitPerItem": 5.12,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFBRAZNSM": {
+      "profitPerItem": 5.05,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFBEETPME": {
+      "profitPerItem": 14.17,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFPEPPEME": {
+      "profitPerItem": 5.26,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "BULK-CACPO-5KG": {
+      "profitPerItem": 121.25,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFBKCARAB9": {
+      "profitPerItem": null,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCHAMOME": {
+      "profitPerItem": 6.86,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFROSEMME": {
+      "profitPerItem": null,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFSUNFSME": {
+      "profitPerItem": 3.63,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFWALNUXL": {
+      "profitPerItem": 13.9,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFMAPLEME": {
+      "profitPerItem": 4.71,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFBKBRYBG": {
+      "profitPerItem": 2.53,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFYUMMBME": {
+      "profitPerItem": 4.11,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCHIASLG": {
+      "profitPerItem": null,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCECACLG": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFLBALMME": {
+      "profitPerItem": 6.51,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "SDREDLOLG": {
+      "profitPerItem": 28.83,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "SDCACAOSM": {
+      "profitPerItem": 5.56,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFFIRESME": {
+      "profitPerItem": 6.84,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFFRANKSM": {
+      "profitPerItem": 9.71,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFDATESLG": {
+      "profitPerItem": 4.92,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFMIXENB11": {
+      "profitPerItem": 177.73,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "SDYELLOXL": {
+      "profitPerItem": 48.72,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFCINNPSM": {
+      "profitPerItem": 4.71,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "SDBLUEISM": {
+      "profitPerItem": 7.5,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFSEEDMLG": {
+      "profitPerItem": 5.91,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFHIBISME": {
+      "profitPerItem": 7.85,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFSLIPPSM": {
+      "profitPerItem": 7.24,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFMESQPSM": {
+      "profitPerItem": 6.81,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "SDRHODISM": {
+      "profitPerItem": null,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFPAPRSSM": {
+      "profitPerItem": 4.75,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "SDREDLOSM": {
+      "profitPerItem": 9.83,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFMAPLESM": {
+      "profitPerItem": 3.35,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFMIXENLG": {
+      "profitPerItem": 6.45,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCANIBSM": {
+      "profitPerItem": 2.19,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFMAPLEXL": {
+      "profitPerItem": null,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "SDREDLOB3": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFTUMMTB.8": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFMIXENME": {
+      "profitPerItem": 4.18,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFMAPLELG": {
+      "profitPerItem": 7.92,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFRASLFME": {
+      "profitPerItem": 8.01,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFOOLONME": {
+      "profitPerItem": 9.52,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFBUCKWB12": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "SDGREENSM": {
+      "profitPerItem": 3.75,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFHAZELME": {
+      "profitPerItem": 6.6,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFIMMUNME": {
+      "profitPerItem": 5.95,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFBLCUMSM": {
+      "profitPerItem": 4.77,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFBEETPSM": {
+      "profitPerItem": 8.72,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFKBBQMLG": {
+      "profitPerItem": 7.07,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFEROLVXL": {
+      "profitPerItem": 13.36,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFTERIMME": {
+      "profitPerItem": 4.32,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCACBPSM": {
+      "profitPerItem": 2.45,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFEROLVLG": {
+      "profitPerItem": 6.08,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFROOIBME": {
+      "profitPerItem": 7.38,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFLAVENME": {
+      "profitPerItem": 5.43,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFMAPLEB5": {
+      "profitPerItem": 102.95,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFASHWPME": {
+      "profitPerItem": 11.22,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFTUMMTSM": {
+      "profitPerItem": 3.57,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFMIXENXL": {
+      "profitPerItem": 16.63,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "SDPCHOCLG": {
+      "profitPerItem": 10.41,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFCHIASME": {
+      "profitPerItem": 5.4,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFHEMPSME": {
+      "profitPerItem": 10.15,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFDMTEAME": {
+      "profitPerItem": 3.71,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFTULSIME": {
+      "profitPerItem": 4.94,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "FCORDYSM": {
+      "profitPerItem": 21.26,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFDMTEASM": {
+      "profitPerItem": 6.87,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFROSEPSM": {
+      "profitPerItem": 4.28,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFSUNFSLG": {
+      "profitPerItem": 4.98,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFBRAZNLG": {
+      "profitPerItem": 9.66,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCHILBB.8": {
+      "profitPerItem": 45.84,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "SDREDLOXL": {
+      "profitPerItem": 49.4,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "SDCACAOLG": {
+      "profitPerItem": 17.82,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFTURMEME": {
+      "profitPerItem": 6.87,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFLOTUSSM": {
+      "profitPerItem": 9.56,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCASHELG": {
+      "profitPerItem": 7.89,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCARCLSM": {
+      "profitPerItem": 4.44,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCARDASM": {
+      "profitPerItem": null,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFSESASSM": {
+      "profitPerItem": 2.14,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCINNPME": {
+      "profitPerItem": 8.07,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFCACBPB10": {
+      "profitPerItem": 79.87,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFGOCHUME": {
+      "profitPerItem": null,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFMIXENSM": {
+      "profitPerItem": 2.36,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFBRAZNME": {
+      "profitPerItem": 8.45,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFGOLDGLG": {
+      "profitPerItem": 3.97,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFSEEDMME": {
+      "profitPerItem": 4.22,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFMACAPME": {
+      "profitPerItem": 5.52,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFMIXENINFYME": {
+      "profitPerItem": 4.59,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCHILBSM": {
+      "profitPerItem": 3.47,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFTERIMB10": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFMIXENINFYSM": {
+      "profitPerItem": 3.61,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFTAMARME": {
+      "profitPerItem": 11.11,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFTERIMSM": {
+      "profitPerItem": 2.94,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFMACAPSM": {
+      "profitPerItem": 4.16,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFPEPITME": {
+      "profitPerItem": 4.85,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFMORINME": {
+      "profitPerItem": 8.39,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFBUCKWLG": {
+      "profitPerItem": 3.9,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCASHEB6": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFLEMMPSM": {
+      "profitPerItem": 7.13,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFEROLVSM": {
+      "profitPerItem": 3.79,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCARCLLG": {
+      "profitPerItem": 6.18,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFMORINSM": {
+      "profitPerItem": 6.93,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFWALNUME": {
+      "profitPerItem": 5.43,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFALMONME": {
+      "profitPerItem": 7.38,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFGARLPSM": {
+      "profitPerItem": 6.9,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFWALNUSM": {
+      "profitPerItem": 2.36,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCASHEXL": {
+      "profitPerItem": 9.78,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFLIQUOME": {
+      "profitPerItem": 4.68,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCACAPSM": {
+      "profitPerItem": 4.12,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFPEPITLG": {
+      "profitPerItem": 7.65,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFMACARME": {
+      "profitPerItem": 10.4,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCECACME": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFTAMARSM": {
+      "profitPerItem": 13.01,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFPECANXL": {
+      "profitPerItem": 8.07,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCANIBME": {
+      "profitPerItem": 7.15,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "BULK-ABBNR-BOX": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFEROLVB9": {
+      "profitPerItem": 91.92,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFCASHESM": {
+      "profitPerItem": 1.82,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFCACAPLG": {
+      "profitPerItem": 7.88,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFCHERRME": {
+      "profitPerItem": 8.58,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFWALNULG": {
+      "profitPerItem": 5.8,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFTAMARLG": {
+      "profitPerItem": null,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFNUTMESM": {
+      "profitPerItem": 9.94,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFPECANSM": {
+      "profitPerItem": 2.91,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "FLIONMSM": {
+      "profitPerItem": 21.2,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFTERIMLG": {
+      "profitPerItem": 9.58,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFMIXENB5.5": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFYEASTME": {
+      "profitPerItem": 4.34,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "SDBLUEIXL": {
+      "profitPerItem": 112.9,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "FLIONMLG": {
+      "profitPerItem": null,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFPSYHUME": {
+      "profitPerItem": 5.27,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "MFGINKLME": {
+      "profitPerItem": 6.15,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFENGLBME": {
+      "profitPerItem": 5.39,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFVALERSM": {
+      "profitPerItem": 12.56,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "FSHROBSM": {
+      "profitPerItem": 20.52,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFGINGRME": {
+      "profitPerItem": 4.67,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "SDBLUEILG": {
+      "profitPerItem": 35.83,
+      "stationLetter": "D",
+      "stationLabel": "Dust",
+      "plannerStation": "dust"
+    },
+    "SDGREENLG": {
+      "profitPerItem": null,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFWILDCME": {
+      "profitPerItem": 11.03,
+      "stationLetter": "E",
+      "stationLabel": "Elephant",
+      "plannerStation": "elephant"
+    },
+    "MFALMONXL": {
+      "profitPerItem": 18.43,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFPECANLG": {
+      "profitPerItem": 4.55,
+      "stationLetter": "O",
+      "stationLabel": "bottlO",
+      "plannerStation": "bottlo"
+    },
+    "MFCUMSWSM": {
+      "profitPerItem": null,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFSTARASM": {
+      "profitPerItem": 4.41,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFCARCLB9": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFFENNSSM": {
+      "profitPerItem": 6.19,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "MFGOTUKME": {
+      "profitPerItem": 7.25,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "FREISHSM": {
+      "profitPerItem": 17.14,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "FCHAGASM": {
+      "profitPerItem": 19.66,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "SDCREATME": {
+      "profitPerItem": null,
+      "stationLetter": "B",
+      "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    }
+  }
+}

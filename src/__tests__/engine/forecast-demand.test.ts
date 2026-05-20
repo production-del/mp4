@@ -128,18 +128,26 @@ describe('forecastWeeklyDemand', () => {
       expect(out[0].sources).toEqual(['event']);
     });
 
-    test('drops events outside the horizon window', () => {
+    test('Phase 4l.10: past-due events bucket into week 0; future out-of-horizon still dropped', () => {
+      // Past-due commitments are real obligations — make them ASAP, don't
+      // drop. Future out-of-horizon events stay dropped (we'll plan them in
+      // a future re-plan when they enter the horizon window).
       const out = forecastWeeklyDemand({
         monthlyRates: {},
         events: [
-          packagingEvent('SKU1', '2026-04-27', 100), // before horizon
-          packagingEvent('SKU2', '2026-06-01', 200), // after a 2-week horizon
+          packagingEvent('SKU1', '2026-04-27', 100), // past-due (was dropped)
+          packagingEvent('SKU2', '2026-06-01', 200), // after a 2-week horizon → still dropped
           packagingEvent('SKU3', '2026-05-06', 50), // inside
         ],
         horizon: horizon(2),
       });
-      expect(out.map((r) => r.productCode)).toEqual(['SKU3']);
-      expect(out[0].quantity).toBe(50);
+      const codes = out.map((r) => r.productCode).sort();
+      expect(codes).toEqual(['SKU1', 'SKU3']);
+      const sku1Row = out.find((r) => r.productCode === 'SKU1')!;
+      expect(sku1Row.weekStart).toBe('2026-05-04'); // first horizon week
+      expect(sku1Row.quantity).toBe(100);
+      const sku3Row = out.find((r) => r.productCode === 'SKU3')!;
+      expect(sku3Row.quantity).toBe(50);
     });
 
     test('weekend needByDate buckets to upcoming Monday (matches mondayOf rule)', () => {

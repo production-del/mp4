@@ -26,6 +26,17 @@
  *                                       station's prior occupant.
  *   - storage overflow penalty       — large; effectively a hard constraint
  *                                       except when no feasible plan exists.
+ *   - linear holding cost            — tiny per-unit-per-week charge on
+ *      (Phase 4l.10)                   carried inventory. Way smaller than
+ *                                       setupCost so it never adds a batch,
+ *                                       but discriminates between otherwise-
+ *                                       equal plans: a batch placed earlier
+ *                                       than necessary pays more carry-time
+ *                                       than one placed later. The DP thus
+ *                                       defers production while initial SOH
+ *                                       covers demand, fixing the "MFWALNUSM
+ *                                       has 42d SOH but is still planned for
+ *                                       18/5" class of bug.
  *
  * Hard constraints (rejected branches in the DP):
  *   - Demand by week must be covered: post-demand inventory ≥ 0.
@@ -82,6 +93,31 @@ export interface SingleProductOptimiserInput {
    * finer-grained but bigger state space. Default 10.
    */
   step?: number;
+  /**
+   * Phase 4l.10: per-unit-per-week holding cost on carried inventory.
+   * Default `1e-3` — tiny enough that it never adds a batch (always
+   * dwarfed by `setupCost`) but enough to discriminate between feasible
+   * placements, so the DP picks the latest workable week and stops
+   * producing through deep starting SOH. Set 0 to disable.
+   */
+  holdingCostPerUnitPerWeek?: number;
+  /**
+   * Phase 4l.12: target SOH floor in DAYS of forward demand. The DP pays
+   * a soft `floorShortfallPenalty` per unit-per-week of post-demand
+   * inventory below this floor. Default 10 — the planner tries to land
+   * end-of-week with at least 10 days of upcoming demand on the shelf.
+   * Set 0 to disable the floor entirely.
+   */
+  sohFloorDays?: number;
+  /**
+   * Phase 4l.12: per-unit-per-week penalty for inventory below the
+   * `sohFloorDays` floor. Default 1.0 — meaningfully larger than
+   * `holdingCostPerUnitPerWeek` (1e-3) so it actually pulls production
+   * forward, but small relative to `setupCost` (typically 100–1000) so
+   * it doesn't force a batch when there's no feasible week to place it.
+   * Soft: a near-empty week still validates, just at higher cost.
+   */
+  floorShortfallPenalty?: number;
 }
 
 export interface ScheduledBatch {
@@ -118,6 +154,9 @@ export interface SingleProductOptimiserOutput {
 const INF = Number.POSITIVE_INFINITY;
 const DEFAULT_STEP = 10;
 const DEFAULT_OVERFLOW_PENALTY = 1e9;
+const DEFAULT_HOLDING_COST_PER_UNIT_PER_WEEK = 1e-3;
+const DEFAULT_SOH_FLOOR_DAYS = 10;
+const DEFAULT_FLOOR_SHORTFALL_PENALTY = 1.0;
 
 export function optimiseSingleProduct(
   input: SingleProductOptimiserInput,
@@ -138,6 +177,11 @@ export function optimiseSingleProduct(
   const W = input.weeklyDemand.length;
   const step = input.step ?? DEFAULT_STEP;
   const overflowPenalty = input.storageOverflowPenalty ?? DEFAULT_OVERFLOW_PENALTY;
+  const holdingCostRate =
+    input.holdingCostPerUnitPerWeek ?? DEFAULT_HOLDING_COST_PER_UNIT_PER_WEEK;
+  const sohFloorDays = input.sohFloorDays ?? DEFAULT_SOH_FLOOR_DAYS;
+  const floorShortfallPenalty =
+    input.floorShortfallPenalty ?? DEFAULT_FLOOR_SHORTFALL_PENALTY;
 
   // Empty horizon: nothing to plan.
   if (W === 0) {
@@ -186,13 +230,24 @@ export function optimiseSingleProduct(
   function naturalCarry(week: number): number {
     return Math.max(0, input.initialInventory - cumulativeDemand[week]);
   }
+  // Phase 4l.10: when shelf life extends past the planning horizon, the
+  // spoilage constraint doesn't bind within the window — we can hold a
+  // batch's worth of inventory beyond the forward-demand-window without
+  // anything going bad. Without this relaxation, low-demand products
+  // with long shelf life (e.g. SDREDLOB3 with 540d shelf, 12-week horizon,
+  // demand=11) become infeasible because the forward-window cap shrinks
+  // to 0 by end of horizon while the DP needs to hold ≥minBatch units
+  // (an indivisible batch larger than remaining demand).
+  const shelfLifeBindsInHorizon = shelfLifeWeeks < W;
+  const longShelfBuffer = shelfLifeBindsInHorizon ? 0 : input.maxBatchSize;
   function effectiveCapAt(week: number): number {
-    return Math.max(forwardWindowDemand[week] ?? 0, naturalCarry(week));
+    const tight = Math.max(forwardWindowDemand[week] ?? 0, naturalCarry(week));
+    return tight + longShelfBuffer;
   }
   const overallCap = Math.max(
     shelfLifeInventoryCap,
     input.initialInventory,
-  );
+  ) + longShelfBuffer;
 
   // The hard storage cap is per-week from the input; the *modelled* cap is
   // shelf-life-bounded. Both apply: state must satisfy both.
@@ -200,11 +255,49 @@ export function optimiseSingleProduct(
     return input.storageCapByWeek?.[w] ?? INF;
   }
 
+  // Phase 4l.12 — SOH floor target per week end. End-of-week-w post-demand
+  // inventory should be ≥ `sohFloorDays` of forward demand, where forward
+  // demand starts at week w+1. We approximate "10 days from start of week
+  // w+1" as a full week + a partial week:
+  //   floor = weeklyDemand[w+1] + (sohFloorDays - 7)/7 × weeklyDemand[w+2]
+  // For the last horizon week we fall back to the same week's demand
+  // (assume the tail is roughly flat). When sohFloorDays ≤ 0 the floor
+  // is disabled entirely.
+  const floorByWeekEnd: number[] = new Array(W).fill(0);
+  if (sohFloorDays > 0) {
+    const fullWeeks = Math.floor(sohFloorDays / 7);
+    const partialDays = sohFloorDays - fullWeeks * 7;
+    for (let w = 0; w < W; w++) {
+      let sum = 0;
+      // Whole-week chunks of forward demand.
+      for (let k = 0; k < fullWeeks; k++) {
+        const idx = Math.min(W - 1, w + 1 + k);
+        sum += input.weeklyDemand[idx].quantity;
+      }
+      // Trailing partial week.
+      if (partialDays > 0) {
+        const idx = Math.min(W - 1, w + 1 + fullWeeks);
+        sum += (partialDays / 7) * input.weeklyDemand[idx].quantity;
+      }
+      floorByWeekEnd[w] = sum;
+    }
+  }
+
   // ─── Build batch-size choice set ─────────────────────────
-  // {0} ∪ {min, min+step, ..., max} (each rounded up to a step boundary)
+  // {0} ∪ {min, min+step, ..., max} (each rounded up to a step boundary).
+  // Phase 4l.10: cap useful max at `totalDemand + minBatch` so the DP
+  // doesn't waste cycles considering enormous batches that the cap check
+  // will reject anyway. Without this cap, low-demand products with high
+  // maxBatchSize generate ~1600 batch candidates per (week, state),
+  // making the DP visibly slow.
+  const totalDemand = cumulativeDemand[W];
+  const usefulMaxBatch = Math.min(
+    input.maxBatchSize,
+    Math.max(input.minBatchSize, Math.ceil(totalDemand) + input.minBatchSize),
+  );
   const batchSizes: number[] = [0];
   const firstSize = Math.ceil(input.minBatchSize / step) * step;
-  for (let s = firstSize; s <= input.maxBatchSize; s += step) {
+  for (let s = firstSize; s <= usefulMaxBatch; s += step) {
     batchSizes.push(s);
   }
 
@@ -246,8 +339,17 @@ export function optimiseSingleProduct(
         // drain from initial inventory, whichever is larger. The natural-
         // carry term lets us drain through high starting stock without
         // being prematurely cut off.
+        //
+        // Phase 4l.10: include `longShelfBuffer` on the LAST-week cap
+        // too, otherwise long-shelf-life products (shelfLifeWeeks ≥ W)
+        // still reject end-of-horizon leftover inventory — a batch
+        // produced in week W-N to cover weeks W-N..W-1 typically leaves
+        // a few units of carry-over at horizon end, which is fine for
+        // long shelf life but was being rejected here.
         const nextCap =
-          w + 1 < W ? effectiveCapAt(w + 1) : naturalCarry(W);
+          w + 1 < W
+            ? effectiveCapAt(w + 1)
+            : naturalCarry(W) + longShelfBuffer;
         if (inventoryAfterDemand > nextCap + step) continue;
         const nextI = Math.round(inventoryAfterDemand / step);
         if (nextI < 0 || nextI >= stepCount) continue;
@@ -257,6 +359,29 @@ export function optimiseSingleProduct(
         if (runSize > 0) cost += input.setupCost;
         if (inventoryAfterRun > cap) {
           cost += (inventoryAfterRun - cap) * overflowPenalty;
+        }
+        // Phase 4l.10: linear holding cost on inventory carried into next
+        // week. Tiny absolute value (<< setupCost) so it never changes how
+        // MANY batches the DP picks; large enough to break the tie between
+        // "batch in week 1" and "batch in week 6" when initial SOH covers
+        // the early weeks. Without this the DP picks the first equal-cost
+        // placement it encounters → always week 0, ignoring deep starting
+        // stock.
+        cost += inventoryAfterDemand * holdingCostRate;
+        // Phase 4l.12: SOH floor soft penalty. Pay
+        // `floorShortfallPenalty` per unit-per-week of post-demand
+        // inventory below the floor target. Soft = state still valid
+        // when below floor (no `continue`); just costs more. When the
+        // setupCost dominates this penalty the DP keeps the same number
+        // of batches but prefers placements that keep SOH near the
+        // floor. When spare capacity is available the penalty motivates
+        // an extra earlier batch to build buffer ahead of demand.
+        if (floorShortfallPenalty > 0 && sohFloorDays > 0) {
+          const floor = floorByWeekEnd[w];
+          const shortfall = floor - inventoryAfterDemand;
+          if (shortfall > 0) {
+            cost += shortfall * floorShortfallPenalty;
+          }
         }
 
         const total = baseCost + cost;

@@ -67,7 +67,11 @@ describe('product-overrides: pure operations', () => {
       const r = resolveOverride({}, 'A', defaults);
       expect(r.shelfLifeDays).toBe(540);
       expect(r.maxBatchSize).toBe(1500);
-      expect(r.overridden).toEqual({ shelfLifeDays: false, maxBatchSize: false });
+      expect(r.overridden).toEqual({
+        shelfLifeDays: false,
+        maxBatchSize: false,
+        sohFloorDays: false,
+      });
     });
 
     test('partial override falls back per-field', () => {
@@ -75,7 +79,11 @@ describe('product-overrides: pure operations', () => {
       const r = resolveOverride(map, 'A', defaults);
       expect(r.shelfLifeDays).toBe(365);
       expect(r.maxBatchSize).toBe(1500);
-      expect(r.overridden).toEqual({ shelfLifeDays: true, maxBatchSize: false });
+      expect(r.overridden).toEqual({
+        shelfLifeDays: true,
+        maxBatchSize: false,
+        sohFloorDays: false,
+      });
     });
 
     test('full override on both fields', () => {
@@ -85,7 +93,25 @@ describe('product-overrides: pure operations', () => {
       const r = resolveOverride(map, 'A', defaults);
       expect(r.shelfLifeDays).toBe(90);
       expect(r.maxBatchSize).toBe(600);
-      expect(r.overridden).toEqual({ shelfLifeDays: true, maxBatchSize: true });
+      expect(r.overridden).toEqual({
+        shelfLifeDays: true,
+        maxBatchSize: true,
+        sohFloorDays: false,
+      });
+    });
+
+    test('Phase 4l.12: sohFloorDays override is plumbed through', () => {
+      const map: ProductOverridesMap = { A: { sohFloorDays: 14 } };
+      const r = resolveOverride(map, 'A', defaults);
+      expect(r.sohFloorDays).toBe(14);
+      expect(r.overridden.sohFloorDays).toBe(true);
+    });
+
+    test('Phase 4l.12: sohFloorDays = 0 (disable floor for this SKU) is preserved', () => {
+      const map: ProductOverridesMap = { A: { sohFloorDays: 0 } };
+      const r = resolveOverride(map, 'A', defaults);
+      expect(r.sohFloorDays).toBe(0);
+      expect(r.overridden.sohFloorDays).toBe(true);
     });
   });
 });

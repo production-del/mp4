@@ -79,6 +79,22 @@ export interface KitchenIntermediate {
   kgPerTray: number | null;
   dehydHours: number | null;
   humidity: number | null;
+  /**
+   * Recipe-level yield rate. A run scheduled for `quantity Q` produces
+   * `Q × yieldRate` units of usable intermediate. `null` means no yield
+   * data — callers should treat as 1.0 (no loss). Sourced from the
+   * `yield` column of the `Kitchen processes` sheet.
+   */
+  yieldRate: number | null;
+  /**
+   * Preferred batch size (kg of INPUT material the recipe processes in
+   * one run, e.g. one IBC, one bowl). The kitchen-run planner rounds the
+   * required input quantity UP to a multiple of this — the team always
+   * runs full batches rather than partials. `null` when no value in the
+   * sheet (then no rounding is applied; runs are sized purely by demand).
+   * Sourced from the `preffered batch size` column of `Kitchen processes`.
+   */
+  preferredBatchSize: number | null;
 }
 
 export type LoadWarning =
@@ -96,6 +112,32 @@ export type LoadWarning =
       message: string;
     };
 
+/**
+ * Phase 4l.10 — physical dehydrator equipment loaded from the
+ * "Kitchen capacities" sheet. The planner treats total daily tray
+ * availability across all dehydrators as a shared pool and enforces it
+ * as a hard constraint on kitchen-run scheduling (= a recipe consuming
+ * N trays for D days blocks N×D tray-day units of the daily 605-tray
+ * budget).
+ */
+export interface Dehydrator {
+  /** Equipment name, e.g. "Mamma", "Pappa", "Midgy". */
+  name: string;
+  /** Total physical tray slots (= trolleys × trays per trolley). */
+  maxTraysPerLoad: number;
+  /** Typical fill fraction (0-1). Top/bottom trays often skipped. */
+  maxFill: number;
+  /** Equipment-level effective tray cap = maxTraysPerLoad × maxFill, rounded. */
+  effectiveTrays: number;
+}
+
+export interface DehydratorCapacity {
+  /** All dehydrators in the kitchen, in sheet order. */
+  dehydrators: Dehydrator[];
+  /** Sum of `effectiveTrays` across all dehydrators — the shared daily pool. */
+  totalEffectiveTrays: number;
+}
+
 export interface CapacityData {
   stations: Record<Station, StationDefaults>;
   changeoverMatrix: ChangeoverCostMatrix;
@@ -103,6 +145,8 @@ export interface CapacityData {
   familyMap: Record<string, FamilyMeta>;
   productMetaBySku: Record<string, ProductMeta>;
   bom: BOMComponent[];
+  /** Phase 4l.10 — physical dehydrator equipment (parsed from "Kitchen capacities"). */
+  dehydratorCapacity: DehydratorCapacity;
   warnings: LoadWarning[];
 }
 
@@ -195,42 +239,76 @@ export function productionDaysFor(intermediate: KitchenIntermediate): number {
   return Math.max(1, days);
 }
 
-// ─── Kitchen-team minutes per intermediate (Phase 4l.8) ───────
+// ─── Kitchen-team minutes per intermediate (Phase 4l.8 / 4l.10) ───
 // The 8-hour kitchen day (480 min) is shared across all kitchen runs that
-// initiate or cook on a given day. Each step costs the team a known amount
-// of attended minutes:
-//   soak                 → SOAK_SETUP_MINUTES (load tubs/IBCs)
-//   dehyd init (hours>0) → DEHYD_INIT_MINUTES (load trays, start dehydrator)
-//   cook                 → COOK_MINUTES (active stovetop / oven work)
-// Soaking & dehydrating run unattended after initiation, so they don't
-// re-charge the budget on subsequent days. Cook is treated as same-day
-// initiation cost — it ALSO falls on the start day of the chip in our
-// simplified model. (Real recipes spread cook across the cook calendar
-// day, which equals the start day for single-day recipes; multi-day
-// recipes overshoot the start-day estimate but the heatmap warns when
-// total exceeds 480.)
+// initiate, cook, or unload on a given day.
 //
-// When an intermediate has no recognised process steps, we fall back to
-// `KITCHEN_DEFAULT_MINUTES` so unknown recipes still register some load.
+// Two regimes:
+//
+//   1. **Dehydrator recipes** (Phase 4l.10 — quantity-aware). Confirmed
+//      with the kitchen team using IABR × 1200 as the reference point:
+//        • soak-load        : 60 min for 1200 units → 0.05 min/unit
+//        • dehydrator-load  : 180 min for 1200 units → 0.15 min/unit
+//        • dehydrator-unload: 60 min for 1200 units → 0.05 min/unit
+//        Total: 0.25 min/unit when the recipe has BOTH soak and dehyd;
+//        0.20 min/unit when dehyd only (no soak-load).
+//      All charged to the START day in the simplified model. Reality is
+//      "load on start, unload on finish" — fine-grained spreading is a
+//      future enhancement, the day-totals are conservative the way it is.
+//
+//   2. **Non-dehydrator recipes** (legacy fixed cost). We don't yet have
+//      a quantity rate confirmed for cook-only or mix-only recipes, so
+//      those keep the per-recipe fixed minutes:
+//        soak (no dehyd)  → SOAK_SETUP_MINUTES (30) — load tubs/IBCs
+//        cook             → COOK_MINUTES (240) — active stovetop/oven
+//        no recognised    → KITCHEN_DEFAULT_MINUTES (240) — fallback
+//
+// Soaking & dehydrating run unattended after initiation; they don't
+// re-charge the budget on the days the equipment is just running.
 
-export const SOAK_SETUP_MINUTES = 30;
-export const DEHYD_INIT_MINUTES = 15;
+export const SOAK_SETUP_MINUTES = 30; // legacy: soak-only fixed cost
+export const DEHYD_INIT_MINUTES = 15; // legacy — superseded by per-unit rate below
 export const COOK_MINUTES = 240;
 export const KITCHEN_DEFAULT_MINUTES = 240;
 
-export function kitchenTeamMinutesFor(intermediate: KitchenIntermediate): number {
+/**
+ * Phase 4l.10 — dehydrator recipe rate constants (min per unit of intermediate).
+ * Sum is 0.25 when the recipe has both soak and dehyd, 0.20 when dehyd only.
+ */
+export const DEHYD_SOAK_LOAD_PER_UNIT = 0.05;
+export const DEHYD_LOAD_PER_UNIT = 0.15;
+export const DEHYD_UNLOAD_PER_UNIT = 0.05;
+
+export function kitchenTeamMinutesFor(
+  intermediate: KitchenIntermediate,
+  /**
+   * Phase 4l.10: quantity in intermediate units (kg of INPUT material the
+   * team weighs out). When omitted, falls back to a per-recipe estimate
+   * using a nominal 250-unit batch — preserves the legacy "minutes per
+   * recipe" semantics for callers that haven't been updated yet.
+   */
+  quantity: number = 250,
+): number {
   const steps = intermediate.processSteps.map((s) => s.toLowerCase().trim());
-  let minutes = 0;
-  if (steps.some((s) => s === 'soak' || s.includes('soak'))) {
-    minutes += SOAK_SETUP_MINUTES;
+  const hasSoak = steps.some((s) => s === 'soak' || s.includes('soak'));
+  const hasDehyd = !!(intermediate.dehydHours && intermediate.dehydHours > 0);
+  const hasCook = steps.some((s) => s === 'cook' || s.includes('cook'));
+
+  // Dehydrator recipes scale with quantity.
+  if (hasDehyd) {
+    const perUnit =
+      (hasSoak ? DEHYD_SOAK_LOAD_PER_UNIT : 0) +
+      DEHYD_LOAD_PER_UNIT +
+      DEHYD_UNLOAD_PER_UNIT;
+    // Round to nearest minute; floor at 1 so a tiny batch still registers
+    // some kitchen-team load (avoids 0-min chips that look free).
+    return Math.max(1, Math.round(perUnit * quantity));
   }
-  if (intermediate.dehydHours && intermediate.dehydHours > 0) {
-    minutes += DEHYD_INIT_MINUTES;
-  }
-  if (steps.some((s) => s === 'cook' || s.includes('cook'))) {
-    minutes += COOK_MINUTES;
-  }
-  return minutes > 0 ? minutes : KITCHEN_DEFAULT_MINUTES;
+
+  // Non-dehydrator: fixed-cost legacy model.
+  if (hasCook) return COOK_MINUTES;
+  if (hasSoak) return SOAK_SETUP_MINUTES;
+  return KITCHEN_DEFAULT_MINUTES;
 }
 
 /**
@@ -401,9 +479,14 @@ function parseKitchenProcessesSheet(
   const out = new Map<string, KitchenIntermediate>();
   // Column layout (index → column):
   //   0 Product, 1 product name, 2-4 process steps,
-  //   5 PACKING EQUIPMENT, 6 PACKING EQUIPMENT Alternate,
+  //   5 PACKING EQUIPMENT Alternate, 6 PACKING EQUIPMENT (primary),
   //   7 max /soak ibc, 8 max soak /tub, 9 max mix /bowl,
-  //   10 oven capacity/day, 11 kilos per tray, 12 dehyd hours, 13 humidity.
+  //   10 oven capacity/day, 11 kilos per tray, 12 dehyd hours, 13 humidity,
+  //   14 yield, 15 preferred batch size (kg INPUT per run, Phase 4l.10).
+  // Phase 4l.12: the live spreadsheet has "PACKING EQUIPMENT Alternate"
+  // in col F (idx 5) and "PACKING EQUIPMENT" in col G (idx 6). The parser
+  // previously had these swapped — fixed here so the primary station
+  // is read from the column actually labelled "PACKING EQUIPMENT".
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     const code = asString(row[0]);
@@ -413,7 +496,7 @@ function parseKitchenProcessesSheet(
       const step = asString(row[idx]);
       if (step) steps.push(step.toLowerCase());
     }
-    const primary = parseStation(row[5]);
+    const primary = parseStation(row[6]);
     if (primary.warning === 'dehydrate_typo') {
       warnings.push({
         kind: 'dehydrate_in_packing_equipment',
@@ -426,11 +509,11 @@ function parseKitchenProcessesSheet(
         kind: 'unknown_station',
         sheet: SHEETS.kitchenProcesses,
         productCode: code,
-        value: asString(row[5]),
-        message: `Unknown packing-station value "${asString(row[5])}" for ${code}; treating as no primary station.`,
+        value: asString(row[6]),
+        message: `Unknown packing-station value "${asString(row[6])}" for ${code}; treating as no primary station.`,
       });
     }
-    const alt = parseStation(row[6]);
+    const alt = parseStation(row[5]);
     if (alt.warning === 'dehydrate_typo') {
       warnings.push({
         kind: 'dehydrate_in_packing_equipment',
@@ -452,6 +535,8 @@ function parseKitchenProcessesSheet(
       kgPerTray: asNumber(row[11]),
       dehydHours: asNumber(row[12]),
       humidity: asNumber(row[13]),
+      yieldRate: asNumber(row[14]),
+      preferredBatchSize: asNumber(row[15]),
     });
   }
   return out;
@@ -607,6 +692,15 @@ export function loadCapacityDataFromBuffer(buffer: Buffer | ArrayBuffer): Capaci
     : new Map();
   const bom = parseBomsSheet(getSheet(SHEETS.bom), wastageByEdge, warnings);
 
+  // Phase 4l.10 — physical dehydrator equipment. The "Kitchen capacities"
+  // sheet has a small header block listing each dehydrator (Mamma/Pappa/
+  // Midgy) with `max trays per load × max fill = effective trays`. Sum
+  // across all of them = the shared daily tray pool the planner enforces
+  // when scheduling dehydration recipes.
+  const dehydratorCapacity = wb.Sheets[SHEETS.kitchenCapacities]
+    ? parseKitchenCapacitiesSheet(wb.Sheets[SHEETS.kitchenCapacities])
+    : { dehydrators: [], totalEffectiveTrays: 0 };
+
   // Derive ProductMeta for every SKU in the family sheet. Station comes
   // from the intermediate's primary packing station (resolved via the
   // family code, which IS the intermediate code in the BOMS schema).
@@ -633,6 +727,63 @@ export function loadCapacityDataFromBuffer(buffer: Buffer | ArrayBuffer): Capaci
     familyMap,
     productMetaBySku,
     bom,
+    dehydratorCapacity,
     warnings,
   };
+}
+
+/**
+ * Phase 4l.10 — parse the "Kitchen capacities" sheet's dehydrator block.
+ *
+ * Expected layout:
+ *   row 0: 'EQUIPMENT'  (label)
+ *   row 1: header row → 'Dehydrators' | 'Max number of trays per load' | 'Trays per trolley' | 'trolleys' | 'Max fill'
+ *   rows 2..K-1: one row per dehydrator until a blank row, e.g.
+ *     'Mamma' | 196 | 70 | 4 | 0.7
+ *     'Pappa' | 378 | 70 | 6 | 0.9
+ *     'Midgy' | 160 | 50 | 4 | 0.8
+ *   (blank row, then other equipment blocks for IBCs / bowls / etc. that
+ *    the planner doesn't currently enforce)
+ *
+ * Defensive: stops parsing at the first row whose first column isn't a
+ * non-empty string. Returns an empty `dehydrators` list if the sheet is
+ * missing or the format doesn't match — the planner then degrades to "no
+ * dehydrator constraint".
+ */
+function parseKitchenCapacitiesSheet(
+  sheet: XLSX.WorkSheet,
+): DehydratorCapacity {
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
+  const dehydrators: Dehydrator[] = [];
+  // Find the header row containing "Dehydrators" in column 0.
+  let headerRow = -1;
+  for (let i = 0; i < Math.min(10, rows.length); i++) {
+    const r = rows[i];
+    if (
+      typeof r?.[0] === 'string' &&
+      r[0].toString().trim().toLowerCase().startsWith('dehydrator')
+    ) {
+      headerRow = i;
+      break;
+    }
+  }
+  if (headerRow === -1) {
+    return { dehydrators: [], totalEffectiveTrays: 0 };
+  }
+  // Rows after the header until a blank/break row.
+  for (let i = headerRow + 1; i < rows.length; i++) {
+    const r = rows[i];
+    const name = asString(r[0]);
+    if (!name) break; // blank row ends the dehydrator block
+    const maxTraysPerLoad = asNumber(r[1]) ?? 0;
+    const maxFill = asNumber(r[4]) ?? 1;
+    if (maxTraysPerLoad <= 0) continue;
+    const effectiveTrays = Math.round(maxTraysPerLoad * maxFill);
+    dehydrators.push({ name, maxTraysPerLoad, maxFill, effectiveTrays });
+  }
+  const totalEffectiveTrays = dehydrators.reduce(
+    (s, d) => s + d.effectiveTrays,
+    0,
+  );
+  return { dehydrators, totalEffectiveTrays };
 }

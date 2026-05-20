@@ -32,7 +32,7 @@ import { ensureSchema } from './init';
 
 // ─── Public API ──────────────────────────────────────────────
 
-export type CacheKind = 'soh' | 'sales-orders' | 'assemblies';
+export type CacheKind = 'soh' | 'sales-orders' | 'assemblies' | 'purchase-orders';
 
 export interface CacheRow<T> {
   kind: CacheKind;

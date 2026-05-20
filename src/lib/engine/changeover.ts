@@ -29,6 +29,16 @@ import type {
 } from '@/lib/planning/engine-io';
 
 /**
+ * Narrow structural type — the only fields `costToSwitch` actually reads.
+ * Lets callers (e.g. the calendar's mutated-changeover recompute) pass
+ * chip-shaped objects without needing full `ProductMeta`.
+ */
+export type ChangeoverProduct = Pick<
+  ProductMeta,
+  'productCode' | 'family' | 'extendedFamily' | 'packageSize'
+>;
+
+/**
  * Numbers from `data/kitchen capacity and family plans.xlsx` →
  * `Packaging Line Capacity` sheet, rows 4–7. Unit: minutes.
  *
@@ -59,8 +69,8 @@ export const DEFAULT_CHANGEOVER_MATRIX: ChangeoverCostMatrix = {
  * product to switch from, so cost is 0.
  */
 export function costToSwitch(
-  prev: ProductMeta | null,
-  curr: ProductMeta,
+  prev: ChangeoverProduct | null,
+  curr: ChangeoverProduct,
   station: Station,
   matrix: ChangeoverCostMatrix = DEFAULT_CHANGEOVER_MATRIX,
 ): number {

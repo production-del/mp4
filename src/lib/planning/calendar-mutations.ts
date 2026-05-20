@@ -45,6 +45,13 @@ export interface ActivityMutation {
    * delay this week, expedited shipping, vendor change.
    */
   editedLeadTimeDays?: number;
+  /**
+   * For packaging chips (Phase 4l.8): user-overridden station. Lets the
+   * operator reroute an auto-routed chip (or any chip) to a different
+   * station post-plan without re-running the optimiser. Capacity heatmap
+   * + changeover recompute respect this. Demand math is unaffected.
+   */
+  editedStation?: string;
   /** ISO timestamp of last write — useful for "stale mutation" warnings. */
   updatedAt: string;
 }
@@ -116,6 +123,31 @@ export function applyReschedule(
 }
 
 /** Returns a NEW map without a reschedule (clears just that field). */
+/**
+ * Drop any reschedule mutation whose target date is strictly before
+ * `today` (Phase 4l.8). Used at hydration time to clean up zombie
+ * reschedules left behind by drags performed in earlier sessions —
+ * those land on dates the calendar can no longer render, and the
+ * server-side `resolveDate` already clamps them to today, so the
+ * mutation is dead weight.
+ *
+ * Only the rescheduledTo field is cleared; other fields (dismissed,
+ * editedQuantity, editedLeadTimeDays) on the same stableId are kept.
+ * If the entry has nothing else, the whole row is removed.
+ */
+export function pruneStaleReschedules(
+  map: MutationsMap,
+  today: string,
+): MutationsMap {
+  let out = map;
+  for (const [stableId, m] of Object.entries(map)) {
+    if (typeof m.rescheduledTo === 'string' && m.rescheduledTo < today) {
+      out = applyClearReschedule(out, stableId);
+    }
+  }
+  return out;
+}
+
 export function applyClearReschedule(
   map: MutationsMap,
   stableId: string,
@@ -191,6 +223,56 @@ export function editedQuantityOf(
   stableId: string,
 ): number | null {
   return map[stableId]?.editedQuantity ?? null;
+}
+
+// ─── Station override (packaging chips, Phase 4l.8) ─────────
+
+/** Set a user-overridden station for a packaging chip. */
+export function applyEditStation(
+  map: MutationsMap,
+  stableId: string,
+  newStation: string,
+): MutationsMap {
+  if (!newStation) return map;
+  const existing = map[stableId];
+  return {
+    ...map,
+    [stableId]: {
+      ...(existing ?? { stableId, updatedAt: '' }),
+      stableId,
+      editedStation: newStation,
+      updatedAt: new Date().toISOString(),
+    },
+  };
+}
+
+/** Returns a NEW map without a station override. */
+export function applyClearStation(
+  map: MutationsMap,
+  stableId: string,
+): MutationsMap {
+  const existing = map[stableId];
+  if (!existing || existing.editedStation === undefined) return map;
+  const { editedStation: _s, ...rest } = existing;
+  const remainingFields = Object.keys(rest).filter(
+    (k) => k !== 'stableId' && k !== 'updatedAt',
+  );
+  if (remainingFields.length === 0) {
+    const out = { ...map };
+    delete out[stableId];
+    return out;
+  }
+  return {
+    ...map,
+    [stableId]: { ...rest, stableId, updatedAt: new Date().toISOString() },
+  };
+}
+
+export function editedStationOf(
+  map: MutationsMap,
+  stableId: string,
+): string | null {
+  return map[stableId]?.editedStation ?? null;
 }
 
 // ─── Lead-time override (PO chips, Phase 4m.4) ──────────────
@@ -344,7 +426,8 @@ export function applyMutationToActivity(
   if (
     !mutation ||
     (mutation.rescheduledTo === undefined &&
-      mutation.editedQuantity === undefined)
+      mutation.editedQuantity === undefined &&
+      mutation.editedStation === undefined)
   ) {
     return activity;
   }
@@ -352,6 +435,12 @@ export function applyMutationToActivity(
   const newDate = mutation.rescheduledTo ?? activity.date;
   const durationScale = activity.quantity > 0 ? newQty / activity.quantity : 1;
   const delta = newDate !== activity.date ? isoDayDelta(activity.date, newDate) : 0;
+  // Phase 4l.8: station override only applies to packaging chips that
+  // already have a station — never spoof a station onto kitchen / PO chips.
+  const stationOverride =
+    activity.kind === 'packaging' && activity.station && mutation.editedStation
+      ? (mutation.editedStation as typeof activity.station)
+      : undefined;
   return {
     ...activity,
     quantity: newQty,
@@ -360,6 +449,7 @@ export function applyMutationToActivity(
     ...(activity.finishDate && delta !== 0
       ? { finishDate: isoAddDays(activity.finishDate, delta) }
       : {}),
+    ...(stationOverride ? { station: stationOverride } : {}),
   };
 }
 

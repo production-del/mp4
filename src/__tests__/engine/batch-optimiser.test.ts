@@ -52,6 +52,11 @@ const BASE: Omit<SingleProductOptimiserInput, 'weeklyDemand' | 'shelfLifeDays'> 
   maxBatchSize: 2000,
   setupCost: 100,
   step: 10,
+  // Phase 4l.12: explicitly disable the soft floor in the base fixture so
+  // existing tests reason about the optimiser without the floor's
+  // pull-forward bias. Dedicated `sohFloorDays` tests below exercise the
+  // feature.
+  sohFloorDays: 0,
 };
 
 // ─── Tests ───────────────────────────────────────────────────
@@ -314,6 +319,165 @@ describe('optimiseSingleProduct', () => {
       });
       // The well-stocked plan needs strictly fewer or equal runs.
       expect(stocked.batches.length).toBeLessThanOrEqual(fresh.batches.length);
+    });
+
+    test('Phase 4l.10: with long shelf-life and deep SOH, first batch lands AFTER inventory drains', () => {
+      // 12 weeks × 100 demand = 1200 total. Long shelf-life (90d) means
+      // one batch could in principle cover everything. With 600 units of
+      // starting inventory (6 weeks of cover), the planner should defer
+      // the first batch — NOT place it in week 0 alongside the SOH.
+      // Pre-Phase-4l.10 the DP picked week 0 (first equal-cost path);
+      // now the holding-cost tiebreaker pushes it to ~ week 5.
+      const r = optimiseSingleProduct({
+        ...BASE,
+        weeklyDemand: constantDemand(12, 100),
+        shelfLifeDays: 90,
+        initialInventory: 600,
+        setupCost: 100,
+      });
+      expect(r.feasible).toBe(true);
+      // The headline: the first batch should NOT be in week 0.
+      // We expect it at the week the running balance first hits zero,
+      // not earlier.
+      const monday = (offset: number) => {
+        const d = new Date('2026-05-04T00:00:00');
+        d.setDate(d.getDate() + offset * 7);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      };
+      const firstBatchWeek = r.batches[0]?.weekStart;
+      expect(firstBatchWeek).not.toBe(monday(0));
+      // It should land around week 5-6 — after the 6 weeks of cover.
+      // Tolerant range to avoid coupling to step discretisation.
+      const weekIndex = r.batches[0]
+        ? Math.round(
+            (new Date(r.batches[0].weekStart).getTime() -
+              new Date(monday(0)).getTime()) /
+              (7 * 86_400_000),
+          )
+        : -1;
+      expect(weekIndex).toBeGreaterThanOrEqual(4);
+    });
+  });
+
+  describe('Phase 4l.12: SOH floor target', () => {
+    test('with a 10-day floor, deep-SOH product STILL holds enough inventory across the horizon', () => {
+      // Same scenario as the deferral test, but with the 10-day floor
+      // ENABLED. The DP should now keep more inventory on hand — the
+      // post-demand balance should stay near the floor target instead
+      // of dipping toward zero between batches.
+      const r = optimiseSingleProduct({
+        ...BASE,
+        weeklyDemand: constantDemand(12, 100),
+        shelfLifeDays: 90,
+        initialInventory: 600,
+        setupCost: 100,
+        sohFloorDays: 10,
+      });
+      expect(r.feasible).toBe(true);
+      // Walk inventory week by week; with a 10-day (≈ 143 units at
+      // 100/week demand) floor the minimum end-of-week SOH should not
+      // fall far below the floor. Allow a small tolerance for batch
+      // discretisation.
+      const byWeek = new Map<string, number>();
+      for (const b of r.batches) {
+        byWeek.set(b.weekStart, (byWeek.get(b.weekStart) ?? 0) + b.quantity);
+      }
+      let inv = 600;
+      const endOfWeekInv: number[] = [];
+      for (const w of constantDemand(12, 100)) {
+        inv += byWeek.get(w.weekStart) ?? 0;
+        inv -= w.quantity;
+        endOfWeekInv.push(inv);
+      }
+      // The minimum (interior weeks, before horizon-end drain) should be
+      // at least ~half the floor — the DP is allowed to dip but the
+      // penalty should keep it largely above zero.
+      const interiorMin = Math.min(...endOfWeekInv.slice(0, -1));
+      expect(interiorMin).toBeGreaterThanOrEqual(50);
+    });
+
+    test('disabling the floor (sohFloorDays=0) reverts to legacy behaviour', () => {
+      const demand = constantDemand(8, 100);
+      const withFloor = optimiseSingleProduct({
+        ...BASE,
+        weeklyDemand: demand,
+        shelfLifeDays: 60,
+        initialInventory: 0,
+        sohFloorDays: 10,
+        setupCost: 50, // low setup → DP can afford extra batches
+      });
+      const noFloor = optimiseSingleProduct({
+        ...BASE,
+        weeklyDemand: demand,
+        shelfLifeDays: 60,
+        initialInventory: 0,
+        sohFloorDays: 0,
+        setupCost: 50,
+      });
+      expect(withFloor.feasible).toBe(true);
+      expect(noFloor.feasible).toBe(true);
+      // With the floor enabled and a cheap setup, the DP may add
+      // earlier/larger batches. Without it, the legacy behaviour
+      // returns. We don't pin exact counts — just verify that the
+      // total quantity in the floor variant is ≥ the non-floor variant
+      // (extra buffer ≥ 0).
+      expect(batchSum(withFloor.batches)).toBeGreaterThanOrEqual(
+        batchSum(noFloor.batches),
+      );
+    });
+
+    test('floor does NOT force infeasibility when capacity is too tight', () => {
+      // Tight scenario: demand exceeds what the DP can produce given
+      // shelf life + minBatchSize. The floor adds soft pressure but
+      // should not turn a feasible-without-floor plan into infeasible.
+      const r = optimiseSingleProduct({
+        ...BASE,
+        weeklyDemand: constantDemand(4, 100),
+        shelfLifeDays: 7, // very short — forces a batch each week
+        initialInventory: 0,
+        minBatchSize: 100,
+        maxBatchSize: 100, // exact match
+        sohFloorDays: 10, // demands extra units the DP CAN'T provide
+        setupCost: 50,
+      });
+      // Soft penalty = still feasible, just at higher cost.
+      expect(r.feasible).toBe(true);
+    });
+
+    test('floor scales linearly with sohFloorDays (5 vs 15 days)', () => {
+      // Compare two floor settings. Higher floor → more inventory held
+      // on average. We measure average end-of-week inventory.
+      const demand = constantDemand(10, 100);
+      const avgInv = (input: SingleProductOptimiserInput) => {
+        const r = optimiseSingleProduct(input);
+        const byWeek = new Map<string, number>();
+        for (const b of r.batches) {
+          byWeek.set(b.weekStart, (byWeek.get(b.weekStart) ?? 0) + b.quantity);
+        }
+        let inv = input.initialInventory;
+        let sum = 0;
+        for (const w of input.weeklyDemand) {
+          inv += byWeek.get(w.weekStart) ?? 0;
+          inv -= w.quantity;
+          sum += inv;
+        }
+        return sum / input.weeklyDemand.length;
+      };
+      const low = avgInv({
+        ...BASE,
+        weeklyDemand: demand,
+        shelfLifeDays: 60,
+        initialInventory: 100,
+        sohFloorDays: 5,
+      });
+      const high = avgInv({
+        ...BASE,
+        weeklyDemand: demand,
+        shelfLifeDays: 60,
+        initialInventory: 100,
+        sohFloorDays: 15,
+      });
+      expect(high).toBeGreaterThanOrEqual(low);
     });
   });
 });

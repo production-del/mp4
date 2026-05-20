@@ -15,14 +15,14 @@ describe('parseDemandCsv', () => {
     const csv = `Product Code,Product Group,Product Description,AVE,6,3,1
 SDYELLOSM,Stardust,Yellow,"1,789","1,839","1,797","1,731"
 MFMAPLEME,Munchies,Maple,"1,576",1693,1738,1297`;
-    const rates = parseDemandCsv(csv);
+    const { rates } = parseDemandCsv(csv);
     expect(rates).toEqual({ SDYELLOSM: 1789, MFMAPLEME: 1576 });
   });
 
   test('handles compound-quoted product names with embedded commas', () => {
     const csv = `Product Code,Product Description,AVE
 SDYELLOSM,"STARDUST Yellow ""Anti-Inflammatory"" - Organic SML (120g)","1,789"`;
-    const rates = parseDemandCsv(csv);
+    const { rates } = parseDemandCsv(csv);
     expect(rates.SDYELLOSM).toBe(1789);
   });
 
@@ -30,7 +30,7 @@ SDYELLOSM,"STARDUST Yellow ""Anti-Inflammatory"" - Organic SML (120g)","1,789"`;
     const csv = `Product Code,AVE
 sdyellosm  , 1789
   MFMAPLEME,1500`;
-    const rates = parseDemandCsv(csv);
+    const { rates } = parseDemandCsv(csv);
     expect(rates).toEqual({ SDYELLOSM: 1789, MFMAPLEME: 1500 });
   });
 
@@ -41,7 +41,7 @@ B,not-a-number
 C,-5
 D,
 E,200`;
-    const rates = parseDemandCsv(csv);
+    const { rates } = parseDemandCsv(csv);
     expect(rates).toEqual({ A: 100, E: 200 });
   });
 
@@ -50,23 +50,35 @@ E,200`;
 A,100
 A,250
 A,150`;
-    const rates = parseDemandCsv(csv);
+    const { rates } = parseDemandCsv(csv);
     expect(rates.A).toBe(250);
   });
 
   test('returns empty when required columns are missing', () => {
     const csv = `Foo,Bar\n1,2\n`;
-    expect(parseDemandCsv(csv)).toEqual({});
+    expect(parseDemandCsv(csv)).toEqual({ rates: {}, groups: {} });
   });
 
   test('returns empty for header-only or empty input', () => {
-    expect(parseDemandCsv('Product Code,AVE\n')).toEqual({});
-    expect(parseDemandCsv('')).toEqual({});
+    expect(parseDemandCsv('Product Code,AVE\n')).toEqual({ rates: {}, groups: {} });
+    expect(parseDemandCsv('')).toEqual({ rates: {}, groups: {} });
   });
 
   test('accepts alternative column names (sku, demand, average)', () => {
-    expect(parseDemandCsv('SKU,demand\nA,100')).toEqual({ A: 100 });
-    expect(parseDemandCsv('productcode,average\nB,200')).toEqual({ B: 200 });
+    expect(parseDemandCsv('SKU,demand\nA,100').rates).toEqual({ A: 100 });
+    expect(parseDemandCsv('productcode,average\nB,200').rates).toEqual({ B: 200 });
+  });
+
+  test('captures product group when the column is present (Phase 4l.8)', () => {
+    const csv = `Product Code,AVE,Unleashed Product Group
+MFCHOCLSM,500,MF - Clusters
+NT-NAKED100,100,TBC - Naked Tallow`;
+    const { rates, groups } = parseDemandCsv(csv);
+    expect(rates).toEqual({ MFCHOCLSM: 500, 'NT-NAKED100': 100 });
+    expect(groups).toEqual({
+      MFCHOCLSM: 'MF - Clusters',
+      'NT-NAKED100': 'TBC - Naked Tallow',
+    });
   });
 });
 

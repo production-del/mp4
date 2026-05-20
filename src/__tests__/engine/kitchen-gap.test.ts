@@ -79,7 +79,43 @@ describe('computeKitchenGaps', () => {
     expect(r[0].shortfallQuantity).toBe(10); // 30 + 60 = 90, demand 100, gap 10
   });
 
-  test('scheduled supply AFTER demand date does not help', () => {
+  test('horizon-total supply offsets gap qty (legacy, consumptionWindowDays=0)', () => {
+    const r = computeKitchenGaps({
+      demand: [demand('XHBC', 100, '2026-05-15')],
+      scheduledSupply: [
+        { intermediateCode: 'XHBC', date: '2026-05-22', quantity: 60, source: 'A-1' },
+      ],
+      lundbergSohByCode: { XHBC: 30 },
+      consumptionWindowDays: 0, // legacy coalesce
+    });
+    // Legacy: total demand 100 − SOH 30 − supply 60 = 10, regardless of supply timing.
+    expect(r).toHaveLength(1);
+    expect(r[0].shortfallQuantity).toBe(10);
+    expect(r[0].requiredByDate).toBe('2026-05-15');
+  });
+
+  test('multiple shortfalls coalesce into ONE gap (legacy, consumptionWindowDays=0)', () => {
+    const r = computeKitchenGaps({
+      demand: [
+        demand('XHBC', 50, '2026-05-15'),
+        demand('XHBC', 50, '2026-05-29'),
+      ],
+      scheduledSupply: [],
+      lundbergSohByCode: { XHBC: 30 },
+      consumptionWindowDays: 0, // legacy coalesce
+    });
+    // Legacy: one gap qty 70 dated at the FIRST crossing (5/15).
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({
+      shortfallQuantity: 70,
+      requiredByDate: '2026-05-15',
+    });
+  });
+
+  test('Phase 4l.12: late supply does NOT offset early demand (window=5 default)', () => {
+    // Same scenario as the legacy test above but with default windowed
+    // behaviour — late supply lands after the window closes, so the
+    // gap reflects the in-window deficit only.
     const r = computeKitchenGaps({
       demand: [demand('XHBC', 100, '2026-05-15')],
       scheduledSupply: [
@@ -87,10 +123,12 @@ describe('computeKitchenGaps', () => {
       ],
       lundbergSohByCode: { XHBC: 30 },
     });
-    expect(r[0].shortfallQuantity).toBe(70); // late supply doesn't help week-15 demand
+    expect(r).toHaveLength(1);
+    expect(r[0].shortfallQuantity).toBe(70); // 100 − 30 SOH, late supply ignored
+    expect(r[0].requiredByDate).toBe('2026-05-15');
   });
 
-  test('multiple shortfalls produce multiple gaps over time', () => {
+  test('Phase 4l.12: two shortfalls 14 days apart emit TWO gaps (window=5 default)', () => {
     const r = computeKitchenGaps({
       demand: [
         demand('XHBC', 50, '2026-05-15'),
@@ -99,17 +137,74 @@ describe('computeKitchenGaps', () => {
       scheduledSupply: [],
       lundbergSohByCode: { XHBC: 30 },
     });
-    // First demand: 30 - 50 = -20 → gap 20 by 5/15. Reset to 0.
-    // Second demand: 0 - 50 = -50 → gap 50 by 5/29.
     expect(r).toHaveLength(2);
+    // Gap 1: SOH covers 30 of the 50 on 5/15 → deficit 20.
     expect(r[0]).toMatchObject({
       shortfallQuantity: 20,
       requiredByDate: '2026-05-15',
     });
+    // Gap 2: no carry-over (window closes after 5/15), full 50 on 5/29.
     expect(r[1]).toMatchObject({
       shortfallQuantity: 50,
       requiredByDate: '2026-05-29',
     });
+  });
+
+  test('Phase 4l.12: preferredBatchSize surplus credits forward — two windows, one batch', () => {
+    // Two 100kg demand events 7 days apart. SOH = 0. preferredBatchSize=300
+    // (yield 1.0). The FIRST 100kg deficit triggers a 300kg run (recipe
+    // floor); the 200kg surplus should carry forward and cover the
+    // second 100kg demand without emitting another gap.
+    const r = computeKitchenGaps({
+      demand: [
+        demand('XHBC', 100, '2026-05-15'),
+        demand('XHBC', 100, '2026-05-22'),
+      ],
+      scheduledSupply: [],
+      lundbergSohByCode: {},
+      preferredBatchByIntermediate: { XHBC: { batch: 300, yield: 1 } },
+    });
+    expect(r).toHaveLength(1);
+    expect(r[0].shortfallQuantity).toBe(100);
+    expect(r[0].requiredByDate).toBe('2026-05-15');
+  });
+
+  test('Phase 4l.12: default windowDays=1 → per-event gaps for just-in-time', () => {
+    // Two events 3 days apart with no surplus carryover should emit
+    // TWO gaps, each dated to its specific event. The 5-day window
+    // would have bundled them; 1-day default keeps them separate.
+    const r = computeKitchenGaps({
+      demand: [
+        demand('XHBC', 50, '2026-05-15'),
+        demand('XHBC', 50, '2026-05-18'),
+      ],
+      scheduledSupply: [],
+      lundbergSohByCode: {},
+      // No preferredBatchByIntermediate → no surplus carry → each
+      // event triggers its own gap.
+    });
+    expect(r).toHaveLength(2);
+    expect(r[0].requiredByDate).toBe('2026-05-15');
+    expect(r[1].requiredByDate).toBe('2026-05-18');
+  });
+
+  test('Phase 4l.12: surplus credit accounts for yield rate', () => {
+    // Same as above but yield = 0.5 → 300kg input only produces 150kg
+    // output. First deficit = 100, batch produces 150 (output) → 50kg
+    // surplus carries. Second demand 100 needs another 50kg → another
+    // batch emitted.
+    const r = computeKitchenGaps({
+      demand: [
+        demand('XHBC', 100, '2026-05-15'),
+        demand('XHBC', 100, '2026-05-22'),
+      ],
+      scheduledSupply: [],
+      lundbergSohByCode: {},
+      preferredBatchByIntermediate: { XHBC: { batch: 300, yield: 0.5 } },
+    });
+    expect(r).toHaveLength(2);
+    expect(r[0].shortfallQuantity).toBe(100);
+    expect(r[1].shortfallQuantity).toBe(50);
   });
 
   test('supply between two demand events bridges a gap', () => {
@@ -153,7 +248,7 @@ describe('computeKitchenGaps', () => {
     expect(r[0].shortfallQuantity).toBe(100);
   });
 
-  test('drivers list contains the packaging batches that caused the gap', () => {
+  test('drivers list contains the packaging batches inside the shortage window (Phase 4l.12)', () => {
     const r = computeKitchenGaps({
       demand: [
         demand('XHBC', 50, '2026-05-15', 'FCHAGALG', 100),
@@ -162,10 +257,13 @@ describe('computeKitchenGaps', () => {
       scheduledSupply: [],
       lundbergSohByCode: {},
     });
-    // 0 - 50 = -50 gap by 5/15. Reset. 0 - 50 = -50 → another gap.
-    // Each gap lists pending drivers up to that point.
-    expect(r[0].drivers.map((d) => d.productCode)).toEqual(['FCHAGALG']);
-    expect(r[1].drivers.map((d) => d.productCode)).toEqual(['FCHAGASM']);
+    // SOH = 0. Both demands on 5/15 are inside the window — both contribute
+    // as drivers since BOTH push the running balance into deficit.
+    expect(r).toHaveLength(1);
+    expect(r[0].shortfallQuantity).toBe(100);
+    expect(new Set(r[0].drivers.map((d) => d.productCode))).toEqual(
+      new Set(['FCHAGALG', 'FCHAGASM']),
+    );
   });
 
   test('output is sorted by (date, code)', () => {
