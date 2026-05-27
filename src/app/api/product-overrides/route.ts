@@ -64,14 +64,21 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+  const o = override as Record<string, unknown>;
   const partial: ProductOverride = {
     shelfLifeDays:
-      typeof (override as Record<string, unknown>).shelfLifeDays === 'number'
-        ? (override as { shelfLifeDays: number }).shelfLifeDays
-        : undefined,
+      typeof o.shelfLifeDays === 'number' ? o.shelfLifeDays : undefined,
     maxBatchSize:
-      typeof (override as Record<string, unknown>).maxBatchSize === 'number'
-        ? (override as { maxBatchSize: number }).maxBatchSize
+      typeof o.maxBatchSize === 'number' ? o.maxBatchSize : undefined,
+    sohFloorDays:
+      typeof o.sohFloorDays === 'number' ? o.sohFloorDays : undefined,
+    skipKitchenRun: o.skipKitchenRun === true ? true : undefined,
+    defaultStation:
+      o.defaultStation === 'hand-packing' ||
+      o.defaultStation === 'elephant' ||
+      o.defaultStation === 'dust' ||
+      o.defaultStation === 'bottlo'
+        ? (o.defaultStation as ProductOverride['defaultStation'])
         : undefined,
   };
   const current = readProductOverrides();

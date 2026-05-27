@@ -46,6 +46,26 @@ export interface ProductOverride {
    * slow-movers where 10 days of cover means dead stock.
    */
   sohFloorDays?: number;
+  /**
+   * Phase 4l.12 — when true, the kitchen-run planner does NOT emit a
+   * kitchen-required chip for this intermediate. Its demand is
+   * transparently cascaded to its BOM children at the consumer's
+   * required-by date (= treat as a "pass-through" blend that the
+   * kitchen team handles ad-hoc at packaging time, or that's
+   * purchased pre-blended).
+   *
+   * Use for mix-only intermediates the team doesn't track as a
+   * separate kitchen run (e.g. SBLOOM "Shroom Bloom"). The component
+   * POs (Chaga/Reishi/etc.) are still projected via the cascade.
+   */
+  skipKitchenRun?: boolean;
+  /**
+   * Phase 4l.12 — default packaging station for this SKU. Set when the
+   * user manually edits a chip's station via the drawer; persists so
+   * subsequent chips of the same SKU use this station too. Must be one
+   * of: 'hand-packing' | 'elephant' | 'dust' | 'bottlo'.
+   */
+  defaultStation?: 'hand-packing' | 'elephant' | 'dust' | 'bottlo';
 }
 
 export type ProductOverridesMap = Record<string, ProductOverride>;
@@ -154,6 +174,19 @@ function cleanOverride(o: ProductOverride): ProductOverride {
   if (typeof o.sohFloorDays === 'number' && o.sohFloorDays >= 0) {
     out.sohFloorDays = Math.round(o.sohFloorDays);
   }
+  // skipKitchenRun: only store when explicitly true.
+  if (o.skipKitchenRun === true) {
+    out.skipKitchenRun = true;
+  }
+  // defaultStation: only one of the four valid station codes.
+  if (
+    o.defaultStation === 'hand-packing' ||
+    o.defaultStation === 'elephant' ||
+    o.defaultStation === 'dust' ||
+    o.defaultStation === 'bottlo'
+  ) {
+    out.defaultStation = o.defaultStation;
+  }
   return out;
 }
 
@@ -167,6 +200,11 @@ function validateMap(raw: Record<string, unknown>): ProductOverridesMap {
       shelfLifeDays: typeof v.shelfLifeDays === 'number' ? v.shelfLifeDays : undefined,
       maxBatchSize: typeof v.maxBatchSize === 'number' ? v.maxBatchSize : undefined,
       sohFloorDays: typeof v.sohFloorDays === 'number' ? v.sohFloorDays : undefined,
+      skipKitchenRun: v.skipKitchenRun === true ? true : undefined,
+      defaultStation:
+        typeof v.defaultStation === 'string'
+          ? (v.defaultStation as ProductOverride['defaultStation'])
+          : undefined,
     });
     if (Object.keys(clean).length > 0) out[code] = clean;
   }

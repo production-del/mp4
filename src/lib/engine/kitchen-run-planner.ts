@@ -122,6 +122,18 @@ export interface KitchenRunPlannerInput {
    * finishes". Set 0 to revert to the legacy single-gap behaviour.
    */
   consumptionWindowDays?: number;
+  /**
+   * Phase 4l.12 — set of intermediate codes to treat as PASS-THROUGH.
+   * For codes in this set, the planner does NOT emit a kitchen-required
+   * run. Instead, the gap's demand is cascaded transparently to the
+   * intermediate's BOM children at the consumer's required-by date,
+   * so component POs still get projected.
+   *
+   * Use for mix-only intermediates the kitchen team doesn't track as a
+   * separate run (e.g. SBLOOM "Shroom Bloom" — blended ad-hoc at
+   * packaging time, no production chip needed).
+   */
+  skipIntermediates?: ReadonlySet<string>;
 }
 
 // ─── Public API ──────────────────────────────────────────────
@@ -180,6 +192,41 @@ export function planKitchenRuns(input: KitchenRunPlannerInput): KitchenRun[] {
     const nextLevelDemand: IntermediateDemandEvent[] = [];
 
     for (const gap of gaps) {
+      // Phase 4l.12 — pass-through intermediates. Don't emit a run;
+      // cascade the deficit's component demand to the next level at
+      // the gap's required-by date so component POs still get
+      // projected. The yieldRate is treated as 1.0 (= the blend ratio
+      // is the BOM ratio; no processing loss assumed).
+      if (input.skipIntermediates?.has(gap.intermediateCode)) {
+        // Find BOM rows where this code is the PARENT — those are its
+        // component dependencies.
+        const childRows = (input.bom as BOMComponent[]).filter(
+          (r) => r.parentProductCode === gap.intermediateCode,
+        );
+        for (const child of childRows) {
+          if (!input.intermediateCodes.has(child.productCode)) continue;
+          // Use `quantityPerParent` (combined clean + wastage) — same
+          // value the gap engine consumes elsewhere. Wastage is included
+          // because the kitchen still consumes that material even if it
+          // ends up scrapped.
+          const childQty = gap.shortfallQuantity * child.quantityPerParent;
+          if (childQty <= 0) continue;
+          nextLevelDemand.push({
+            intermediateCode: child.productCode,
+            intermediateName: child.productName,
+            quantity: childQty,
+            requiredByDate: gap.requiredByDate,
+            drivenBy: {
+              productCode: gap.intermediateCode,
+              productName: gap.intermediateName,
+              packagingQuantity: gap.shortfallQuantity,
+              packagingDate: gap.requiredByDate,
+            },
+          });
+        }
+        // Skip the rest of the for-iteration — no run, no calendar chip.
+        continue;
+      }
       const intermediate = input.intermediates.get(gap.intermediateCode);
       const productionDays = intermediate ? productionDaysFor(intermediate) : 1;
       // Phase 4l.10: convert OUTPUT shortfall → INPUT kg the kitchen team

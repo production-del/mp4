@@ -44,6 +44,9 @@ export async function POST() {
     quantity: a.quantity,
     warehouseName: a.warehouseName,
     status: a.status,
+    // Phase 4l.12 — pass Unleashed's `AssembleBy` through as the
+    // authoritative scheduled date. Audit timestamps used as fallback only.
+    assembleBy: a.assembleBy ?? null,
     lastModifiedOn: a.lastModifiedOn ?? null,
     createdOn: a.createdOn ?? null,
   }));

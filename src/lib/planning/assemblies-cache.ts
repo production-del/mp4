@@ -158,6 +158,15 @@ export interface RawAssembly {
   quantity: number;
   warehouseName: string;
   status: string;
+  /**
+   * Phase 4l.12 — the actual SCHEDULED date from Unleashed (Unleashed's
+   * `AssembleBy` field). Use this when present — it's the date the
+   * kitchen team / packaging team has committed to. Falls back to
+   * lastModifiedOn / createdOn (record audit timestamps) only when
+   * AssembleBy is missing, since those audit dates often cluster
+   * around "today" and produce misleading calendar placements.
+   */
+  assembleBy?: string | null;
   /** Either ISO datetime or null. */
   lastModifiedOn?: string | null;
   /** Fallback when lastModifiedOn is absent. */
@@ -169,16 +178,17 @@ export interface RawAssembly {
  * without a usable scheduled date (defensive — Unleashed shouldn't return
  * these but cache integrity matters more than completeness).
  *
- * Date derivation matches the existing `demandsFromKitchenAssemblies`
- * helper: prefer lastModifiedOn, fall back to createdOn, format to local
- * YYYY-MM-DD to avoid UTC-shifting Australian dates.
+ * Date derivation: PREFER `assembleBy` (the user's intended scheduled
+ * date in Unleashed). Fall back to lastModifiedOn / createdOn only when
+ * AssembleBy is missing — those are audit timestamps and cluster on
+ * "today" rather than reflecting real production timing.
  */
 export function buildAssembliesCache(
   raw: RawAssembly[],
 ): AssembliesCache {
   const lines: AssemblyCacheLine[] = [];
   for (const a of raw) {
-    const dateSource = a.lastModifiedOn ?? a.createdOn;
+    const dateSource = a.assembleBy ?? a.lastModifiedOn ?? a.createdOn;
     if (!dateSource) continue;
     const d = new Date(dateSource);
     let iso: string;

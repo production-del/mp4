@@ -1,5 +1,8 @@
 {
   "MFMAPLESM": {
     "maxBatchSize": 5000
+  },
+  "SBLOOM": {
+    "skipKitchenRun": true
   }
 }

@@ -43,6 +43,44 @@ describe('buildAssembliesCache', () => {
     expect(out.lines[0].scheduledDate).toMatch(/^2026-05-1[45]$/);
   });
 
+  test('Phase 4l.12: PREFERS assembleBy over lastModifiedOn / createdOn', () => {
+    // AssembleBy is the user's intended scheduled date. Audit
+    // timestamps (lastModifiedOn/createdOn) cluster on "today" rather
+    // than reflecting real production timing, so they're fallbacks
+    // only.
+    const out = buildAssembliesCache([
+      {
+        assemblyNumber: 'A-1',
+        productCode: 'X',
+        productName: 'X',
+        quantity: 10,
+        warehouseName: 'WH',
+        status: 'Parked',
+        assembleBy: '2026-06-15T00:00:00Z',
+        lastModifiedOn: '2026-05-15T00:00:00Z',
+        createdOn: '2026-05-01T00:00:00Z',
+      },
+    ]);
+    expect(out.lines).toHaveLength(1);
+    expect(out.lines[0].scheduledDate).toMatch(/^2026-06-1[45]$/);
+  });
+
+  test('Phase 4l.12: falls back to lastModifiedOn when assembleBy missing', () => {
+    const out = buildAssembliesCache([
+      {
+        assemblyNumber: 'A-1',
+        productCode: 'X',
+        productName: 'X',
+        quantity: 10,
+        warehouseName: 'WH',
+        status: 'Parked',
+        lastModifiedOn: '2026-05-15T00:00:00Z',
+      },
+    ]);
+    expect(out.lines).toHaveLength(1);
+    expect(out.lines[0].scheduledDate).toMatch(/^2026-05-1[45]$/);
+  });
+
   test('drops assemblies with no usable date', () => {
     const out = buildAssembliesCache([
       {

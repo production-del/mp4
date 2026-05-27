@@ -64,6 +64,7 @@ import { readFinishedGoodsAllowlist } from '@/lib/planning/finished-goods-allowl
 import { readProductProfit } from '@/lib/planning/product-profit';
 import { classifyPackagingMaterial } from '@/lib/planning/packaging-materials';
 import { applySupplyCaps } from '@/lib/engine/supply-cap';
+import { allocateSupplyFifo } from '@/lib/engine/supply-allocator';
 import type { Station } from '@/lib/planning/engine-io';
 import { nextWorkday, previousWorkday, isWorkday, fromLocalISODate, toLocalISODate } from '@/lib/planning/working-day';
 import { parseManualActivitiesCookie, type ManualActivity } from '@/lib/planning/manual-activities';
@@ -385,6 +386,10 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
   // dropped by the forecaster — committed demand far in the future doesn't
   // belong in this horizon.
   const salesCache = await readSalesOrdersCache();
+  // Phase 4l.12 — read assemblies cache EARLY so we can subtract
+  // committed Unleashed packaging quantities from forecast demand
+  // BEFORE the optimiser runs. (Used downstream too — same cache.)
+  const assembliesCache = await readAssembliesCache();
   const salesEvents: Demand[] = (salesCache?.lines ?? []).map((line) => ({
     productCode: line.productCode,
     quantityNeeded: line.quantityRemaining,
@@ -397,11 +402,81 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     },
   }));
 
-  const forecast = forecastWeeklyDemand({
+  const rawForecast = forecastWeeklyDemand({
     monthlyRates,
     events: salesEvents,
     horizon,
   });
+
+  // ─── Phase 4l.12 — subtract committed Unleashed packaging ────
+  // Per-(SKU, week) bucket every committed Unleashed assembly whose
+  // PRODUCT is a finished good (= NOT an intermediate), then deduct
+  // from the forecast with surplus carry-forward. Without this the
+  // planner double-plans whatever Unleashed already has committed.
+  //
+  // Product-type-based rather than warehouse-based: a Lundberg
+  // assembly for MFRMIXNB11 is just as much committed FG production
+  // as one in MF Packaging, so it should also reduce the forecast.
+  // Intermediate assemblies (XHBC, IRM, etc.) are excluded — they
+  // don't reduce FG forecast on their own; the FG draws them through
+  // the BOM cascade.
+  function mondayIsoOf(iso: string): string {
+    const d = fromLocalISODate(iso);
+    const dow = d.getDay();
+    const mondayOffset = dow === 0 ? -6 : 1 - dow;
+    d.setDate(d.getDate() + mondayOffset);
+    return toLocalISODate(d);
+  }
+  const unleashedCommittedByCodeWeek = new Map<string, Map<string, number>>();
+  let unleashedCommittedTotal = 0;
+  for (const a of assembliesCache?.lines ?? []) {
+    if (capacity.intermediates.has(a.productCode)) continue;
+    // Dismissed Unleashed-packaging chips don't drive any state; skip.
+    const stableId = `unleashed-assembly|${a.assemblyNumber}`;
+    if (dismissedStableIds.has(stableId)) continue;
+    const monday = mondayIsoOf(a.scheduledDate);
+    let m = unleashedCommittedByCodeWeek.get(a.productCode);
+    if (!m) {
+      m = new Map();
+      unleashedCommittedByCodeWeek.set(a.productCode, m);
+    }
+    m.set(monday, (m.get(monday) ?? 0) + a.quantity);
+    unleashedCommittedTotal += a.quantity;
+  }
+  // Apply subtraction per code with surplus carry-forward.
+  const forecast: typeof rawForecast = [];
+  const codesInForecast = new Set(rawForecast.map((r) => r.productCode));
+  let totalSubtracted = 0;
+  for (const code of codesInForecast) {
+    const weeksForCode = rawForecast
+      .filter((r) => r.productCode === code)
+      .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+    const committedByWeek = unleashedCommittedByCodeWeek.get(code);
+    if (!committedByWeek || committedByWeek.size === 0) {
+      forecast.push(...weeksForCode);
+      continue;
+    }
+    let surplus = 0;
+    for (const row of weeksForCode) {
+      const committedThisWeek = committedByWeek.get(row.weekStart) ?? 0;
+      const availableSupply = committedThisWeek + surplus;
+      if (availableSupply >= row.quantity) {
+        // Unleashed fully covers this week's forecast.
+        surplus = availableSupply - row.quantity;
+        totalSubtracted += row.quantity;
+      } else {
+        const net = row.quantity - availableSupply;
+        forecast.push({ ...row, quantity: net });
+        totalSubtracted += row.quantity - net;
+        surplus = 0;
+      }
+    }
+  }
+  if (unleashedCommittedTotal > 0) {
+    console.log(
+      `[planner] Subtracted ${Math.round(totalSubtracted).toLocaleString()} units from forecast (Unleashed packaging committed: ${Math.round(unleashedCommittedTotal).toLocaleString()} units across ${unleashedCommittedByCodeWeek.size} SKU(s)).`,
+    );
+  }
 
   // ─── Pass 1: per-product cost-efficient routing ──────────
   // For each SKU, pick the lowest-cost station from its candidate set
@@ -411,6 +486,24 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
   const initialRoutings: ProductRouting[] = [];
   const initialRationales = new Map<string, string>();
   const weeklyDemandByProduct = new Map<string, { weekStart: string; quantity: number }[]>();
+  // Phase 4l.12 — FULL (pre-subtraction) forecast, for the client's
+  // inventory sparkline ONLY. The planner uses the REDUCED `forecast`
+  // (committed Unleashed packaging netted out) so it doesn't double-
+  // plan; but the sparkline ALSO renders committed assemblies as
+  // supply chips. Feeding the sparkline the reduced forecast AND the
+  // assembly-as-supply double-counts the committed quantity (curve
+  // looks ~2× healthier). Per the operator's preference, committed
+  // assemblies are modelled as SUPPLY (a +qty spike on their date),
+  // so the sparkline's DEMAND side must use the full forecast.
+  const weeklyDemandFullByProduct = new Map<string, { weekStart: string; quantity: number }[]>();
+  for (const r of rawForecast) {
+    let arr = weeklyDemandFullByProduct.get(r.productCode);
+    if (!arr) {
+      arr = [];
+      weeklyDemandFullByProduct.set(r.productCode, arr);
+    }
+    arr.push({ weekStart: r.weekStart, quantity: Math.ceil(r.quantity) });
+  }
 
   for (const code of Object.keys(monthlyRates)) {
     const baseMeta = capacity.productMetaBySku[code];
@@ -480,6 +573,24 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
   // render. Operators set these via the drawer's Product overrides section
   // (Phase 4f); the next Re-plan picks them up.
   const productOverrides = readProductOverrides();
+
+  // Phase 4l.12 — apply per-SKU `defaultStation` overrides to
+  // productMetaBySku BEFORE the optimiser routes. When the user edits
+  // a chip's station in the drawer, the override is persisted to
+  // product-overrides.json and picked up here so subsequent runs of
+  // that SKU default to the new station.
+  for (const [code, ovr] of Object.entries(productOverrides)) {
+    if (!ovr.defaultStation) continue;
+    const meta = capacity.productMetaBySku[code];
+    if (!meta) continue;
+    if (meta.station === ovr.defaultStation) continue;
+    const stationDefaults = capacity.stations[ovr.defaultStation];
+    capacity.productMetaBySku[code] = {
+      ...meta,
+      station: ovr.defaultStation,
+      rateUnitsPerHour: stationDefaults?.unitsPerHour ?? meta.rateUnitsPerHour,
+    };
+  }
 
   // Stock-on-hand cache — produced by /api/refresh-soh from Unleashed.
   // Read on each render; null when the cache file is missing (planner falls
@@ -676,11 +787,38 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     });
   }
 
-  // Kitchen production runs from Unleashed assemblies. Filtered to
-  // Lundberg Storeroom (kitchen production) — packaging assemblies are
-  // already covered by the optimiser output. Each assembly becomes one
-  // CalendarActivity with kind='kitchen' and station=null.
-  const assembliesCache = await readAssembliesCache();
+  // Kitchen + packaging activities from Unleashed assemblies. Routing
+  // is PRODUCT-TYPE based, not warehouse based (Phase 4l.12):
+  //
+  //   • productCode ∈ capacity.intermediates → kitchen layer
+  //     (kind='kitchen', station=null, with kitchen-minutes + dehydrator
+  //     occupancy). Source: Lundberg Storeroom assemblies (kitchen-side
+  //     production lives there).
+  //
+  //   • everything else → packaging layer (kind='packaging') on the
+  //     right station. The station is resolved by:
+  //         (1) capacity.productMetaBySku[code].station — planner's
+  //             authoritative routing (allowlist + family sheet)
+  //         (2) productProfit.byCode[code].plannerStation — operational
+  //             "currently packaged on" letter from product-profit.json
+  //         (3) 'hand-packing' as the safe default
+  //     Sources: MF Packaging, MF Operations, TBC, PLUS any Lundberg
+  //     assembly whose product is a packaged good (not an intermediate).
+  //
+  // The user was hitting this with finished-good SKUs (e.g. MFRMIXNB11)
+  // appearing as kitchen chips because they came out of Lundberg, when
+  // they should be packaging chips on hand-packing. Conversely if an
+  // intermediate assembly ever lands at a packaging warehouse, it'd be
+  // treated as kitchen so dehydrator + kitchen-team load is tracked
+  // correctly.
+  const resolvePackagingStation = (code: string): Station => {
+    const meta = capacity.productMetaBySku[code];
+    if (meta?.station) return meta.station;
+    const profitEntry = productProfit?.byCode[code];
+    if (profitEntry?.plannerStation) return profitEntry.plannerStation;
+    return 'hand-packing';
+  };
+
   const purchaseOrdersCache = await readPurchaseOrdersCache();
   const kitchenActivities: CalendarActivity[] = [];
   // Phase 4l.11 — per-(productCode, weekStart) counter so multiple live
@@ -691,78 +829,145 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
   // its own with a different orderInWeek.
   const kitchenOrderCounter = new Map<string, number>();
   const kitchenStableIdByAssembly = new Map<string, string>();
-  for (const a of assembliesAtWarehouse(assembliesCache, WAREHOUSES.LUNDBERG)) {
-    // Use the activity's scheduled date as both the day and the weekStart
-    // anchor (kitchen activities aren't placed by our weekly DP, so the
-    // weekStart concept doesn't apply naturally; use the Monday of the
-    // scheduled date as a stand-in for stableId stability).
-    const d = new Date(a.scheduledDate + 'T00:00:00');
-    const dow = d.getDay();
-    const mondayOffset = dow === 0 ? -6 : 1 - dow;
-    const monday = new Date(d);
-    monday.setDate(d.getDate() + mondayOffset);
-    const weekStart = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
-    // Phase 4l.10: compute kitchen-team minutes per (recipe, quantity).
-    const intermediateMeta = capacity.intermediates.get(a.productCode);
-    const chipKitchenMinutes = intermediateMeta
-      ? kitchenTeamMinutesFor(intermediateMeta, a.quantity)
-      : KITCHEN_DEFAULT_MINUTES;
-    // Phase 4l.10 — dehydrator occupancy for live assemblies. Same formula
-    // as kitchen-required chips below.
-    let dehydratorTrays: number | null = null;
-    let dehydratorOccupiesFrom: string | null = null;
-    let dehydratorOccupiesTo: string | null = null;
-    if (
-      intermediateMeta?.dehydHours &&
-      intermediateMeta.dehydHours > 0 &&
-      intermediateMeta.kgPerTray &&
-      intermediateMeta.kgPerTray > 0
-    ) {
-      dehydratorTrays = Math.ceil(a.quantity / intermediateMeta.kgPerTray);
-      const dehydDays = Math.max(
-        1,
-        Math.ceil(intermediateMeta.dehydHours / 24),
-      );
-      const hasSoak = intermediateMeta.processSteps.some(
-        (s) => s === 'soak' || s.toLowerCase().includes('soak'),
-      );
-      const soakOffsetDays = hasSoak ? 1 : 0;
-      const fromDate = new Date(a.scheduledDate + 'T00:00:00');
-      fromDate.setDate(fromDate.getDate() + soakOffsetDays);
-      const toDate = new Date(fromDate);
-      toDate.setDate(toDate.getDate() + dehydDays - 1);
-      const isoOf = (d: Date) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      dehydratorOccupiesFrom = isoOf(fromDate);
-      dehydratorOccupiesTo = isoOf(toDate);
+  const unleashedPackagingActivities: CalendarActivity[] = [];
+
+  // Unified routing pass: iterate Lundberg + packaging warehouses,
+  // route each assembly to the kitchen OR packaging layer based on
+  // whether its productCode is an intermediate. A packaged good in
+  // Lundberg (e.g. MFRMIXNB11) now lands on the packaging layer
+  // (hand-packing), and an intermediate hidden in a packaging
+  // warehouse would correctly land on the kitchen layer with kitchen-
+  // team + dehydrator load tracked.
+  const ASSEMBLY_SOURCE_WAREHOUSES = [
+    WAREHOUSES.LUNDBERG,
+    WAREHOUSES.MF_PACKAGING,
+    WAREHOUSES.MF_OPERATIONS,
+    'TBC',
+  ];
+  const seenAssemblyNumbers = new Set<string>();
+  for (const wh of ASSEMBLY_SOURCE_WAREHOUSES) {
+    for (const a of assembliesAtWarehouse(assembliesCache, wh)) {
+      if (seenAssemblyNumbers.has(a.assemblyNumber)) continue;
+      seenAssemblyNumbers.add(a.assemblyNumber);
+      const intermediateMeta = capacity.intermediates.get(a.productCode);
+      const isIntermediate = !!intermediateMeta;
+
+      // Compute weekStart Monday once — both branches need it.
+      const d = new Date(a.scheduledDate + 'T00:00:00');
+      const dow = d.getDay();
+      const mondayOffset = dow === 0 ? -6 : 1 - dow;
+      const monday = new Date(d);
+      monday.setDate(d.getDate() + mondayOffset);
+      const weekStart = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+
+      if (isIntermediate) {
+        // ─── Kitchen layer ──────────────────────────────────────
+        const chipKitchenMinutes = kitchenTeamMinutesFor(intermediateMeta, a.quantity);
+        let dehydratorTrays: number | null = null;
+        let dehydratorOccupiesFrom: string | null = null;
+        let dehydratorOccupiesTo: string | null = null;
+        if (
+          intermediateMeta.dehydHours &&
+          intermediateMeta.dehydHours > 0 &&
+          intermediateMeta.kgPerTray &&
+          intermediateMeta.kgPerTray > 0
+        ) {
+          dehydratorTrays = Math.ceil(a.quantity / intermediateMeta.kgPerTray);
+          const dehydDays = Math.max(1, Math.ceil(intermediateMeta.dehydHours / 24));
+          const hasSoak = intermediateMeta.processSteps.some(
+            (s) => s === 'soak' || s.toLowerCase().includes('soak'),
+          );
+          const soakOffsetDays = hasSoak ? 1 : 0;
+          const fromDate = new Date(a.scheduledDate + 'T00:00:00');
+          fromDate.setDate(fromDate.getDate() + soakOffsetDays);
+          const toDate = new Date(fromDate);
+          toDate.setDate(toDate.getDate() + dehydDays - 1);
+          const isoOf = (dd: Date) =>
+            `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, '0')}-${String(dd.getDate()).padStart(2, '0')}`;
+          dehydratorOccupiesFrom = isoOf(fromDate);
+          dehydratorOccupiesTo = isoOf(toDate);
+        }
+        const kitchenOrderKey = `${a.productCode}|${weekStart}`;
+        const kitchenOrderInWeek = kitchenOrderCounter.get(kitchenOrderKey) ?? 0;
+        kitchenOrderCounter.set(kitchenOrderKey, kitchenOrderInWeek + 1);
+        const kitchenStableId = stableIdOf(a.productCode, weekStart, kitchenOrderInWeek);
+        kitchenStableIdByAssembly.set(a.assemblyNumber, kitchenStableId);
+        kitchenActivities.push({
+          id: `kitchen-${a.assemblyNumber}`,
+          stableId: kitchenStableId,
+          kind: 'kitchen',
+          date: a.scheduledDate,
+          weekStart,
+          orderInWeek: kitchenOrderInWeek,
+          station: null,
+          productCode: a.productCode,
+          productName: a.productName,
+          quantity: a.quantity,
+          durationMinutes: 0, // not estimated for kitchen yet
+          changeoverMinutes: 0,
+          family: null,
+          extendedFamily: null,
+          assemblyNumber: a.assemblyNumber,
+          assemblyStatus: a.status,
+          kitchenMinutes: chipKitchenMinutes,
+          dehydratorTrays,
+          dehydratorOccupiesFrom,
+          dehydratorOccupiesTo,
+        });
+        continue;
+      }
+
+      // ─── Packaging layer ────────────────────────────────────
+      // Packaged good (incl. ones from Lundberg). Resolve the station
+      // via the helper above so it lands on the right equipment.
+      const meta = capacity.productMetaBySku[a.productCode];
+      const station = resolvePackagingStation(a.productCode);
+      const stationDefaults = capacity.stations[station];
+      const rateUnitsPerHour = stationDefaults?.unitsPerHour ?? 200;
+      const durationMinutes =
+        rateUnitsPerHour > 0 ? (a.quantity / rateUnitsPerHour) * 60 : 0;
+      // Anchor stableId on the assembly number — these chips are
+      // committed and won't be split into batches, so a simple ID is
+      // fine. Prefix avoids collision with planner-emitted IDs.
+      const stableId = `unleashed-assembly|${a.assemblyNumber}`;
+      unleashedPackagingActivities.push({
+        id: `unleashed-pkg-${a.assemblyNumber}`,
+        stableId,
+        kind: 'packaging',
+        date: a.scheduledDate,
+        weekStart: a.scheduledDate, // placeholder — not used for these
+        orderInWeek: 0,
+        station,
+        productCode: a.productCode,
+        productName: a.productName,
+        quantity: a.quantity,
+        durationMinutes,
+        changeoverMinutes: 0,
+        family: meta?.family ?? null,
+        extendedFamily: meta?.extendedFamily ?? null,
+        packageSize: meta?.packageSize ?? null,
+        profitPerItem: meta?.profitPerItem ?? null,
+        assemblyNumber: a.assemblyNumber,
+        assemblyStatus: a.status,
+      });
     }
-    const kitchenOrderKey = `${a.productCode}|${weekStart}`;
-    const kitchenOrderInWeek = kitchenOrderCounter.get(kitchenOrderKey) ?? 0;
-    kitchenOrderCounter.set(kitchenOrderKey, kitchenOrderInWeek + 1);
-    const kitchenStableId = stableIdOf(a.productCode, weekStart, kitchenOrderInWeek);
-    kitchenStableIdByAssembly.set(a.assemblyNumber, kitchenStableId);
-    kitchenActivities.push({
-      id: `kitchen-${a.assemblyNumber}`,
-      stableId: kitchenStableId,
-      kind: 'kitchen',
-      date: a.scheduledDate,
-      weekStart,
-      orderInWeek: kitchenOrderInWeek,
-      station: null,
-      productCode: a.productCode,
-      productName: a.productName,
-      quantity: a.quantity,
-      durationMinutes: 0, // not estimated for kitchen yet
-      changeoverMinutes: 0,
-      family: null,
-      extendedFamily: null,
-      assemblyNumber: a.assemblyNumber,
-      kitchenMinutes: chipKitchenMinutes,
-      dehydratorTrays,
-      dehydratorOccupiesFrom,
-      dehydratorOccupiesTo,
-    });
   }
+  if (unleashedPackagingActivities.length > 0 || kitchenActivities.length > 0) {
+    // Group routing diagnostics by where each chip landed so it's
+    // obvious when a Lundberg assembly was routed to packaging or
+    // vice-versa.
+    const byStation = new Map<string, number>();
+    for (const a of unleashedPackagingActivities) {
+      byStation.set(a.station ?? '?', (byStation.get(a.station ?? '?') ?? 0) + 1);
+    }
+    const stationSummary = Array.from(byStation.entries())
+      .map(([s, n]) => `${s}=${n}`)
+      .join(', ');
+    console.log(
+      `[planner] Unleashed assemblies routed: ${kitchenActivities.length} kitchen, ${unleashedPackagingActivities.length} packaging (${stationSummary || '—'}).`,
+    );
+  }
+
   // ─── Cascading kitchen-run planner (Phase 4k.2) ──────────
   // Walk packaging plan, derive intermediate demand via BOM, compare to
   // Lundberg SOH + scheduled assemblies, surface gaps as required runs
@@ -790,6 +995,52 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
       date: a.date,
     }),
   );
+
+  // Phase 4l.12 — Unleashed-committed packaging assemblies drive
+  // upstream demand for components/intermediates so they can be
+  // fulfilled. Statuses in this set are treated as "not yet drawn
+  // upstream" — the planner needs to project the cascade. Statuses
+  // NOT in the set (Planned, Open) are assumed to have already
+  // committed their components in Unleashed → no fresh cascade.
+  const PACKAGING_TRIGGERS_UPSTREAM = new Set<string>([
+    'Parked',
+    'To Do',
+    'Todo',
+    'Priority',
+    'Unapproved',
+    'Inventory Mgr',
+    'InventoryMgr',
+    'Inventory Manager',
+  ]);
+  for (const a of unleashedPackagingActivities) {
+    if (dismissedStableIds.has(a.stableId)) continue;
+    const status = a.assemblyStatus ?? '';
+    if (!PACKAGING_TRIGGERS_UPSTREAM.has(status)) continue;
+    packagingForDemand.push({
+      productCode: a.productCode,
+      productName: a.productName,
+      quantity: a.quantity,
+      date: a.date,
+    });
+  }
+  // Diagnostic: count how many Unleashed packaging assemblies
+  // contributed demand vs how many were skipped (Planned / Open / other).
+  {
+    const triggered: string[] = [];
+    const skipped: string[] = [];
+    for (const a of unleashedPackagingActivities) {
+      if (PACKAGING_TRIGGERS_UPSTREAM.has(a.assemblyStatus ?? '')) {
+        triggered.push(`${a.assemblyNumber}:${a.assemblyStatus}`);
+      } else {
+        skipped.push(`${a.assemblyNumber}:${a.assemblyStatus}`);
+      }
+    }
+    if (triggered.length > 0) {
+      console.log(
+        `[planner] ${triggered.length} Unleashed packaging assembly(ies) triggering upstream cascade (Parked / To Do / Priority / Unapproved / Inventory Mgr); ${skipped.length} skipped (Planned / Open / other — components assumed committed).`,
+      );
+    }
+  }
   // Intermediate SOH lookup (Phase 4l.8). Intermediates can sit at any of:
   //   • Lundberg — just produced by the kitchen
   //   • MF Packaging — staged for hand-pack / elephant / dust runs
@@ -880,6 +1131,20 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     }
   }
 
+  // Phase 4l.12 — set of intermediates the user has flagged as
+  // pass-through (skip kitchen-required chip). Plumbed in from
+  // data/product-overrides.json. Cascade still walks their components
+  // so component POs get projected normally.
+  const skipKitchenIntermediates = new Set<string>();
+  for (const [code, ovr] of Object.entries(productOverrides)) {
+    if (ovr.skipKitchenRun === true) skipKitchenIntermediates.add(code);
+  }
+  if (skipKitchenIntermediates.size > 0) {
+    console.log(
+      `[planner] Skipping kitchen-required chip emission for ${skipKitchenIntermediates.size} intermediate(s) (pass-through cascade only): ${[...skipKitchenIntermediates].sort().join(', ')}`,
+    );
+  }
+
   const kitchenRuns = planKitchenRuns({
     packagingActivities: packagingForDemand,
     bom: capacity.bom,
@@ -890,6 +1155,7 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     scheduledSupply: scheduledKitchenSupply,
     bufferDays: 1,
     today: todayLocal,
+    skipIntermediates: skipKitchenIntermediates,
   });
 
   // Phase 4l.8: drop kitchen runs whose intermediate isn't reachable
@@ -1056,6 +1322,49 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
         redundantWithUnleashed: run.redundantWithUnleashed,
       });
     }
+  }
+
+  // ─── Phase 4l.12 — Parked Unleashed kitchen assemblies are movable ───
+  // Move Parked Lundberg-warehouse Unleashed assemblies from the
+  // committed `kitchenActivities` array into the planner-walkable
+  // `kitchenRequiredActivities` array. This lets the kitchen-team
+  // walker reschedule them just like cascade-derived runs (the user
+  // hasn't committed Parked yet — it's still a draft).
+  //
+  // They keep `kind: 'kitchen'` so they render as live (cyan) and
+  // retain their assemblyNumber / assemblyStatus for drawer + badge.
+  // They were already counted in scheduledKitchenSupply when the
+  // cascade ran, so no double-supply emission.
+  const parkedLundbergIndexes: number[] = [];
+  for (let i = 0; i < kitchenActivities.length; i++) {
+    if (kitchenActivities[i].assemblyStatus === 'Parked') {
+      parkedLundbergIndexes.push(i);
+    }
+  }
+  if (parkedLundbergIndexes.length > 0) {
+    // Move (splice from kitchenActivities, push to kitchenRequiredActivities)
+    // — iterate in reverse so splice indexes stay valid.
+    const moved: CalendarActivity[] = [];
+    for (let i = parkedLundbergIndexes.length - 1; i >= 0; i--) {
+      const idx = parkedLundbergIndexes[i];
+      moved.unshift(kitchenActivities[idx]);
+      kitchenActivities.splice(idx, 1);
+    }
+    for (const chip of moved) {
+      kitchenRequiredActivities.push({
+        ...chip,
+        // Mark as walkable: synthesise a kitchenRunInfo so the walker
+        // has an idealStartDate (= the Unleashed-committed date). The
+        // walker uses idealStartDate for sort ordering + JIT target.
+        kitchenRunInfo: {
+          overdue: false,
+          idealStartDate: chip.date,
+        },
+      });
+    }
+    console.log(
+      `[planner] Moved ${moved.length} Parked Lundberg assembly(ies) into the kitchen-team walker (will be repositioned to fit capacity).`,
+    );
   }
 
   // ─── Kitchen-team today-floor walk (Phase 4l.10) ──────────
@@ -1439,12 +1748,22 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
   //    c. If no day fits within the cap, fall back to placing on the
   //       earliest workday with overrun reported via the heatmap. The
   //       packagingInfo.overdue flag still surfaces the displacement.
-  const latestIntermediateFinishByCode = new Map<string, string>();
+  // Phase 4l.12 — switched from LATEST → EARLIEST finish per intermediate.
+  // With split-and-redate, an intermediate can have multiple kitchen
+  // batches across the horizon (one per consumer week). The walker only
+  // needs the EARLIEST finish to know "can my chip be served by any
+  // batch?". Using the LATEST finish bumped every consumer forward to
+  // the last batch's finish — even a manual chip dropped today would
+  // be walked weeks ahead just because some unrelated later consumer
+  // had a batch finishing in mid-June. FIFO sorts out the actual
+  // batch→consumer allocation in a later pass; optimistic placement
+  // here is correct.
+  const earliestIntermediateFinishByCode = new Map<string, string>();
   for (const k of kitchenRequiredActivities) {
     const finish = k.finishDate ?? k.date;
-    const existing = latestIntermediateFinishByCode.get(k.productCode);
-    if (!existing || finish > existing) {
-      latestIntermediateFinishByCode.set(k.productCode, finish);
+    const existing = earliestIntermediateFinishByCode.get(k.productCode);
+    if (!existing || finish < existing) {
+      earliestIntermediateFinishByCode.set(k.productCode, finish);
     }
   }
   function dayAfter(iso: string): string {
@@ -1472,16 +1791,14 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     dust: new Map(),
     bottlo: new Map(),
   };
-  // Helper: does any required intermediate finish AFTER this chip's date?
-  // If so, the 1-day buffer is violated and the chip must be walked forward
-  // even though the orchestrator/day-assigner placed it on a future date.
-  // Common case: packaging chip on day 18 (= today, first horizon Monday)
-  // but its kitchen run was overdue and got clamped to today as well —
-  // packaging would otherwise consume an intermediate that hasn't been
-  // produced yet.
+  // Helper: do ALL of this chip's required intermediates have NO batch
+  // finishing before its date? Uses the EARLIEST finish per intermediate —
+  // a chip is only buffer-violated when even the earliest batch hasn't
+  // finished by then. If at least one batch finishes in time, the chip
+  // can run (FIFO will allocate the right batch downstream).
   function bufferViolated(a: CalendarActivity): boolean {
     for (const ing of consumesMap[a.productCode] ?? []) {
-      const finish = latestIntermediateFinishByCode.get(ing);
+      const finish = earliestIntermediateFinishByCode.get(ing);
       if (!finish) continue;
       const earliestStart = dayAfter(finish);
       if (a.date < earliestStart) return true;
@@ -1532,10 +1849,12 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
   for (const idx of overdueIdxs) {
     const a = clampedActivities[idx];
     const station = a.station as Station;
-    // Earliest = today, bumped past any intermediate kitchen finish + 1d.
+    // Earliest = today, bumped past the EARLIEST intermediate finish + 1d.
+    // (Not the latest — one early batch is enough to feed this chip;
+    // FIFO decides which batch supplies which consumer downstream.)
     let earliest = todayLocal;
     for (const ing of consumesMap[a.productCode] ?? []) {
-      const finish = latestIntermediateFinishByCode.get(ing);
+      const finish = earliestIntermediateFinishByCode.get(ing);
       if (!finish) continue;
       const after = dayAfter(finish);
       if (after > earliest) earliest = after;
@@ -1593,6 +1912,530 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     }
   }
   const packagingActivitiesClamped = clampedActivities;
+
+  // ─── Phase 4l.12 — Post-FIFO batch SPLIT-AND-REDATE (Option 2+) ──
+  // The pass walks every kitchen-required chip, looks up its real FIFO
+  // allocations, and:
+  //
+  //   1. SPLITS the chip into shards whose qty matches each consumer
+  //      cluster's actual demand (one shard per consumer-week). This
+  //      breaks up the "one big batch dated to first consumer" pattern
+  //      where downstream consumers in week +3 were carried from
+  //      inventory rather than produced just-in-time.
+  //
+  //   2. REDATES each shard to land just before its consumer cluster's
+  //      earliest required date (FIFO buffer = 1 workday lead in).
+  //
+  // Shards inherit the parent chip's identity (productCode, family,
+  // intermediateMeta, etc.) and get a fresh per-shard stableId so the
+  // calendar's chipRefs map can address each one. Kitchen-team minutes
+  // + dehydrator trays are recomputed per-shard from the smaller qty.
+  //
+  // Constraint: a shard never lands EARLIER than where the kitchen-run
+  // walker placed the parent chip (the walker already today-clamped
+  // and respected kitchen-team capacity). If FIFO says "consume on day
+  // X" but X < walker.startDate, that shard collapses back to
+  // walker.startDate (still better than the original "all-aggregated"
+  // date, since later shards in the same chip still get spread out).
+  //
+  // Splits only fire when meaningful — single-consumer chips and
+  // chips whose post-split shards would all collapse to the same
+  // week stay as one chip.
+  {
+    // Build a local consumesQtyMap (parent → ingredient → qty/unit) for
+    // the FIFO. Same shape the supply-cap pass uses; cheaper to rebuild
+    // here than to thread through.
+    const redateConsumesQtyMap: Record<string, Record<string, number>> = {};
+    for (const row of capacity.bom) {
+      let inner = redateConsumesQtyMap[row.parentProductCode];
+      if (!inner) {
+        inner = {};
+        redateConsumesQtyMap[row.parentProductCode] = inner;
+      }
+      inner[row.productCode] =
+        (inner[row.productCode] ?? 0) + row.quantityPerParent;
+    }
+    // Supplier output override: kitchen-required chip's `quantity` is
+    // INPUT kg; FIFO needs OUTPUT kg (= input × yield).
+    const redateSupplyQty: Record<string, number> = {};
+    for (const a of kitchenRequiredActivities) {
+      const y =
+        capacity.intermediates.get(a.productCode)?.yieldRate ?? 1;
+      const eff = y > 0 && y <= 1 ? y : 1;
+      redateSupplyQty[a.stableId] = a.quantity * eff;
+    }
+    // Live Unleashed kitchen assemblies supply their stated quantity
+    // (already output kg).
+    for (const a of kitchenActivities) {
+      redateSupplyQty[a.stableId] = a.quantity;
+    }
+    // Run FIFO. We pass packaging chips as consumers, plus kitchen
+    // chips (which can be both consumer of sub-intermediates and
+    // supplier of intermediates).
+    const fifoResult = allocateSupplyFifo({
+      activities: [
+        ...packagingActivitiesClamped,
+        ...kitchenActivities,
+        ...kitchenRequiredActivities,
+      ].map((a) => ({
+        stableId: a.stableId,
+        productCode: a.productCode,
+        kind: a.kind,
+        date: a.date,
+        finishDate: a.finishDate ?? null,
+        quantity: a.quantity,
+        profitPerItem: a.profitPerItem ?? null,
+      })),
+      excludedStableIds: dismissedStableIds,
+      isConsumer: (a) =>
+        a.kind === 'packaging' ||
+        a.kind === 'kitchen-required' ||
+        a.kind === 'kitchen',
+      isSupplier: (a) => a.kind !== 'po-placed',
+      consumesMap,
+      consumesQtyMap: redateConsumesQtyMap,
+      initialSohByCode: lundbergSohByCode,
+      supplyQtyByActivity: redateSupplyQty,
+    });
+    // Map each supplier (kitchen-required chip) → list of allocated
+    // consumer dates. Only REAL allocations drive redating; phantoms
+    // don't represent actual demand commitments.
+    // Per-chip allocations keyed by consumer-week (Monday ISO). The
+    // weekly bucket size is a compromise: tighter than per-consumer
+    // (avoids minute fragments) and looser than full-chip aggregation
+    // (avoids dating the whole batch to its first consumer).
+    function mondayOf(iso: string): string {
+      const d = fromLocalISODate(iso);
+      const dow = d.getDay();
+      const mondayOffset = dow === 0 ? -6 : 1 - dow;
+      d.setDate(d.getDate() + mondayOffset);
+      return toLocalISODate(d);
+    }
+    type Bucket = { earliestConsumerDate: string; outputQty: number };
+    // supplierStableId → consumerWeekMonday → bucket (qty + earliest)
+    const bucketsBySupplier = new Map<string, Map<string, Bucket>>();
+    const allById = new Map<string, CalendarActivity>();
+    for (const a of packagingActivitiesClamped) allById.set(a.stableId, a);
+    for (const a of kitchenActivities) allById.set(a.stableId, a);
+    for (const a of kitchenRequiredActivities) allById.set(a.stableId, a);
+    for (const alloc of fifoResult.allocations) {
+      if (alloc.phantom) continue;
+      const supplier = allById.get(alloc.supplierStableId);
+      if (!supplier || supplier.kind !== 'kitchen-required') continue;
+      const consumer = allById.get(alloc.consumerStableId);
+      if (!consumer) continue;
+      const wk = mondayOf(consumer.date);
+      let weekMap = bucketsBySupplier.get(alloc.supplierStableId);
+      if (!weekMap) {
+        weekMap = new Map();
+        bucketsBySupplier.set(alloc.supplierStableId, weekMap);
+      }
+      const existing = weekMap.get(wk);
+      if (!existing) {
+        weekMap.set(wk, {
+          earliestConsumerDate: consumer.date,
+          outputQty: alloc.quantity,
+        });
+      } else {
+        existing.outputQty += alloc.quantity;
+        if (consumer.date < existing.earliestConsumerDate) {
+          existing.earliestConsumerDate = consumer.date;
+        }
+      }
+    }
+
+    // Apply split-and-redate. Each shard:
+    //   • inputQty = ceil(bucketOutputQty / yieldRate)
+    //   • date     = earliestConsumer − buffer − (prodDays − 1)
+    //               clamped to ≥ walker.startDate (chip.date today-floored)
+    //   • stableId = fresh per-shard so calendar arrows resolve uniquely
+    //
+    // Single-bucket suppliers fall through to the simple redate path
+    // (preserving the original stableId so user mutations on the chip
+    // survive). Multi-bucket suppliers get replaced wholesale: shard 0
+    // inherits the original stableId, shards 1..N get fresh ones.
+    const shardOrderByKey = new Map<string, number>();
+    function nextOrder(productCode: string, weekStart: string): number {
+      const k = `${productCode}|${weekStart}`;
+      const n = shardOrderByKey.get(k) ?? 0;
+      shardOrderByKey.set(k, n + 1);
+      return n;
+    }
+    // Seed the shard counter from existing batches so we don't collide
+    // with stableIds the kitchen-run planner already minted in
+    // `orderCounterByKey`.
+    for (const [k, v] of orderCounterByKey.entries()) shardOrderByKey.set(k, v);
+
+    const splitChips: CalendarActivity[] = [];
+    let splitCount = 0;
+    let shardedFromCount = 0;
+    let movedCount = 0;
+    let cumulativeShiftDays = 0;
+    let droppedNoConsumerCount = 0;
+    const droppedSummaries: string[] = [];
+
+    for (const chip of kitchenRequiredActivities) {
+      const weekMap = bucketsBySupplier.get(chip.stableId);
+      // No FIFO allocations = nothing downstream actually needs this
+      // chip's output (SOH + Unleashed assemblies + earlier-finishing
+      // batches together cover every real consumer). Don't emit it —
+      // a kitchen-required chip with no consumer is just clutter,
+      // confuses the operator ("why is this run scheduled?"), and
+      // misleads the kitchen-team / dehydrator load badges.
+      //
+      // Subtract its load contributions so the day's badges reflect
+      // reality after the drop. The cascade originally added these
+      // minutes / trays based on the demand it computed before SOH +
+      // assemblies were folded in via the FIFO; we're catching the
+      // over-production here.
+      if (!weekMap || weekMap.size === 0) {
+        const chipMinDrop = chip.kitchenMinutes ?? 0;
+        if (chipMinDrop > 0) {
+          kitchenLoadByDay.set(
+            chip.date,
+            Math.max(0, (kitchenLoadByDay.get(chip.date) ?? 0) - chipMinDrop),
+          );
+        }
+        if (chip.dehydratorTrays && chip.dehydratorOccupiesFrom && chip.dehydratorOccupiesTo) {
+          const oldFrom = fromLocalISODate(chip.dehydratorOccupiesFrom);
+          const oldTo = fromLocalISODate(chip.dehydratorOccupiesTo);
+          for (let d = new Date(oldFrom); d.getTime() <= oldTo.getTime(); d.setDate(d.getDate() + 1)) {
+            const iso = toLocalISODate(d);
+            const cur = dehydratorLoadByDay.get(iso) ?? 0;
+            dehydratorLoadByDay.set(iso, Math.max(0, cur - chip.dehydratorTrays));
+          }
+        }
+        droppedNoConsumerCount += 1;
+        if (droppedSummaries.length < 8) {
+          droppedSummaries.push(`${chip.productCode}@${chip.date} q${chip.quantity}`);
+        }
+        continue;
+      }
+      // Buckets sorted by earliest-consumer-date.
+      const buckets = Array.from(weekMap.values()).sort((a, b) =>
+        a.earliestConsumerDate.localeCompare(b.earliestConsumerDate),
+      );
+      const yieldRate =
+        capacity.intermediates.get(chip.productCode)?.yieldRate ?? 1;
+      const eff = yieldRate > 0 && yieldRate <= 1 ? yieldRate : 1;
+      const bufferDays = 1;
+      const productionDays = chip.durationDays ?? 1;
+      const intermediateMeta = capacity.intermediates.get(chip.productCode);
+
+      // Subtract the original chip's load from the calendar — we'll add
+      // each shard's load back below.
+      const originalKitchenMin = chip.kitchenMinutes ?? 0;
+      if (originalKitchenMin > 0) {
+        kitchenLoadByDay.set(
+          chip.date,
+          Math.max(0, (kitchenLoadByDay.get(chip.date) ?? 0) - originalKitchenMin),
+        );
+      }
+      if (chip.dehydratorTrays && chip.dehydratorOccupiesFrom && chip.dehydratorOccupiesTo) {
+        const oldFrom = fromLocalISODate(chip.dehydratorOccupiesFrom);
+        const oldTo = fromLocalISODate(chip.dehydratorOccupiesTo);
+        for (let d = new Date(oldFrom); d.getTime() <= oldTo.getTime(); d.setDate(d.getDate() + 1)) {
+          const iso = toLocalISODate(d);
+          const cur = dehydratorLoadByDay.get(iso) ?? 0;
+          dehydratorLoadByDay.set(iso, Math.max(0, cur - chip.dehydratorTrays));
+        }
+      }
+
+      const shardCountForChip = buckets.length;
+      // Phase 4l.12 — distribute the ORIGINAL chip's input across shards
+      // in proportion to each bucket's output demand. Earlier code did
+      // `ceil(bucketOutputQty / yield)` per shard, which added rounding
+      // surplus to every shard (sum of shard outputs > original output).
+      // Downstream client FIFO then used the earlier shards' surplus to
+      // serve later buckets, leaving the last shard with 0 allocations
+      // ("0 CONSUMERS" in the drawer). Preserving total input matches
+      // the original chip's output exactly; last shard absorbs any
+      // rounding residual.
+      const originalInputQty = chip.quantity;
+      const totalBucketOutput = buckets.reduce((s, x) => s + x.outputQty, 0);
+      const inputByShard: number[] = [];
+      let assignedInput = 0;
+      for (let i = 0; i < buckets.length; i++) {
+        if (i === buckets.length - 1) {
+          inputByShard.push(Math.max(1, originalInputQty - assignedInput));
+        } else {
+          const share =
+            totalBucketOutput > 0
+              ? buckets[i].outputQty / totalBucketOutput
+              : 1 / buckets.length;
+          const inp = Math.max(1, Math.round(originalInputQty * share));
+          inputByShard.push(inp);
+          assignedInput += inp;
+        }
+      }
+      for (let s = 0; s < buckets.length; s++) {
+        const b = buckets[s];
+        // Compute target start date for this shard.
+        let newFinish = shiftIsoByDays(b.earliestConsumerDate, -bufferDays);
+        if (!isWorkday(newFinish)) newFinish = previousWorkday(newFinish);
+        let newStart = shiftIsoByDays(newFinish, -(productionDays - 1));
+        if (!isWorkday(newStart)) newStart = previousWorkday(newStart);
+        // Never EARLIER than where the walker placed the parent
+        // (capacity-respecting today-floor). Shards that want to land
+        // before that collapse back to the walker date — still better
+        // than the original aggregate behaviour because LATER shards
+        // get their own dates.
+        if (newStart < chip.date) newStart = chip.date;
+
+        const inputQty = inputByShard[s];
+        const kitchenMinutes = intermediateMeta
+          ? kitchenTeamMinutesFor(intermediateMeta, inputQty)
+          : KITCHEN_DEFAULT_MINUTES;
+
+        // Per-shard dehydrator occupancy (same shape as parent, just
+        // scaled by qty + anchored on newStart).
+        let dehydratorTrays: number | null = null;
+        let dehydratorOccupiesFrom: string | null = null;
+        let dehydratorOccupiesTo: string | null = null;
+        if (
+          intermediateMeta?.dehydHours &&
+          intermediateMeta.dehydHours > 0 &&
+          intermediateMeta.kgPerTray &&
+          intermediateMeta.kgPerTray > 0
+        ) {
+          dehydratorTrays = Math.ceil(inputQty / intermediateMeta.kgPerTray);
+          const dehydDays = Math.max(1, Math.ceil(intermediateMeta.dehydHours / 24));
+          const hasSoak = intermediateMeta.processSteps.some(
+            (st) => st === 'soak' || st.toLowerCase().includes('soak'),
+          );
+          const soakOffsetDays = hasSoak ? 1 : 0;
+          const fromDate = new Date(newStart + 'T00:00:00');
+          fromDate.setDate(fromDate.getDate() + soakOffsetDays);
+          const toDate = new Date(fromDate);
+          toDate.setDate(toDate.getDate() + dehydDays - 1);
+          dehydratorOccupiesFrom = toLocalISODate(fromDate);
+          dehydratorOccupiesTo = toLocalISODate(toDate);
+        }
+
+        // Weekly anchor for the new stableId.
+        const shardWeekStart = mondayOf(newStart);
+        const shardStableId =
+          s === 0 && shardCountForChip > 1
+            ? chip.stableId // shard 0 keeps the original id so server-known mutations survive
+            : s === 0
+              ? chip.stableId
+              : stableIdOf(
+                  chip.productCode,
+                  shardWeekStart,
+                  nextOrder(chip.productCode, shardWeekStart),
+                );
+
+        // Calendar load: add each shard's contribution to the (now-zeroed)
+        // load maps.
+        if (kitchenMinutes > 0) {
+          kitchenLoadByDay.set(
+            newStart,
+            (kitchenLoadByDay.get(newStart) ?? 0) + kitchenMinutes,
+          );
+        }
+        if (dehydratorTrays && dehydratorOccupiesFrom && dehydratorOccupiesTo) {
+          addDehydratorLoad(
+            dehydratorLoadByDay,
+            dehydratorOccupiesFrom,
+            dehydratorOccupiesTo,
+            dehydratorTrays,
+          );
+        }
+
+        const baseName = intermediateMeta?.productName ?? chip.productName;
+        const productNameForShard =
+          shardCountForChip > 1
+            ? `${baseName} (shard ${s + 1}/${shardCountForChip})`
+            : chip.productName;
+
+        // requiredByDate moves with the shard so the drawer reads correctly.
+        const finishDateShifted = newFinish;
+        const requiredByDateShifted = b.earliestConsumerDate;
+
+        splitChips.push({
+          ...chip,
+          id: `kitchen-required-${chip.productCode}-${newStart}-${shardStableId}`,
+          stableId: shardStableId,
+          date: newStart,
+          finishDate: finishDateShifted,
+          requiredByDate: requiredByDateShifted,
+          quantity: inputQty,
+          productName: productNameForShard,
+          kitchenMinutes,
+          dehydratorTrays,
+          dehydratorOccupiesFrom,
+          dehydratorOccupiesTo,
+        });
+
+        if (newStart !== chip.date) {
+          movedCount += 1;
+          cumulativeShiftDays += daysBetween(chip.date, newStart);
+        }
+        // Per-shard placement diagnostic — emitted only for split chips
+        // (single-shard chips already keep their walker date by design).
+      }
+      if (shardCountForChip > 1) {
+        splitCount += shardCountForChip;
+        shardedFromCount += 1;
+      }
+    }
+    // Replace the original list contents with the (potentially split)
+    // shards. Mutating in place so all the downstream references to
+    // kitchenRequiredActivities pick up the new shape automatically.
+    kitchenRequiredActivities.length = 0;
+    kitchenRequiredActivities.push(...splitChips);
+
+    // ─── Phase 4l.12 — Iterative redating pass ─────────────────
+    // The bucket-based split-and-redate above is computed off the FIRST
+    // FIFO (run on the ORIGINAL unsplit chips). Once chips are split,
+    // a second FIFO might allocate consumers differently because each
+    // shard is now an individual supplier — earlier-finishing shards
+    // get drained by chronologically-earlier consumers, leaving later
+    // shards to feed later consumers.
+    //
+    // Concrete failure mode this fixes: IABL chip dated 28/05 showing
+    // IMT@26/06 + IMK@01/07 as its consumers (drawer reflects client
+    // FIFO). The server bucket put both consumers in the early bucket;
+    // client FIFO reassigned them to the later shard. Without this
+    // pass the shard stays on 28/05 (server bucket date) instead of
+    // moving to ~25/06 just-in-time for IMT.
+    //
+    // Approach: re-FIFO over the now-split shards, then for each chip,
+    // find its earliest REAL (non-phantom) allocated consumer. If that
+    // consumer is significantly later than the chip's current date,
+    // shift the chip forward to land 1 workday before it. Bounded by
+    // an iteration cap to prevent runaway oscillation.
+    const MAX_REDATE_ITERATIONS = 3;
+    const REDATE_TOLERANCE_DAYS = 3; // ignore tiny shifts to keep stable
+    let iteration = 0;
+    let secondPassMoved = 0;
+    let secondPassShiftDays = 0;
+    while (iteration < MAX_REDATE_ITERATIONS) {
+      iteration += 1;
+      const fifo2 = allocateSupplyFifo({
+        activities: [
+          ...packagingActivitiesClamped,
+          ...kitchenActivities,
+          ...kitchenRequiredActivities,
+        ].map((a) => ({
+          stableId: a.stableId,
+          productCode: a.productCode,
+          kind: a.kind,
+          date: a.date,
+          finishDate: a.finishDate ?? null,
+          quantity: a.quantity,
+          profitPerItem: a.profitPerItem ?? null,
+        })),
+        excludedStableIds: dismissedStableIds,
+        isConsumer: (a) =>
+          a.kind === 'packaging' ||
+          a.kind === 'kitchen-required' ||
+          a.kind === 'kitchen',
+        isSupplier: (a) => a.kind !== 'po-placed',
+        consumesMap,
+        consumesQtyMap: redateConsumesQtyMap,
+        initialSohByCode: lundbergSohByCode,
+        supplyQtyByActivity: (() => {
+          const m: Record<string, number> = {};
+          for (const a of kitchenRequiredActivities) {
+            const y = capacity.intermediates.get(a.productCode)?.yieldRate ?? 1;
+            const eff = y > 0 && y <= 1 ? y : 1;
+            m[a.stableId] = a.quantity * eff;
+          }
+          for (const a of kitchenActivities) m[a.stableId] = a.quantity;
+          return m;
+        })(),
+      });
+      // Earliest REAL consumer date per supplier stableId.
+      const earliestRealConsumerBySupplier = new Map<string, string>();
+      const allById2 = new Map<string, CalendarActivity>();
+      for (const a of packagingActivitiesClamped) allById2.set(a.stableId, a);
+      for (const a of kitchenActivities) allById2.set(a.stableId, a);
+      for (const a of kitchenRequiredActivities) allById2.set(a.stableId, a);
+      for (const alloc of fifo2.allocations) {
+        if (alloc.phantom) continue;
+        const supplier = allById2.get(alloc.supplierStableId);
+        if (!supplier || supplier.kind !== 'kitchen-required') continue;
+        const consumer = allById2.get(alloc.consumerStableId);
+        if (!consumer) continue;
+        const cur = earliestRealConsumerBySupplier.get(alloc.supplierStableId);
+        if (!cur || consumer.date < cur) {
+          earliestRealConsumerBySupplier.set(alloc.supplierStableId, consumer.date);
+        }
+      }
+      // Apply shifts.
+      let anyMovedThisIter = 0;
+      for (let i = 0; i < kitchenRequiredActivities.length; i++) {
+        const chip = kitchenRequiredActivities[i];
+        const earliestConsumer = earliestRealConsumerBySupplier.get(chip.stableId);
+        if (!earliestConsumer) continue;
+        const productionDays = chip.durationDays ?? 1;
+        let newFinish = shiftIsoByDays(earliestConsumer, -1);
+        if (!isWorkday(newFinish)) newFinish = previousWorkday(newFinish);
+        let newStart = shiftIsoByDays(newFinish, -(productionDays - 1));
+        if (!isWorkday(newStart)) newStart = previousWorkday(newStart);
+        if (newStart <= chip.date) continue; // never earlier
+        const shift = daysBetween(chip.date, newStart);
+        if (shift < REDATE_TOLERANCE_DAYS) continue;
+        const chipMin = chip.kitchenMinutes ?? 0;
+        if (chipMin > 0) {
+          kitchenLoadByDay.set(
+            chip.date,
+            Math.max(0, (kitchenLoadByDay.get(chip.date) ?? 0) - chipMin),
+          );
+          kitchenLoadByDay.set(
+            newStart,
+            (kitchenLoadByDay.get(newStart) ?? 0) + chipMin,
+          );
+        }
+        if (chip.dehydratorTrays && chip.dehydratorOccupiesFrom && chip.dehydratorOccupiesTo) {
+          const oldFrom = fromLocalISODate(chip.dehydratorOccupiesFrom);
+          const oldTo = fromLocalISODate(chip.dehydratorOccupiesTo);
+          for (let d = new Date(oldFrom); d.getTime() <= oldTo.getTime(); d.setDate(d.getDate() + 1)) {
+            const iso = toLocalISODate(d);
+            const cur = dehydratorLoadByDay.get(iso) ?? 0;
+            dehydratorLoadByDay.set(iso, Math.max(0, cur - chip.dehydratorTrays));
+          }
+          addDehydratorLoad(
+            dehydratorLoadByDay,
+            shiftIsoOrNull(chip.dehydratorOccupiesFrom, shift),
+            shiftIsoOrNull(chip.dehydratorOccupiesTo, shift),
+            chip.dehydratorTrays,
+          );
+        }
+        kitchenRequiredActivities[i] = {
+          ...chip,
+          date: newStart,
+          finishDate: chip.finishDate
+            ? shiftIsoByDays(chip.finishDate, shift)
+            : chip.finishDate,
+          requiredByDate: chip.requiredByDate
+            ? shiftIsoByDays(chip.requiredByDate, shift)
+            : chip.requiredByDate,
+          dehydratorOccupiesFrom: shiftIsoOrNull(chip.dehydratorOccupiesFrom, shift),
+          dehydratorOccupiesTo: shiftIsoOrNull(chip.dehydratorOccupiesTo, shift),
+        };
+        anyMovedThisIter += 1;
+        secondPassMoved += 1;
+        secondPassShiftDays += shift;
+      }
+      if (anyMovedThisIter === 0) break; // stable
+    }
+
+    if (shardedFromCount > 0 || movedCount > 0 || droppedNoConsumerCount > 0 || secondPassMoved > 0) {
+      const dropTail =
+        droppedNoConsumerCount > 0
+          ? ` Dropped ${droppedNoConsumerCount} chip(s) with no FIFO-allocated consumer (covered by SOH + assemblies + earlier batches): ${droppedSummaries.join(', ')}${droppedNoConsumerCount > droppedSummaries.length ? `, …+${droppedNoConsumerCount - droppedSummaries.length} more` : ''}.`
+          : '';
+      const secondTail =
+        secondPassMoved > 0
+          ? ` Iterative post-split FIFO redate: ${secondPassMoved} chip-move(s) over ${iteration} iteration(s) (cumulative ${secondPassShiftDays} chip-days shifted further toward consumers).`
+          : '';
+      console.log(
+        `[planner] FIFO split-and-redate: ${shardedFromCount} chip(s) split into ${splitCount} shard(s); ${movedCount} shard(s) moved later (cumulative ${cumulativeShiftDays} chip-days shifted toward consumers).${secondTail}${dropTail}`,
+      );
+    }
+  }
 
   // ─── Supply cap pass (Phase 4l.10) ───────────────────────────
   // Reconcile user-edited kitchen runs against packaging demand. The DP
@@ -1862,6 +2705,7 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
   const allActivities: CalendarActivity[] = [
     ...cappedActivities,
     ...kitchenActivities,
+    ...unleashedPackagingActivities,
     ...kitchenRequiredActivities,
   ];
 
@@ -2448,6 +3292,52 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
           .join(', ')}`,
       );
     }
+    // (j) Packaging chips whose run size exceeds the SKU's 3-month
+    // expected demand. The current maxBatchSize = station-daily-output
+    // can let the DP pick a 1,600-unit run for an SKU whose 3-month
+    // total is 300 — that's 13 months of carry. Flag the worst
+    // offenders so we know which SKUs would benefit from a tighter
+    // demand-aware cap. (Sized check uses weeklyDemandByProduct × 13
+    // weeks ≈ 3 months.)
+    const overproductionChips: Array<{
+      code: string;
+      date: string;
+      qty: number;
+      threeMonthDemand: number;
+      ratio: number;
+    }> = [];
+    for (const a of cappedActivities) {
+      if (a.kind !== 'packaging') continue;
+      if (dismissedStableIds.has(a.stableId)) continue;
+      const weekly = weeklyDemandByProduct.get(a.productCode);
+      if (!weekly || weekly.length === 0) continue;
+      const avgWeekly =
+        weekly.reduce((s, w) => s + w.quantity, 0) / weekly.length;
+      const threeMonthDemand = Math.round(avgWeekly * 13);
+      if (threeMonthDemand <= 0) continue;
+      if (a.quantity > threeMonthDemand) {
+        overproductionChips.push({
+          code: a.productCode,
+          date: a.date,
+          qty: a.quantity,
+          threeMonthDemand,
+          ratio: a.quantity / threeMonthDemand,
+        });
+      }
+    }
+    // Sort worst-offender first (highest ratio).
+    overproductionChips.sort((x, y) => y.ratio - x.ratio);
+    if (overproductionChips.length > 0) {
+      auditLines.push(
+        `  ${overproductionChips.length} packaging chip(s) sized > 3-month demand (potential overproduction; BOOKMARK: max-batch-vs-demand review). Worst offenders: ${overproductionChips
+          .slice(0, 8)
+          .map(
+            (c) =>
+              `${c.code}@${c.date} qty=${Math.round(c.qty)} vs ${c.threeMonthDemand}/3mo (${c.ratio.toFixed(1)}×)`,
+          )
+          .join(', ')}`,
+      );
+    }
 
     if (auditLines.length > 0) {
       console.warn(
@@ -2470,11 +3360,86 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     // Phase 4l.11: per-product weekly demand for the client-side
     // inventory-timeline computation that drives chip availability heat.
     // Map → plain object for the server-client boundary.
-    weeklyDemandByProduct: Object.fromEntries(weeklyDemandByProduct),
+    // Phase 4l.12 — ship the FULL (pre-subtraction) forecast so the
+    // sparkline doesn't double-count committed assemblies (which it
+    // also renders as supply). See weeklyDemandFullByProduct above.
+    weeklyDemandByProduct: Object.fromEntries(weeklyDemandFullByProduct),
     infeasibleProducts,
     routingDecisions,
     productOverrides,
     productStationDailyOutput,
+    // Phase 4l.12 — product catalogue for the left-rail "Add to plan"
+    // lookup. Two-tier construction:
+    //
+    //   Tier A (plannable): SKUs in `productMetaBySku` — the planner is
+    //   allowed to schedule these. Driven by the finished-goods
+    //   allowlist + family-sheet routing.
+    //
+    //   Tier B (draggable-only): SKUs the planner WON'T touch but the
+    //   operator can still drop manually — anything with demand, a BOM,
+    //   or a profit-data entry. Lets the user override the allowlist for
+    //   one-off runs (e.g. MFRMIXNB11 has a BOM + demand but isn't on
+    //   the allowlist; before this fix it was unsearchable). Station is
+    //   derived the same way the allowlist auto-route does it:
+    //   product-profit's plannerStation, else hand-packing.
+    //
+    // Tier A wins on duplicates so the planner's authoritative meta is
+    // preserved when present.
+    productCatalog: (() => {
+      const out = new Map<
+        string,
+        {
+          productCode: string;
+          productName: string;
+          station: 'hand-packing' | 'elephant' | 'dust' | 'bottlo';
+          plannable: boolean;
+        }
+      >();
+      // Tier A first — wins on duplicate keys.
+      for (const [code, meta] of Object.entries(capacity.productMetaBySku)) {
+        if (meta.station == null) continue;
+        out.set(code, {
+          productCode: code,
+          productName: meta.productName || code,
+          station: meta.station as 'hand-packing' | 'elephant' | 'dust' | 'bottlo',
+          plannable: true,
+        });
+      }
+      // Tier B — every code we have data for that isn't already in A.
+      const draggableCandidates = new Set<string>();
+      for (const code of Object.keys(allRates)) draggableCandidates.add(code);
+      for (const code of bomParentCodes) draggableCandidates.add(code);
+      if (productProfit) {
+        for (const code of Object.keys(productProfit.byCode)) {
+          draggableCandidates.add(code);
+        }
+      }
+      // Best-effort productName lookup: BOM rows carry a `productName`
+      // for the CHILD code. A SKU that's a BOM PARENT (e.g. MFRMIXNB11)
+      // won't have its own name in any BOM row, only its children's
+      // names. So we harvest child names and fall back to the bare code
+      // for parent-only SKUs. The operator can edit the chip's name via
+      // the drawer if it matters.
+      const bomNameByCode = new Map<string, string>();
+      for (const row of capacity.bom) {
+        if (row.productName && !bomNameByCode.has(row.productCode)) {
+          bomNameByCode.set(row.productCode, row.productName);
+        }
+      }
+      for (const code of draggableCandidates) {
+        if (out.has(code)) continue;
+        const profitEntry = productProfit?.byCode[code] ?? null;
+        const station: 'hand-packing' | 'elephant' | 'dust' | 'bottlo' =
+          profitEntry?.plannerStation ?? 'hand-packing';
+        out.set(code, {
+          productCode: code,
+          productName: bomNameByCode.get(code) || code,
+          station,
+          plannable: false,
+        });
+      }
+      return Array.from(out.values());
+    })(),
     sohByProductCode,
     sohFetchedAt,
     availableWarehouses,

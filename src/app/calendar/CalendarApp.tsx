@@ -88,6 +88,7 @@ import type {
   Station,
 } from '@/lib/planning/engine-io';
 import { costToSwitch } from '@/lib/engine/changeover';
+import { allocateSupplyFifo } from '@/lib/engine/supply-allocator';
 import { toLocalISODate } from '@/lib/planning/working-day';
 import {
   readManualActivitiesFromStorage,
@@ -158,6 +159,18 @@ interface CalendarAppProps {
   productOverrides: Record<string, ProductOverrideShape>;
   /** Per-product station daily output (units), used as default for max-batch override. */
   productStationDailyOutput: Record<string, number>;
+  /** Phase 4l.12 — all plannable packaging SKUs (allowlist ∩ has-station).
+   *  Drives the left-rail "Add to plan" lookup so the user can pick SKUs
+   *  that aren't currently in the plan. Tier A (plannable=true) = SKUs
+   *  the planner can schedule; Tier B (plannable=false) = SKUs the
+   *  operator can still drag manually but the planner won't touch
+   *  (no allowlist entry / no family routing). */
+  productCatalog: ReadonlyArray<{
+    productCode: string;
+    productName: string;
+    station: Station;
+    plannable: boolean;
+  }>;
   /** SOH per (product code, warehouse name); empty when no cache file exists. */
   sohByProductCode: Record<string, Record<string, number>>;
   /** ISO timestamp of the last SOH refresh, or null when cache is missing. */
@@ -774,6 +787,7 @@ export function CalendarApp(props: CalendarAppProps) {
     routingDecisions,
     productOverrides,
     productStationDailyOutput,
+    productCatalog,
     sohByProductCode,
     sohFetchedAt,
     availableWarehouses,
@@ -923,6 +937,12 @@ export function CalendarApp(props: CalendarAppProps) {
 
   // Selected activity for the drawer.
   const [selected, setSelected] = useState<CalendarActivity | null>(null);
+  // The chip's STABLE id (won't change across mutations / layer toggles /
+  // re-renders). Kept alongside `selected` so the selection visual sticks
+  // even when the underlying CalendarActivity object reference changes —
+  // e.g. when the user adds a layer to visibility and the calendar re-
+  // renders with a fresh `mutatedActivities` array.
+  const selectedStableId = selected?.stableId ?? null;
 
   // Real today (client clock) — used by drag-guards and stale-reschedule
   // prune. We keep this independent of `planFromDate` so that when the user
@@ -949,7 +969,9 @@ export function CalendarApp(props: CalendarAppProps) {
   }
   function addManualActivity(input: Omit<ManualActivity, 'id'>) {
     const id = `${input.productCode}|${input.date}|${Date.now()}`;
-    setManualActivities((curr) => persistManualActivities([...curr, { id, ...input }]));
+    setManualActivities((curr) =>
+      persistManualActivities([...curr, { id, ...input }]),
+    );
     setUnplaceableIds([]);
   }
   function removeManualActivity(id: string) {
@@ -981,11 +1003,64 @@ export function CalendarApp(props: CalendarAppProps) {
   // (a reschedule whose chip ended up outside the current month view
   // is the canonical motivating case).
   const [mutationsOpen, setMutationsOpen] = useState(false);
+  const [showStaleDetails, setShowStaleDetails] = useState(false);
+  const [productLookupQuery, setProductLookupQuery] = useState('');
 
   // ─── Mutations (dismiss) ─────────────────────────────────
   // Hydrated from localStorage on mount; written on every mutation.
   const [mutations, setMutations] = useState<MutationsMap>({});
   const [showDismissed, setShowDismissed] = useState(true);
+
+  // Phase 4l.12 — auto-scroll while dragging chips. When a chip drag
+  // hovers near the top or bottom of the viewport, scroll the page in
+  // that direction so the user can target dates outside the current
+  // view. Triggered by any HTML5 drag (chip reschedule or manual-add
+  // from the left rail).
+  useEffect(() => {
+    let raf: number | null = null;
+    let direction = 0; // -1 = up, 1 = down, 0 = idle
+    const SCROLL_ZONE_PX = 90; // edge band that triggers scroll
+    const SCROLL_SPEED_PX = 14; // px per animation frame
+    const step = () => {
+      if (direction === 0) {
+        raf = null;
+        return;
+      }
+      window.scrollBy(0, direction * SCROLL_SPEED_PX);
+      raf = requestAnimationFrame(step);
+    };
+    const updateFromY = (clientY: number) => {
+      const vh = window.innerHeight;
+      let next = 0;
+      if (clientY < SCROLL_ZONE_PX) next = -1;
+      else if (clientY > vh - SCROLL_ZONE_PX) next = 1;
+      if (next !== direction) {
+        direction = next;
+        if (direction !== 0 && raf === null) {
+          raf = requestAnimationFrame(step);
+        }
+      }
+    };
+    const onDragOver = (e: DragEvent) => {
+      updateFromY(e.clientY);
+    };
+    const stop = () => {
+      direction = 0;
+      if (raf !== null) {
+        cancelAnimationFrame(raf);
+        raf = null;
+      }
+    };
+    document.addEventListener('dragover', onDragOver);
+    document.addEventListener('dragend', stop);
+    document.addEventListener('drop', stop);
+    return () => {
+      document.removeEventListener('dragover', onDragOver);
+      document.removeEventListener('dragend', stop);
+      document.removeEventListener('drop', stop);
+      if (raf !== null) cancelAnimationFrame(raf);
+    };
+  }, []);
 
   useEffect(() => {
     const hydrated = readMutationsFromStorage();
@@ -1110,9 +1185,31 @@ export function CalendarApp(props: CalendarAppProps) {
     setMutations((curr) => persist(applyClearLeadTime(curr, placeByStableId)));
     setUnplaceableIds([]);
   }
-  function editStation(stableId: string, newStation: Station) {
+  function editStation(stableId: string, newStation: Station, productCode?: string) {
     setMutations((curr) => persist(applyEditStation(curr, stableId, newStation)));
     setUnplaceableIds([]);
+    // Phase 4l.12 — also persist as the SKU's default station so subsequent
+    // chips for this product use the new station too. Fire-and-forget; if
+    // the request fails we just lose the default-for-future behaviour, the
+    // per-chip mutation still applies. The router refresh re-renders the
+    // server component which picks up the new override.
+    if (productCode) {
+      fetch('/api/product-overrides', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productCode,
+          override: { defaultStation: newStation },
+        }),
+      })
+        .then(() => router.refresh())
+        .catch((err) =>
+          console.error(
+            '[editStation] failed to persist defaultStation override:',
+            err,
+          ),
+        );
+    }
   }
   function clearStation(stableId: string) {
     setMutations((curr) => persist(applyClearStation(curr, stableId)));
@@ -1124,6 +1221,16 @@ export function CalendarApp(props: CalendarAppProps) {
   }
   function clearAllMutations() {
     setMutations(persist({}));
+    setUnplaceableIds([]);
+  }
+  /**
+   * Phase 4l.12 — wipe every manually-dropped chip (drag-from-lookup or
+   * drag-from-infeasible). Used by the mutations dropdown's "Clear all"
+   * so the operator can return to a pristine planner view in one click
+   * instead of removing each manual entry individually.
+   */
+  function clearAllManualActivities() {
+    setManualActivities(() => persistManualActivities([]));
     setUnplaceableIds([]);
   }
 
@@ -1141,7 +1248,16 @@ export function CalendarApp(props: CalendarAppProps) {
    */
   function resolveAllConflicts(strategy: ResolveStrategy) {
     const result = resolveScheduleConflicts({
-      activities,
+      // Use `activitiesWithPo` (not the raw `activities` prop) so the
+      // resolver sees client-projected PO chips as suppliers. Without
+      // them, raw-material conflicts like "needs LMFRASLFME by 26/05;
+      // closest run finishes 09/06" are invisible to the resolver
+      // (the PO chip arriving 09/06 is the supplier) — Resolve auto
+      // would silently return zero mutations and the chip wouldn't
+      // move. The UI builds its conflict view from `mutatedActivities`
+      // which is layered on top of `activitiesWithPo`, so the
+      // resolver now sees the same suppliers as the user.
+      activities: activitiesWithPo,
       mutations,
       consumesMap,
       strategy,
@@ -1261,6 +1377,15 @@ export function CalendarApp(props: CalendarAppProps) {
         : a;
     });
   }, [activitiesWithPo, mutations, changeoverMatrix]);
+
+  // Selection survives layer toggles via stableId matching on the chip
+  // render side (ActivityChip / ClusterChip already compare both
+  // `selectedStableId` and `selectedId`). No useEffect sync needed —
+  // an earlier attempt to also refresh the `selected` object reference
+  // here could ping-pong with React's commit cycle when the calendar
+  // is heavy (cookie mutations + many manual chips re-render fast
+  // enough that the effect's `find()` returns a new reference each
+  // pass, which the stale-reference check failed to spot).
 
   // Number of dismissed activities present in the current plan.
   const dismissedCount = useMemo(
@@ -1444,17 +1569,9 @@ export function CalendarApp(props: CalendarAppProps) {
   }, [conflicts]);
 
   // ─── FIFO supply-allocation for arrow drawing (Phase 4l.6) ──
-  // Replaces the old "every supplier finishing before me is my supplier"
-  // approach (which over-drew arrows) with a per-ingredient FIFO walk.
-  //
-  // Algorithm: for each ingredient code, walk consumers in date order and
-  // satisfy each consumer's demand from:
-  //   1. initial SOH (no arrow — SOH isn't a chip)
-  //   2. scheduled supplier chips in finish-date order, only those whose
-  //      finish strictly precedes the consumer's date (1-day buffer)
-  // Each consumer only sees arrows from the supplier(s) that actually fed it.
-  // If a consumer goes partly unfilled (SOH+supply < need), the conflict
-  // detector flags it; we still record the suppliers that DID feed it.
+  // Phase 4l.12: extracted to `src/lib/engine/supply-allocator.ts` so
+  // the server can also run the FIFO (Option 2 post-FIFO batch
+  // redating). Behaviour identical to the previous inline implementation.
   type RelKind = 'supplier' | 'consumer';
   interface RelEntry {
     stableId: string;
@@ -1467,114 +1584,30 @@ export function CalendarApp(props: CalendarAppProps) {
     phantom?: boolean;
   }
   const relatedByStableId = useMemo<Map<string, RelEntry[]>>(() => {
-    const finishOf = (a: CalendarActivity) => a.finishDate ?? a.date;
-    const isConsumerKind = (k: CalendarActivity['kind']) =>
-      k === 'packaging' || k === 'kitchen-required' || k === 'kitchen';
-    const qtyPerUnit = (consumerCode: string, ingredient: string) =>
-      consumesQtyMap[consumerCode]?.[ingredient] ?? 1;
-    const supplyQty = (a: CalendarActivity) =>
-      supplyQtyByActivity[a.stableId] ?? a.quantity ?? 0;
-
-    // Set of ingredients that appear on the right-hand side of consumesMap.
-    const ingredients = new Set<string>();
-    for (const codes of Object.values(consumesMap)) {
-      for (const c of codes) ingredients.add(c);
+    // Excluded set = dismissed chips (= no consumer or supplier role).
+    const dismissedSet = new Set<string>();
+    for (const a of mutatedActivities) {
+      if (isDismissed(mutations, a.stableId)) dismissedSet.add(a.stableId);
     }
-
-    // Per-ingredient FIFO walk → list of (supplierStableId, consumerStableId)
-    // allocations. `phantom: true` = consumer was starved (got no real
-    // supply at its date); the arrow is drawn dashed-red as a visual hint
-    // that there's a supply problem.
-    const allocations: Array<{ supplier: string; consumer: string; phantom: boolean }> = [];
-    for (const ing of ingredients) {
-      const consumers: CalendarActivity[] = [];
-      const suppliers: CalendarActivity[] = [];
-      for (const a of mutatedActivities) {
-        if (isDismissed(mutations, a.stableId)) continue;
-        if (isConsumerKind(a.kind) && (consumesMap[a.productCode] ?? []).includes(ing)) {
-          consumers.push(a);
-        }
-        if (a.kind !== 'po-placed' && a.productCode === ing) {
-          suppliers.push(a);
-        }
-      }
-      if (consumers.length === 0) continue;
-      // Phase 4l.11 — profit-first tiebreaker on same-date consumers.
-      // Without this, two consumers sharing a date are processed in
-      // stable-array-order, which gives one consumer all the supply and
-      // starves the other deterministically but arbitrarily. Now the
-      // higher-profit-per-unit consumer wins ties, mirroring the supply-
-      // cap pass (Phase 4l.9). Null profit ranks last.
-      consumers.sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        const pa = a.profitPerItem ?? 0;
-        const pb = b.profitPerItem ?? 0;
-        return pb - pa;
-      });
-      suppliers.sort((a, b) => finishOf(a).localeCompare(finishOf(b)));
-
-      const supplierRemaining = new Map<string, number>();
-      for (const s of suppliers) supplierRemaining.set(s.stableId, supplyQty(s));
-      let sohRemaining = conflictInitialSohByCode[ing] ?? 0;
-
-      for (const c of consumers) {
-        let need = qtyPerUnit(c.productCode, ing) * c.quantity;
-        if (need <= 0) continue;
-        const initialNeed = need;
-        // Pull from initial SOH first — no arrow (SOH isn't a chip).
-        if (sohRemaining > 0) {
-          const drawn = Math.min(need, sohRemaining);
-          sohRemaining -= drawn;
-          need -= drawn;
-        }
-        let realAllocations = 0;
-        if (need > 0) {
-          // Pull from scheduled suppliers in FIFO order.
-          for (const s of suppliers) {
-            if (need <= 0) break;
-            if (finishOf(s) >= c.date) break; // remainder are too late
-            const rem = supplierRemaining.get(s.stableId) ?? 0;
-            if (rem <= 0) continue;
-            const drawn = Math.min(need, rem);
-            supplierRemaining.set(s.stableId, rem - drawn);
-            need -= drawn;
-            allocations.push({
-              supplier: s.stableId,
-              consumer: c.stableId,
-              phantom: false,
-            });
-            realAllocations += 1;
-          }
-        }
-        // Phase 4l.11 — phantom arrow for starved consumers. If we drew
-        // ZERO real arrows (no SOH allocation either, since SOH doesn't
-        // produce an arrow), the chip would silently appear orphan on
-        // the calendar. Emit a phantom link to the supplier that WOULD
-        // have fed this consumer if earlier ones hadn't drained the pool:
-        // the latest-finishing valid supplier (most recent, highest
-        // information density for the user). Dashed-red on the canvas.
-        if (
-          realAllocations === 0 &&
-          initialNeed > sohRemaining + 0 && // not satisfied by SOH alone
-          need > 0
-        ) {
-          // Find the most-recent supplier that still finishes before us
-          // (= last valid candidate in the FIFO walk).
-          let phantomSupplier: CalendarActivity | null = null;
-          for (const s of suppliers) {
-            if (finishOf(s) < c.date) phantomSupplier = s;
-            else break;
-          }
-          if (phantomSupplier) {
-            allocations.push({
-              supplier: phantomSupplier.stableId,
-              consumer: c.stableId,
-              phantom: true,
-            });
-          }
-        }
-      }
-    }
+    const result = allocateSupplyFifo({
+      activities: mutatedActivities.map((a) => ({
+        stableId: a.stableId,
+        productCode: a.productCode,
+        kind: a.kind,
+        date: a.date,
+        finishDate: a.finishDate,
+        quantity: a.quantity,
+        profitPerItem: a.profitPerItem,
+      })),
+      excludedStableIds: dismissedSet,
+      isConsumer: (a) =>
+        a.kind === 'packaging' || a.kind === 'kitchen-required' || a.kind === 'kitchen',
+      isSupplier: (a) => a.kind !== 'po-placed',
+      consumesMap,
+      consumesQtyMap,
+      initialSohByCode: conflictInitialSohByCode,
+      supplyQtyByActivity,
+    });
 
     // Build bidirectional map, deduped (same pair can show up across
     // multiple ingredients when a product feeds via several pathways).
@@ -1592,24 +1625,107 @@ export function CalendarApp(props: CalendarAppProps) {
       if (!arr) { arr = []; out.set(from, arr); }
       const existing = arr.find((r) => r.stableId === to && r.kind === kind);
       if (existing) {
-        // Upgrade phantom → real if a real allocation comes through later.
         if (existing.phantom && !phantom) existing.phantom = false;
         return;
       }
       arr.push({ stableId: to, kind, phantom });
     };
-    for (const a of allocations) {
-      addRel(a.consumer, a.supplier, 'supplier', a.phantom);
-      addRel(a.supplier, a.consumer, 'consumer', a.phantom);
+    for (const a of result.allocations) {
+      addRel(a.consumerStableId, a.supplierStableId, 'supplier', a.phantom);
+      addRel(a.supplierStableId, a.consumerStableId, 'consumer', a.phantom);
     }
     return out;
   }, [mutatedActivities, mutations, consumesMap, consumesQtyMap, supplyQtyByActivity, conflictInitialSohByCode]);
+
+  // Phase 4l.12 — "supply-starved" chip flag. A chip is supply-starved
+  // when at least one of its required ingredients has no real supplier
+  // finishing in time (= a phantom incoming arrow). Such chips will
+  // physically arrive at their production day with missing inputs and
+  // won't actually run — surfacing this on the chip itself (not just
+  // the arrow) helps the operator spot infeasible runs at a glance.
+  //
+  // Kitchen-required chips whose own production date is overdue often
+  // create this cascade: the cascade tried to schedule a sub-
+  // intermediate backwards from the consumer's required date, the
+  // backoff went into the past, so the planner couldn't emit it in
+  // time → its consumer reads as phantom.
+  const supplyStarvedStableIds = useMemo<ReadonlySet<string>>(() => {
+    const out = new Set<string>();
+    for (const [stableId, rels] of relatedByStableId.entries()) {
+      // Only flag consumers (chips with phantom INCOMING suppliers).
+      // A chip whose OUTGOING consumers are phantoms is a different
+      // issue (over-production / orphan supplier).
+      for (const r of rels) {
+        if (r.kind === 'supplier' && r.phantom) {
+          out.add(stableId);
+          break;
+        }
+      }
+    }
+    return out;
+  }, [relatedByStableId]);
 
   // Currently-hovered chip — drives arrow drawing. null = no arrows.
   const [hoveredStableId, setHoveredStableId] = useState<string | null>(null);
   const onChipHover = useCallback((id: string | null) => {
     setHoveredStableId(id);
   }, []);
+
+  // Phase 4l.12 — "view connected" focus mode. When set, the calendar
+  // hides every chip except this stableId + its direct suppliers and
+  // consumers (resolved via `relatedByStableId`). Toggled from the
+  // drawer button next to the productCode; cleared via a banner at
+  // the top of the calendar.
+  const [focusedRelationsId, setFocusedRelationsId] = useState<string | null>(null);
+  // Stable set of stableIds to keep visible when focused. The set is:
+  //   1. The focused chip itself.
+  //   2. Direct suppliers + consumers (depth-1 via FIFO allocations).
+  //   3. EVERY other chip with the SAME productCode — past and future
+  //      runs of the same SKU on the calendar, regardless of FIFO
+  //      relation. This lets the operator see the full production
+  //      lifecycle of a SKU (previous batches, current selection,
+  //      upcoming batches) alongside the upstream/downstream chain.
+  // Computed against `mutatedActivities` so it picks up the latest
+  // mutation-applied dates / clusters.
+  const focusedRelatedSet = useMemo<ReadonlySet<string> | null>(() => {
+    if (!focusedRelationsId) return null;
+    const out = new Set<string>([focusedRelationsId]);
+    const rels = relatedByStableId.get(focusedRelationsId) ?? [];
+    for (const r of rels) out.add(r.stableId);
+    // Find the focused chip's productCode, then add every other chip
+    // sharing it. Falls back to no-op if the focused id isn't found
+    // (e.g. cluster member that got reshuffled).
+    const focused = mutatedActivities.find((a) => a.stableId === focusedRelationsId);
+    if (focused) {
+      for (const a of mutatedActivities) {
+        if (a.productCode === focused.productCode) out.add(a.stableId);
+      }
+    }
+    return out;
+  }, [focusedRelationsId, relatedByStableId, mutatedActivities]);
+
+  // When "view connected" turns ON (transition from null → some id),
+  // auto-enable every category/station toggle so the operator sees the
+  // FULL connected set immediately. From that baseline, they can turn
+  // individual layers off to narrow further (e.g. hide PO chips to
+  // study the kitchen+packaging flow in isolation). Doesn't fire on
+  // every render — only when the focus id changes from null to non-null.
+  const prevFocusedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const becameFocused =
+      prevFocusedRef.current === null && focusedRelationsId !== null;
+    prevFocusedRef.current = focusedRelationsId;
+    if (!becameFocused) return;
+    setShowPackaging(true);
+    setShowKitchen(true);
+    setShowKitchenScheduled(true);
+    setShowKitchenRequired(true);
+    setShowPO(true);
+    setShowPoPlaced(true);
+    setShowPoReceiving(true);
+    setShowPoUrgent(true);
+    setVisibleStations(new Set(STATIONS));
+  }, [focusedRelationsId]);
 
   // Fast lookup for chips that the most-recent Resolve-all left unplaced.
   const unplaceableSet = useMemo(
@@ -1620,6 +1736,15 @@ export function CalendarApp(props: CalendarAppProps) {
   // Filter mutated activities through layer toggles + dismissal visibility.
   const visibleActivities = useMemo(() => {
     return mutatedActivities.filter((a) => {
+      // Phase 4l.12 — "view connected" focus mode acts as an EXTRA
+      // filter: a chip must be in the connected set AND pass the
+      // standard layer toggles. When focus mode is activated, the
+      // toggles are auto-enabled (see useEffect below) so the whole
+      // connected set is visible by default — the user can then turn
+      // individual layers off to narrow the view further (e.g. focus
+      // on a chip and then hide the PO chain to study just the
+      // kitchen/packaging flow).
+      if (focusedRelatedSet && !focusedRelatedSet.has(a.stableId)) return false;
       // Category toggle (top-level): Packaging master / Kitchen master.
       if (a.kind === 'packaging' && !showPackaging) return false;
       if (a.kind === 'kitchen' && (!showKitchen || !showKitchenScheduled)) return false;
@@ -1668,7 +1793,9 @@ export function CalendarApp(props: CalendarAppProps) {
     showPO,
     mutations,
     showDismissed,
+    focusedRelatedSet,
   ]);
+
   const activitiesByDate = useMemo(() => {
     const grouped = groupByDate(visibleActivities);
     // Phase 4l.11/4l.12 — sort each day's chips into three layers
@@ -1899,6 +2026,15 @@ export function CalendarApp(props: CalendarAppProps) {
         shortageRatios: number[] | null;
         floorRatios: number[] | null;
         chipDateIndex: number;
+        /** Phase 4l.12 — absolute projected stock-on-hand at this chip's
+         *  date (end-of-day inventory from the timeline). For future
+         *  chips this is the PREDICTED SOH; for the first day it's the
+         *  current SOH baseline. null when the product has no timeline. */
+        predictedSoh: number | null;
+        /** Phase 4l.12 — days of forward demand the predicted SOH covers
+         *  (= SOH ÷ daily demand rate at the chip's date). null when the
+         *  product has no demand on/around that date (infinite cover). */
+        availableDays: number | null;
       }
     >();
     const horizonStart = fromISO(horizon.startWeek);
@@ -1966,11 +2102,33 @@ export function CalendarApp(props: CalendarAppProps) {
         0,
         Math.min(entry.ratios.length - 1, daysFromStart),
       );
+      // Absolute projected SOH + available days at the chip's date.
+      const timeline = inventoryTimelineByProduct.get(a.productCode);
+      let predictedSoh: number | null = null;
+      let availableDays: number | null = null;
+      if (timeline) {
+        const iso = a.date;
+        // End-of-day inventory at the chip's date. Index 0 (horizon
+        // start) falls back to the initial SOH baseline.
+        predictedSoh =
+          timeline.byDate.get(iso) ??
+          (initialInventoryByProduct[a.productCode] ?? 0);
+        // Daily demand rate = floor ÷ SOH_FLOOR_DAYS (floor was
+        // computed as dailyRate × SOH_FLOOR_DAYS). 0 → no demand → leave
+        // availableDays null ("infinite" cover, shown as "—").
+        const floor = timeline.floorByDate.get(iso) ?? 0;
+        const dailyRate = floor / SOH_FLOOR_DAYS;
+        if (dailyRate > 0 && predictedSoh != null) {
+          availableDays = predictedSoh / dailyRate;
+        }
+      }
       out.set(a.stableId, {
         ratios: entry.ratios,
         shortageRatios: entry.shortageRatios,
         floorRatios: entry.floorRatios,
         chipDateIndex,
+        predictedSoh,
+        availableDays,
       });
     }
     return out;
@@ -2304,6 +2462,185 @@ export function CalendarApp(props: CalendarAppProps) {
             value={`${Math.round(summary.totalChangeoverMinutes)} min`}
           />
           <KPIRow label="Activities" value={`${activities.length}`} />
+        </Section>
+
+        {/* Phase 4l.12 — product lookup. Search by SKU code or
+            product name; matches are draggable onto any day cell to
+            create a manual packaging activity (same path as
+            drag-from-infeasible). Source: all packaging products in
+            the visible activity list, deduplicated by code. */}
+        <Section title="Add to plan">
+          {(() => {
+            // Build a deduplicated product index. Source order:
+            //   1. activities (= current plan; freshest productName)
+            //   2. productCatalog Tier A + Tier B (plannable + manual-
+            //      drag-only). Tier B SKUs (plannable=false) carry a
+            //      visible badge so the user knows the auto-planner
+            //      won't touch them.
+            // First-seen wins so in-plan products keep their up-to-
+            // date productName / station.
+            const productIndex = new Map<
+              string,
+              {
+                productCode: string;
+                productName: string;
+                station: Station;
+                plannable: boolean;
+              }
+            >();
+            for (const a of activities) {
+              if (a.kind !== 'packaging') continue;
+              if (!a.station) continue;
+              if (productIndex.has(a.productCode)) continue;
+              productIndex.set(a.productCode, {
+                productCode: a.productCode,
+                productName: a.productName,
+                station: a.station,
+                plannable: true,
+              });
+            }
+            for (const p of productCatalog) {
+              if (productIndex.has(p.productCode)) continue;
+              productIndex.set(p.productCode, p);
+            }
+            const products = Array.from(productIndex.values());
+            // Phase 4l.12 — tolerant search. Split the query into
+            // whitespace-separated tokens and require EVERY token to
+            // appear (case-insensitive substring) in either the code
+            // OR the name. Lets users find "MFMIXENB11" via "mix b11"
+            // even when they don't remember the full code. Order-
+            // independent.
+            const q = productLookupQuery.trim().toLowerCase();
+            const tokens = q.split(/\s+/).filter((t) => t.length > 0);
+            const matches = tokens.length === 0
+              ? []
+              : products
+                  .filter((p) => {
+                    const hay = (p.productCode + ' ' + p.productName).toLowerCase();
+                    return tokens.every((t) => hay.includes(t));
+                  })
+                  .slice(0, 12);
+            return (
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  value={productLookupQuery}
+                  onChange={(e) => setProductLookupQuery(e.target.value)}
+                  placeholder="Search by code or name…"
+                  style={{
+                    width: '100%',
+                    padding: '6px 8px',
+                    fontSize: 12,
+                    border: '0.5px solid var(--border)',
+                    borderRadius: 4,
+                    background: 'var(--bg-page)',
+                    color: 'inherit',
+                    fontFamily: 'inherit',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                {q.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: 4,
+                      maxHeight: 240,
+                      overflowY: 'auto',
+                      border: '0.5px solid var(--border)',
+                      borderRadius: 4,
+                      background: 'var(--bg-elevated, #fff)',
+                      fontSize: 11,
+                    }}
+                  >
+                    {matches.length === 0 ? (
+                      <div style={{ padding: '8px 10px', color: 'var(--text-muted)' }}>
+                        No matching SKUs.
+                      </div>
+                    ) : (
+                      matches.map((p) => (
+                        <div
+                          key={p.productCode}
+                          draggable
+                          onDragStart={(e) => {
+                            const payload = {
+                              productCode: p.productCode,
+                              productName: p.productName,
+                              quantity: 1,
+                              station: p.station,
+                            };
+                            e.dataTransfer.setData(
+                              'application/byron-manual-add',
+                              JSON.stringify(payload),
+                            );
+                            e.dataTransfer.effectAllowed = 'copy';
+                          }}
+                          style={{
+                            padding: '6px 10px',
+                            borderBottom: '0.5px solid var(--border)',
+                            cursor: 'grab',
+                          }}
+                          title={
+                            p.plannable
+                              ? `Drag onto a day to schedule a manual packaging chip (qty 1; edit in drawer afterwards).`
+                              : `Manual-only — this SKU isn't on the planner allowlist and won't be auto-scheduled, but you can still drop it on a day for one-off runs. Add it to data/finished-goods-allowlist.json to make it auto-plannable.`
+                          }
+                        >
+                          <div
+                            style={{
+                              fontWeight: 500,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            {p.productCode}
+                            {!p.plannable && (
+                              <span
+                                style={{
+                                  padding: '0 4px',
+                                  borderRadius: 2,
+                                  background: '#1f2937',
+                                  color: '#fff',
+                                  fontSize: 9,
+                                  fontWeight: 700,
+                                  letterSpacing: '0.04em',
+                                }}
+                              >
+                                M
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ color: 'var(--text-muted)', marginTop: 1 }}>
+                            {p.productName}
+                          </div>
+                          <div
+                            style={{
+                              color: 'var(--text-muted)',
+                              fontSize: 10,
+                              marginTop: 1,
+                              opacity: 0.8,
+                            }}
+                          >
+                            → {STATION_LABELS[p.station]}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    <div
+                      style={{
+                        padding: '6px 10px',
+                        fontSize: 10,
+                        color: 'var(--text-muted)',
+                        background: 'var(--bg-page)',
+                        borderTop: '0.5px solid var(--border)',
+                      }}
+                    >
+                      Drag a result onto any day on the calendar.
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </Section>
 
         <Section title="Layers">
@@ -3029,9 +3366,9 @@ export function CalendarApp(props: CalendarAppProps) {
                 cursor: refreshingAssemblies ? 'wait' : 'pointer',
                 fontFamily: 'inherit',
               }}
-              title="Pull active kitchen assemblies from Unleashed"
+              title="Pull active Unleashed assemblies (kitchen + packaging) and re-plan"
             >
-              {refreshingAssemblies ? 'Refreshing kitchen…' : 'Refresh kitchen'}
+              {refreshingAssemblies ? 'Refreshing assemblies…' : 'Refresh assemblies'}
             </button>
             <button
               type="button"
@@ -3106,6 +3443,7 @@ export function CalendarApp(props: CalendarAppProps) {
                         type="button"
                         onClick={() => {
                           clearAllMutations();
+                          clearAllManualActivities();
                           setMutationsOpen(false);
                         }}
                         style={{
@@ -3350,6 +3688,54 @@ export function CalendarApp(props: CalendarAppProps) {
           </div>
         )}
 
+        {/* Phase 4l.12 — "view connected" focus banner. Surfaces the
+            current focus + a one-click escape so the user can never
+            get stuck with a filtered view they don't know how to
+            clear. The drawer's "View connected" button is the other
+            way to toggle this state. */}
+        {focusedRelationsId && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '8px 12px',
+              background: '#eff6ff',
+              border: '0.5px solid #93c5fd',
+              borderRadius: 4,
+              fontSize: 12,
+              color: '#1e3a8a',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <span style={{ flex: 1 }}>
+              <strong>Focus mode:</strong> showing only chips connected to{' '}
+              <code style={{ fontFamily: 'monospace', fontSize: 11 }}>
+                {focusedRelationsId.split('|')[0]}
+              </code>
+              {' '}({(focusedRelatedSet?.size ?? 1) - 1} connected — suppliers, consumers, and all
+              other runs of the same SKU). All other chips are hidden.
+            </span>
+            <button
+              type="button"
+              onClick={() => setFocusedRelationsId(null)}
+              style={{
+                padding: '4px 10px',
+                fontSize: 11,
+                border: '0.5px solid #1e40af',
+                borderRadius: 3,
+                background: '#fff',
+                color: '#1e3a8a',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontWeight: 600,
+              }}
+            >
+              Clear filter
+            </button>
+          </div>
+        )}
+
         {unplaceableIds.length > 0 && (
           <div
             style={{
@@ -3407,34 +3793,114 @@ export function CalendarApp(props: CalendarAppProps) {
               border: '0.5px solid #fcd34d',
               borderRadius: 4,
               fontSize: 12,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
               color: '#78350f',
             }}
           >
-            <span style={{ flex: 1 }}>
-              ⚠ {staleIds.length} stale mutation{staleIds.length === 1 ? '' : 's'} —
-              the underlying activities are no longer in the plan (data changed since
-              the mutation was made).
-            </span>
-            <button
-              type="button"
-              onClick={clearStaleMutations}
+            <div
               style={{
-                padding: '4px 10px',
-                fontSize: 11,
-                background: '#fef3c7',
-                color: '#78350f',
-                border: '0.5px solid #fcd34d',
-                borderRadius: 3,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
               }}
             >
-              Clear stale
-            </button>
+              <span style={{ flex: 1 }}>
+                ⚠ {staleIds.length} stale mutation{staleIds.length === 1 ? '' : 's'} —
+                the underlying activities are no longer in the plan (data changed since
+                the mutation was made).
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowStaleDetails((v) => !v)}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  background: 'transparent',
+                  color: '#78350f',
+                  border: '0.5px solid #fcd34d',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 500,
+                }}
+              >
+                {showStaleDetails ? 'Hide' : 'View'}
+              </button>
+              <button
+                type="button"
+                onClick={clearStaleMutations}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  background: '#fef3c7',
+                  color: '#78350f',
+                  border: '0.5px solid #fcd34d',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 500,
+                }}
+              >
+                Clear stale
+              </button>
+            </div>
+            {showStaleDetails && (
+              <div
+                style={{
+                  marginTop: 10,
+                  paddingTop: 10,
+                  borderTop: '0.5px dashed #fcd34d',
+                  maxHeight: 220,
+                  overflowY: 'auto',
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                }}
+              >
+                {staleIds.map((id) => {
+                  const m = mutations[id];
+                  // Derive a human-readable summary of the mutation type(s).
+                  const tags: string[] = [];
+                  if (m?.dismissed) tags.push('dismissed');
+                  if (m?.editedQuantity !== undefined) {
+                    tags.push(`qty=${m.editedQuantity}`);
+                  }
+                  if (m?.rescheduledTo) tags.push(`→ ${m.rescheduledTo}`);
+                  if (m?.editedStation) tags.push(`station=${m.editedStation}`);
+                  if (m?.editedLeadTimeDays !== undefined) {
+                    tags.push(`lead=${m.editedLeadTimeDays}d`);
+                  }
+                  const when = m?.updatedAt ? m.updatedAt.slice(0, 10) : '?';
+                  return (
+                    <div
+                      key={id}
+                      style={{
+                        display: 'flex',
+                        gap: 8,
+                        padding: '3px 0',
+                        borderBottom: '0.5px dotted #fde68a',
+                      }}
+                    >
+                      <span style={{ flex: 1, wordBreak: 'break-all' }}>{id}</span>
+                      <span style={{ flexShrink: 0, opacity: 0.85 }}>
+                        {tags.join(', ') || '(no fields)'}
+                      </span>
+                      <span style={{ flexShrink: 0, opacity: 0.6, minWidth: 78, textAlign: 'right' }}>
+                        {when}
+                      </span>
+                    </div>
+                  );
+                })}
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 10,
+                    opacity: 0.75,
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  stableId · changes · last-modified date
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -3454,6 +3920,7 @@ export function CalendarApp(props: CalendarAppProps) {
             mutations={mutations}
             conflictsByConsumer={conflictsByConsumer}
             unplaceableSet={unplaceableSet}
+            supplyStarvedSet={supplyStarvedStableIds}
             hoveredStableId={hoveredStableId}
             onChipHover={onChipHover}
             relatedByStableId={relatedByStableId}
@@ -3518,11 +3985,17 @@ export function CalendarApp(props: CalendarAppProps) {
       {/* ─── Right drawer ──────────────────────────────── */}
       {selected && (
         <ActivityDrawer
-          // We always render the drawer against the LATEST data: look up the
-          // original activity in `activities` (the server-rendered list) and
-          // overlay any current mutation. Selected gets stale when mutations
-          // happen otherwise.
-          activity={selected}
+          // Look the activity up in `mutatedActivities` by stableId so the
+          // drawer always renders against the LATEST mutation-applied
+          // chip (= the same data the calendar is showing). If we used
+          // the stored `selected` reference directly, edits like the
+          // station dropdown wouldn't reflect immediately — the cached
+          // ref would still hold the pre-edit values.
+          activity={
+            mutatedActivities.find((a) => a.stableId === selected.stableId) ??
+            selected
+          }
+          availability={chipAvailabilityByStableId.get(selected.stableId) ?? null}
           original={activitiesWithPo.find((a) => a.stableId === selected.stableId) ?? selected}
           routingRationale={routingDecisions[selected.productCode] ?? null}
           dismissed={isDismissed(mutations, selected.stableId)}
@@ -3598,7 +4071,7 @@ export function CalendarApp(props: CalendarAppProps) {
                 : selected.stableId;
             clearLeadTime(placeId);
           }}
-          onEditStation={(s) => editStation(selected.stableId, s)}
+          onEditStation={(s) => editStation(selected.stableId, s, selected.productCode)}
           onClearStation={() => clearStation(selected.stableId)}
           stationOverridden={editedStationOf(mutations, selected.stableId) !== null}
           originalStation={
@@ -3636,8 +4109,30 @@ export function CalendarApp(props: CalendarAppProps) {
             }
             return out;
           })()}
-          onSelectRelatedChip={(a) => setSelected(a)}
+          onSelectRelatedChip={(a) => {
+            // Phase 4l.12 — switch drawer focus AND scroll the calendar
+            // so the operator can see the related chip without manually
+            // hunting through months. Looks up by `data-chip-id` for
+            // singleton chips OR `data-chip-ids` (space-separated) for
+            // cluster chips. If the chip isn't currently rendered (e.g.
+            // filtered out by a layer toggle), we still switch focus so
+            // the drawer shows it; the scroll silently no-ops.
+            setSelected(a);
+            requestAnimationFrame(() => {
+              const sel = `[data-chip-id="${a.stableId}"], [data-chip-ids~="${a.stableId}"]`;
+              const el = document.querySelector(sel);
+              if (el && 'scrollIntoView' in el) {
+                (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            });
+          }}
           onClose={() => setSelected(null)}
+          focused={focusedRelationsId === selected.stableId}
+          onToggleFocus={() => {
+            setFocusedRelationsId((curr) =>
+              curr === selected.stableId ? null : selected.stableId,
+            );
+          }}
         />
       )}
     </div>
@@ -3761,6 +4256,7 @@ function MonthBlock({
   mutations,
   conflictsByConsumer,
   unplaceableSet,
+  supplyStarvedSet,
   hoveredStableId,
   onChipHover,
   relatedByStableId,
@@ -3785,6 +4281,8 @@ function MonthBlock({
       shortageRatios: number[] | null;
       floorRatios: number[] | null;
       chipDateIndex: number;
+      predictedSoh: number | null;
+      availableDays: number | null;
     }
   >;
   onSelect: (a: CalendarActivity) => void;
@@ -3799,6 +4297,8 @@ function MonthBlock({
   conflictsByConsumer: Map<string, ScheduleConflict[]>;
   /** Set of stableIds left unplaced by the most-recent Resolve-all run. */
   unplaceableSet: ReadonlySet<string>;
+  /** Set of stableIds whose ingredients include at least one phantom (= un-supplied) input. */
+  supplyStarvedSet: ReadonlySet<string>;
   /** Currently-hovered chip stableId (drives the arrow overlay). */
   hoveredStableId: string | null;
   /** Hover handler — pass id on enter, null on leave. */
@@ -4010,7 +4510,11 @@ function MonthBlock({
                 // preventDefault is what makes the cell a valid drop target;
                 // without it the browser rejects the drop with cursor=no-drop.
                 e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
+                // Phase 4l.12 — match dropEffect to what's being dragged.
+                const isManualAdd = e.dataTransfer.types.includes(
+                  'application/byron-manual-add',
+                );
+                e.dataTransfer.dropEffect = isManualAdd ? 'copy' : 'move';
                 if (hoverDate !== dropDate) setHoverDate(dropDate);
               }}
               onDragLeave={() => {
@@ -4128,6 +4632,68 @@ function MonthBlock({
                   )}
                 </div>
               </div>
+              {/* Phase 4l.12 — per-station packaging unit totals.
+                  H=hand-packing E=elephant D=dust B=bottlo.
+                  Lowercase + faint grey to distinguish from the
+                  utilisation indicators (especially "D" for Dehydrator).
+                  Only stations with any units are shown. */}
+              {(() => {
+                let handUnits = 0;
+                let elephantUnits = 0;
+                let dustUnits = 0;
+                let bottloUnits = 0;
+                for (const a of dayActivities) {
+                  if (a.kind !== 'packaging') continue;
+                  if (isDismissed(mutations, a.stableId)) continue;
+                  const q = Math.round(a.quantity);
+                  if (a.station === 'hand-packing') handUnits += q;
+                  else if (a.station === 'elephant') elephantUnits += q;
+                  else if (a.station === 'dust') dustUnits += q;
+                  else if (a.station === 'bottlo') bottloUnits += q;
+                }
+                const totalPackagingUnits = handUnits + elephantUnits + dustUnits + bottloUnits;
+                if (totalPackagingUnits === 0) return null;
+                const badge = (letter: string, units: number, label: string) => (
+                  units > 0 ? (
+                    <span
+                      style={{ color: 'var(--text-primary)', fontWeight: 500 }}
+                      title={`${label}: ${units.toLocaleString()} units`}
+                    >
+                      <span style={{ opacity: 0.7, marginRight: 1 }}>{letter}</span>
+                      {units.toLocaleString()}
+                    </span>
+                  ) : null
+                );
+                return (
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: 6,
+                      justifyContent: 'flex-end',
+                      alignItems: 'baseline',
+                      fontSize: 10,
+                      marginBottom: 4,
+                      letterSpacing: '0.02em',
+                    }}
+                  >
+                    {badge('h', handUnits, 'Hand-packing')}
+                    {badge('e', elephantUnits, 'Elephant')}
+                    {badge('d', dustUnits, 'Dust')}
+                    {badge('b', bottloUnits, 'Bottlo')}
+                    <span
+                      style={{
+                        color: 'var(--text-primary)',
+                        fontWeight: 700,
+                        fontSize: 11,
+                        marginLeft: 2,
+                      }}
+                      title={`Total packaging units this day: ${totalPackagingUnits.toLocaleString()}`}
+                    >
+                      ={totalPackagingUnits.toLocaleString()}
+                    </span>
+                  </div>
+                );
+              })()}
               {(() => {
                 // Render each (date, kind, productCode) group as either a
                 // single ActivityChip (singleton) or a ClusterChip (≥2 members).
@@ -4159,9 +4725,11 @@ function MonthBlock({
                         key={clusterKey}
                         members={cluster}
                         selectedId={selectedId}
+                        selectedStableId={selectedStableId}
                         mutations={mutations}
                         conflictsByConsumer={conflictsByConsumer}
                         unplaceableSet={unplaceableSet}
+                        supplyStarvedSet={supplyStarvedSet}
                         relatedHighlight={relatedHighlight}
                         hoveredStableId={hoveredStableId}
                         registerRef={registerChipRef}
@@ -4180,10 +4748,17 @@ function MonthBlock({
                     <ActivityChip
                       key={a.id}
                       activity={a}
-                      selected={a.id === selectedId}
+                      // Match by stableId (durable identity) primarily,
+                      // with id as fallback — keeps the selection visual
+                      // intact across mutations + layer toggles where
+                      // `a.id` might shift but `stableId` won't.
+                      selected={
+                        a.stableId === selectedStableId || a.id === selectedId
+                      }
                       dismissed={isDismissed(mutations, a.stableId) || supplyZeroed}
                       conflicted={conflictsByConsumer.has(a.stableId)}
                       unplaceable={unplaceableSet.has(a.stableId)}
+                      supplyStarved={supplyStarvedSet.has(a.stableId)}
                       relatedKind={relatedHighlight.get(a.stableId) ?? null}
                       isHoveredSource={hoveredStableId === a.stableId}
                       registerRef={registerChipRef}
@@ -4341,6 +4916,7 @@ function ActivityChip({
   dismissed,
   conflicted,
   unplaceable,
+  supplyStarved,
   relatedKind,
   isHoveredSource,
   registerRef,
@@ -4353,6 +4929,8 @@ function ActivityChip({
   dismissed: boolean;
   conflicted: boolean;
   unplaceable: boolean;
+  /** True when at least one ingredient FIFO-allocated to this chip is a phantom — i.e. the chip can't actually run because an input won't be there on time. */
+  supplyStarved: boolean;
   /** Highlight as supplier/consumer of the currently-hovered chip, or null. */
   relatedKind: 'supplier' | 'consumer' | null;
   /** True when THIS chip is the one being hovered. Drives the source-glow style. */
@@ -4377,6 +4955,8 @@ function ActivityChip({
      *  floor (= no forecast → no sensible target). */
     floorRatios: number[] | null;
     chipDateIndex: number;
+    predictedSoh: number | null;
+    availableDays: number | null;
   } | null;
 }) {
   const colors = colorOf(activity);
@@ -4402,14 +4982,28 @@ function ActivityChip({
   // Unleashed, can't be edited in the planner. We render a "U" badge on
   // the chip and a different drawer below.
   const isUnleashedPo = activity.poInfo?.source === 'unleashed_po';
+  // Phase 4l.12 — manual user-added chips (dragged from the left-rail
+  // lookup or infeasible list). They're easy to lose in a busy day with
+  // 20+ chips, especially with q=1 / no profit data. Distinguish them
+  // with a dashed border + an "M" badge so the user can always find what
+  // they just dropped.
+  const isManual = activity.stableId.startsWith('manual|');
   // Compose the box-shadow: conflict (red) + related (green/orange) +
   // hovered-source (blue) + SELECTED (dark + lift) can stack.
   const shadows: string[] = [];
-  if (conflicted) shadows.push('inset 0 0 0 1.5px #dc2626');
+  // Phase 4l.12: conflict border softened from alarming red (#dc2626)
+  // to amber (#f59e0b). Conflicts are common enough that a softer
+  // warning colour reduces fatigue; phantom arrows still use red.
+  if (conflicted) shadows.push('inset 0 0 0 1.5px #f59e0b');
   if (relatedKind === 'supplier') shadows.push('inset 0 0 0 1.5px #059669');
   if (relatedKind === 'consumer') shadows.push('inset 0 0 0 1.5px #d97706');
   if (isHoveredSource) shadows.push('0 0 0 2px #3b82f6');
   if (unplaceable) shadows.push('inset 0 0 0 1.5px #d97706');
+  // Phase 4l.12 — supply-starved chips get a distinct red inset ring,
+  // strong enough to compete with the amber conflict ring so a chip
+  // that is BOTH conflicted and starved reads as starved (the more
+  // alarming state — chip cannot physically run).
+  if (supplyStarved) shadows.push('inset 0 0 0 2px #dc2626');
   // Phase 4l.12 — selected chip gets a strong drop-shadow + thicker
   // dark outline so it visually "lifts" off the calendar. The previous
   // 1.5px chip-coloured outline blended in with chips that share the
@@ -4421,6 +5015,13 @@ function ActivityChip({
       type="button"
       onClick={onClick}
       ref={(el) => registerRef(activity.stableId, el)}
+      // data-chip-id lets the drawer find this DOM element via a global
+      // selector so clicking a supplier/consumer in the drawer can
+      // scroll the calendar to bring the related chip into view. Plain
+      // `id` would collide if a chip cluster duplicates a stableId; the
+      // data-attribute survives React's commit cycle and is queryable
+      // from anywhere in the page.
+      data-chip-id={activity.stableId}
       onMouseEnter={() => onHover(activity.stableId)}
       onMouseLeave={() => onHover(null)}
       // Dragging the chip writes its stableId to the dataTransfer; day cells
@@ -4452,14 +5053,12 @@ function ActivityChip({
         color: chipTextColor,
         textShadow: chipTextShadow,
         borderRadius: 3,
-        border: 'none',
-        // Phase 4l.12 — selected chip: thick dark outline that ignores
-        // chip colour, so it stands out against any background. Paired
-        // with the drop-shadow above and a z-index lift so the chip
-        // pops forward of its neighbours.
-        borderLeft: selected ? `5px solid #111827` : `3px solid ${colors.border}`,
-        outline: selected ? `2.5px solid #111827` : 'none',
-        outlineOffset: selected ? 1 : 0,
+        border: isManual ? '1.5px dashed #1f2937' : 'none',
+        // Phase 4l.12 — selected chip lifted by drop shadow + scale
+        // only. No outline, no special left bar — the chip's normal
+        // coloured border + the lift do the work.
+        borderLeft: isManual ? '4px solid #1f2937' : `3px solid ${colors.border}`,
+        outline: 'none',
         cursor: isPo ? 'pointer' : isDragging ? 'grabbing' : 'grab',
         fontFamily: 'inherit',
         whiteSpace: 'nowrap',
@@ -4470,7 +5069,7 @@ function ActivityChip({
         boxShadow: shadows.length > 0 ? shadows.join(', ') : undefined,
         position: 'relative',
         zIndex: selected ? 3 : isHoveredSource ? 2 : 'auto',
-        transform: selected ? 'scale(1.02)' : undefined,
+        transform: selected ? 'scale(1.05)' : undefined,
         transformOrigin: 'left center',
         transition: 'transform 100ms ease, box-shadow 100ms ease',
       }}
@@ -4536,20 +5135,27 @@ function ActivityChip({
       })()}
       <div
         style={{
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          display: 'flex',
+          alignItems: 'baseline',
+          minWidth: 0,
           position: 'relative',
           zIndex: 1,
           // Chip-bg-coloured halo punches the text through any sparkline
-          // pixels underneath. Stacked shadows in 4 directions make it
-          // read like a thin outline rather than a soft glow.
-          // Crisp 1px outline: zero-blur shadows in 4 cardinal directions.
-// Sharper and thinner than blurred glow — text looks "stencilled"
-// through the sparkline beneath.
-textShadow: `1px 0 0 ${colors.bg}, -1px 0 0 ${colors.bg}, 0 1px 0 ${colors.bg}, 0 -1px 0 ${colors.bg}`,
+          // pixels underneath. Crisp 1px outline: zero-blur shadows in
+          // 4 cardinal directions — text reads "stencilled" through
+          // the sparkline beneath.
+          textShadow: `1px 0 0 ${colors.bg}, -1px 0 0 ${colors.bg}, 0 1px 0 ${colors.bg}, 0 -1px 0 ${colors.bg}`,
         }}
       >
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
         {conflicted && <span style={{ marginRight: 3 }}>⚠</span>}
         {unplaceable && !conflicted && <span style={{ marginRight: 3 }}>⚠</span>}
         {activity.kind === 'po-placed' && (
@@ -4576,6 +5182,42 @@ textShadow: `1px 0 0 ${colors.bg}, -1px 0 0 ${colors.bg}, 0 1px 0 ${colors.bg}, 
                 U
               </span>
             )}
+          </span>
+        )}
+        {isManual && (
+          <span
+            title="Manual chip — added by drag-and-drop from the lookup / infeasible panel. Not produced by the planner."
+            style={{
+              marginRight: 4,
+              padding: '0 4px',
+              borderRadius: 2,
+              background: '#1f2937',
+              color: '#ffffff',
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              verticalAlign: 'baseline',
+            }}
+          >
+            M
+          </span>
+        )}
+        {supplyStarved && (
+          <span
+            title="Supply-starved — at least one required ingredient has no real supplier finishing in time. This chip will not actually run as scheduled. Open the drawer to see which inputs are phantom; move the chip later, or reschedule the upstream production."
+            style={{
+              marginRight: 4,
+              padding: '0 4px',
+              borderRadius: 2,
+              background: '#dc2626',
+              color: '#ffffff',
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              verticalAlign: 'baseline',
+            }}
+          >
+            ⛔
           </span>
         )}
         {activity.productCode} <span style={{ opacity: 0.7 }}>×{Math.round(activity.quantity)}</span>
@@ -4637,12 +5279,54 @@ textShadow: `1px 0 0 ${colors.bg}, -1px 0 0 ${colors.bg}, 0 1px 0 ${colors.bg}, 
         {activity.kind === 'kitchen-required' && activity.durationDays && activity.durationDays > 1 && (
           <span style={{ opacity: 0.7 }}> · {activity.durationDays}d</span>
         )}
+        </span>
+        {/* Phase 4l.12 — Unleashed assembly status letter, far-right.
+            K=Parked, P=Planned, O=Open, T=Todo, I=Inventory Mgr,
+            ! =Priority, U=Unapproved. No outline / no background —
+            just the letter in a meaningful colour. */}
+        {activity.assemblyStatus && (() => {
+          const status = activity.assemblyStatus;
+          const map: Record<string, { letter: string; color: string }> = {
+            Parked:        { letter: 'K', color: '#6b7280' },  // grey
+            Planned:       { letter: 'P', color: '#3b82f6' },  // blue
+            Open:          { letter: 'O', color: '#10b981' },  // green
+            'To Do':       { letter: 'T', color: '#d97706' },  // amber
+            Todo:          { letter: 'T', color: '#d97706' },
+            'Inventory Mgr': { letter: 'I', color: '#a855f7' }, // purple
+            Priority:      { letter: '!', color: '#dc2626' },  // red
+            Unapproved:    { letter: 'U', color: '#92400e' },  // brown
+          };
+          const entry =
+            map[status] ?? { letter: status[0]?.toUpperCase() ?? '?', color: '#6b7280' };
+          return (
+            <span
+              title={`Unleashed status: ${status} (assembly ${activity.assemblyNumber ?? '?'})`}
+              style={{
+                marginLeft: 'auto',
+                paddingLeft: 6,
+                color: entry.color,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                flexShrink: 0,
+              }}
+            >
+              {entry.letter}
+            </span>
+          );
+        })()}
       </div>
       {activity.productName && activity.productName !== activity.productCode && (
         <div
           style={{
             fontSize: 9,
-            opacity: 0.65,
+            // Phase 4l.12 — increased subtext contrast. Previously 0.65
+            // opacity made the product name washed out on pale chips
+            // (low-profit / missing-profit). Bumped to 0.9 with explicit
+            // font weight so the chip's main label and the subtext
+            // both read clearly.
+            opacity: 0.9,
+            fontWeight: 500,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -4650,15 +5334,59 @@ textShadow: `1px 0 0 ${colors.bg}, -1px 0 0 ${colors.bg}, 0 1px 0 ${colors.bg}, 
             lineHeight: 1.2,
             position: 'relative',
             zIndex: 1,
-            // Crisp 1px outline: zero-blur shadows in 4 cardinal directions.
-// Sharper and thinner than blurred glow — text looks "stencilled"
-// through the sparkline beneath.
-textShadow: `1px 0 0 ${colors.bg}, -1px 0 0 ${colors.bg}, 0 1px 0 ${colors.bg}, 0 -1px 0 ${colors.bg}`,
+            // Crisp 1px outline: zero-blur shadows in 4 cardinal
+            // directions so the text reads cleanly over any sparkline
+            // pixels that may be underneath.
+            textShadow: `1px 0 0 ${colors.bg}, -1px 0 0 ${colors.bg}, 0 1px 0 ${colors.bg}, 0 -1px 0 ${colors.bg}`,
           }}
         >
           {activity.productName}
         </div>
       )}
+      {/* Phase 4l.12 — projected SOH + available-days, right-aligned.
+          For chips in the future this is the PREDICTED stock-on-hand at
+          the chip's date (from the inventory timeline) and how many days
+          of forward demand it covers. Packaging chips only — kitchen/PO
+          chips trace intermediate/raw-material curves where "available
+          days" is less meaningful for the operator. */}
+      {activity.kind === 'packaging' &&
+        availability &&
+        availability.predictedSoh != null && (
+          <div
+            title={`Projected stock-on-hand at ${fmtDate(activity.date)}: ${Math.round(availability.predictedSoh).toLocaleString()} units${availability.availableDays != null ? ` — ${Math.round(availability.availableDays)} days of forward cover at current demand` : ' — no forecast demand (cover not applicable)'}`}
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: 6,
+              fontSize: 9,
+              fontWeight: 600,
+              opacity: 0.95,
+              marginTop: 1,
+              lineHeight: 1.2,
+              position: 'relative',
+              zIndex: 1,
+              whiteSpace: 'nowrap',
+              textShadow: `1px 0 0 ${colors.bg}, -1px 0 0 ${colors.bg}, 0 1px 0 ${colors.bg}, 0 -1px 0 ${colors.bg}`,
+            }}
+          >
+            <span style={{ opacity: 0.7 }}>SOH</span>
+            <span>{Math.round(availability.predictedSoh).toLocaleString()}</span>
+            {availability.availableDays != null && (
+              <span
+                style={{
+                  // Amber when cover drops below the 10-day floor target,
+                  // so a thin-stock chip flags itself at a glance.
+                  color:
+                    availability.availableDays < SOH_FLOOR_DAYS
+                      ? '#b45309'
+                      : 'inherit',
+                }}
+              >
+                {Math.round(availability.availableDays)}d
+              </span>
+            )}
+          </div>
+        )}
       {/* Phase 4l.11 — inventory sparkline overlay for packaging chips.
           Absolutely positioned along the chip's BOTTOM edge so it costs
           no vertical space — it passes through the chip text if the
@@ -4679,7 +5407,12 @@ textShadow: `1px 0 0 ${colors.bg}, -1px 0 0 ${colors.bg}, 0 1px 0 ${colors.bg}, 
           VIEW_H,
         );
         const lineColor = colors.border;
-        const fillColor = `${colors.border}33`; // ~20% alpha hex suffix
+        // Phase 4l.12 — area below the inventory curve uses the chip's
+        // background colour (was: 20%-alpha border tint, which darkened
+        // the bottom strip). The fill now blends seamlessly with the
+        // rest of the chip; only the curve + marker remain visually
+        // distinct.
+        const fillColor = colors.bg;
         return (
           <svg
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
@@ -4752,9 +5485,11 @@ textShadow: `1px 0 0 ${colors.bg}, -1px 0 0 ${colors.bg}, 0 1px 0 ${colors.bg}, 
 function ClusterChip({
   members,
   selectedId,
+  selectedStableId,
   mutations,
   conflictsByConsumer,
   unplaceableSet,
+  supplyStarvedSet,
   relatedHighlight,
   hoveredStableId,
   registerRef,
@@ -4763,9 +5498,11 @@ function ClusterChip({
 }: {
   members: ReadonlyArray<CalendarActivity>;
   selectedId: string | null;
+  selectedStableId: string | null;
   mutations: MutationsMap;
   conflictsByConsumer: Map<string, ScheduleConflict[]>;
   unplaceableSet: ReadonlySet<string>;
+  supplyStarvedSet: ReadonlySet<string>;
   relatedHighlight: ReadonlyMap<string, 'supplier' | 'consumer'>;
   hoveredStableId: string | null;
   registerRef: (stableId: string, el: HTMLElement | null) => void;
@@ -4778,6 +5515,7 @@ function ClusterChip({
   const allDismissed = members.every((m) => isDismissed(mutations, m.stableId));
   const anyConflict = members.some((m) => conflictsByConsumer.has(m.stableId));
   const anyUnplaceable = members.some((m) => unplaceableSet.has(m.stableId));
+  const anyStarved = members.some((m) => supplyStarvedSet.has(m.stableId));
   const anyRelated = (() => {
     for (const m of members) {
       const k = relatedHighlight.get(m.stableId);
@@ -4786,7 +5524,9 @@ function ClusterChip({
     return null;
   })();
   const anyHovered = members.some((m) => hoveredStableId === m.stableId);
-  const anySelected = members.some((m) => m.id === selectedId);
+  const anySelected = members.some(
+    (m) => m.stableId === selectedStableId || m.id === selectedId,
+  );
 
   // Register the SAME DOM node under every member's stableId so arrows
   // pointing to any constituent resolve to this cluster chip.
@@ -4799,7 +5539,8 @@ function ClusterChip({
   const onMouseLeave = () => onHover(null);
 
   const shadows: string[] = [];
-  if (anyConflict) shadows.push('inset 0 0 0 1.5px #dc2626');
+  if (anyConflict) shadows.push('inset 0 0 0 1.5px #f59e0b');
+  if (anyStarved) shadows.push('inset 0 0 0 2px #dc2626');
   if (anyRelated === 'supplier') shadows.push('inset 0 0 0 1.5px #059669');
   if (anyRelated === 'consumer') shadows.push('inset 0 0 0 1.5px #d97706');
   if (anyHovered) shadows.push('0 0 0 2px #3b82f6');
@@ -4820,6 +5561,12 @@ function ClusterChip({
       type="button"
       onClick={() => onSelect(first)}
       ref={refSetter}
+      // data-chip-ids = space-separated list of every cluster member's
+      // stableId. Drawer's scroll-to-chip uses `[data-chip-ids~="X"]`
+      // (CSS attribute whitespace selector) so clicking a related
+      // supplier/consumer that happens to be inside a cluster still
+      // scrolls the parent cluster chip into view.
+      data-chip-ids={members.map((m) => m.stableId).join(' ')}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       draggable={false}
@@ -4834,9 +5581,8 @@ function ClusterChip({
         color: colors.text,
         borderRadius: 3,
         border: 'none',
-        borderLeft: anySelected ? `5px solid #111827` : `3px solid ${colors.border}`,
-        outline: anySelected ? `2.5px solid #111827` : 'none',
-        outlineOffset: anySelected ? 1 : 0,
+        borderLeft: `3px solid ${colors.border}`,
+        outline: 'none',
         cursor: 'pointer',
         fontFamily: 'inherit',
         whiteSpace: 'nowrap',
@@ -4847,7 +5593,7 @@ function ClusterChip({
         boxShadow: shadows.length > 0 ? shadows.join(', ') : undefined,
         position: 'relative',
         zIndex: anySelected ? 3 : anyHovered ? 2 : 'auto',
-        transform: anySelected ? 'scale(1.02)' : undefined,
+        transform: anySelected ? 'scale(1.05)' : undefined,
         transformOrigin: 'left center',
         transition: 'transform 100ms ease, box-shadow 100ms ease',
       }}
@@ -4855,6 +5601,24 @@ function ClusterChip({
     >
       <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {anyConflict && <span style={{ marginRight: 3 }}>⚠</span>}
+        {anyStarved && (
+          <span
+            title="At least one chip in this cluster is supply-starved — an upstream ingredient has no real supplier finishing in time."
+            style={{
+              marginRight: 4,
+              padding: '0 4px',
+              borderRadius: 2,
+              background: '#dc2626',
+              color: '#ffffff',
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              verticalAlign: 'baseline',
+            }}
+          >
+            ⛔
+          </span>
+        )}
         {first.productCode}{' '}
         <span style={{ opacity: 0.7 }}>×{Math.round(totalQty)}</span>{' '}
         <span
@@ -4892,6 +5656,7 @@ function ClusterChip({
 
 function ActivityDrawer({
   activity,
+  availability,
   original,
   routingRationale,
   dismissed,
@@ -4928,8 +5693,22 @@ function ActivityDrawer({
   relatedChips,
   onSelectRelatedChip,
   onClose,
+  focused,
+  onToggleFocus,
 }: {
   activity: CalendarActivity;
+  /**
+   * Per-day inventory ratio samples (+ optional shortage/floor ratios) for
+   * the selected chip's product. Drives the demand sparkline rendered
+   * below the drawer's product-name header. Null when no inventory data
+   * is available for this chip — sparkline is skipped.
+   */
+  availability: {
+    ratios: number[];
+    shortageRatios: number[] | null;
+    floorRatios: number[] | null;
+    chipDateIndex: number;
+  } | null;
   /** The unmutated activity from the server output — used to display "original" values. */
   original: CalendarActivity;
   routingRationale: string | null;
@@ -5003,6 +5782,10 @@ function ActivityDrawer({
   /** Click handler to jump the drawer to a related chip. */
   onSelectRelatedChip: (a: CalendarActivity) => void;
   onClose: () => void;
+  /** True when "view connected" is currently focusing this chip. */
+  focused: boolean;
+  /** Toggle the "view connected" focus mode — hides every other chip. */
+  onToggleFocus: () => void;
 }) {
   const colors = colorOf(activity);
 
@@ -5051,8 +5834,19 @@ function ActivityDrawer({
         alignSelf: 'flex-start',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h3 style={{ fontSize: 14, fontWeight: 600 }}>Activity</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 8 }}>
+        <h3
+          style={{
+            fontSize: 16,
+            fontWeight: 600,
+            lineHeight: 1.25,
+            margin: 0,
+            wordBreak: 'break-word',
+          }}
+          title={activity.productName}
+        >
+          {activity.productName}
+        </h3>
         <button
           type="button"
           onClick={onClose}
@@ -5061,8 +5855,10 @@ function ActivityDrawer({
             background: 'transparent',
             cursor: 'pointer',
             color: 'var(--text-muted)',
-            fontSize: 16,
+            fontSize: 18,
             padding: 4,
+            flexShrink: 0,
+            lineHeight: 1,
           }}
           aria-label="Close drawer"
         >
@@ -5070,30 +5866,135 @@ function ActivityDrawer({
         </button>
       </div>
 
-      <div
-        style={{
-          display: 'inline-block',
-          padding: '2px 8px',
-          fontSize: 11,
-          background: colors.bg,
-          color: colors.text,
-          borderRadius: 3,
-          marginBottom: 12,
-          textTransform: 'capitalize',
-        }}
-      >
-        {activity.kind === 'kitchen'
-          ? `Kitchen (scheduled)${activity.assemblyNumber ? ` · ${activity.assemblyNumber}` : ''}`
-          : activity.kind === 'kitchen-required'
-          ? 'Kitchen (required by plan)'
-          : activity.kind === 'po-placed'
-          ? 'Purchase order — place by'
-          : activity.kind === 'po-receiving'
-          ? 'Purchase order — arrive by'
-          : activity.station
-          ? STATION_LABELS[activity.station]
-          : '—'}
-      </div>
+      {/* Demand sparkline — replicates the inventory curve drawn on the
+          chip itself, just below the product-name header. Same shape and
+          colours so the drawer feels like a zoomed-in version of the
+          chip. Skipped silently when no availability data is available
+          (e.g. PO chips, or products with zero forecast). */}
+      {availability && availability.ratios.length > 1 && (() => {
+        const VIEW_W = 100;
+        const VIEW_H = 28; // taller than the chip's 14px so detail reads
+        const geom = buildSparklineGeometry(
+          availability.ratios,
+          availability.chipDateIndex,
+          VIEW_W,
+          VIEW_H,
+        );
+        const floorPoints = buildFloorPoints(
+          availability.floorRatios,
+          VIEW_W,
+          VIEW_H,
+        );
+        const shortageGeom = buildShortageGeometry(
+          availability.shortageRatios,
+          VIEW_W,
+          6, // shortage strip — small inverted overlay at the top
+        );
+        return (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: '4px 6px',
+              background: colors.bg,
+              border: `0.5px solid ${colors.border}`,
+              borderRadius: 4,
+              position: 'relative',
+            }}
+            title="Demand sparkline — projected inventory ratio across the horizon. Dashed vertical line = this chip's date. Dashed amber line = SOH floor target. Red curve from top = shortage (demand exceeded supply on those days)."
+          >
+            <svg
+              viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              style={{
+                display: 'block',
+                width: '100%',
+                height: VIEW_H,
+                overflow: 'visible',
+              }}
+            >
+              {/* Main inventory curve (chip-coloured area + border line). */}
+              <path d={geom.fillPath} fill={colors.bg} stroke="none" />
+              <polyline
+                points={geom.points}
+                fill="none"
+                stroke={colors.border}
+                strokeWidth={1.2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+              />
+              {/* SOH floor reference line (dashed amber). */}
+              {floorPoints && (
+                <polyline
+                  points={floorPoints}
+                  fill="none"
+                  stroke="#d97706"
+                  strokeWidth={1}
+                  strokeOpacity={0.75}
+                  strokeDasharray="2 2"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+              {/* Shortage overlay — inverted curve hanging from top. */}
+              {shortageGeom && (
+                <path
+                  d={shortageGeom.fillPath}
+                  fill="rgba(220, 38, 38, 0.25)"
+                  stroke="#dc2626"
+                  strokeWidth={1}
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+              {/* Chip-date marker (dashed dark vertical). */}
+              {geom.markerX != null && (
+                <line
+                  x1={geom.markerX}
+                  y1={0}
+                  x2={geom.markerX}
+                  y2={VIEW_H}
+                  stroke="rgba(0, 0, 0, 0.55)"
+                  strokeWidth={1}
+                  strokeDasharray="2 2"
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+            </svg>
+          </div>
+        );
+      })()}
+
+      {/* Kind badge — kept only for non-packaging chips. For packaging,
+          the station is already explicit in the dropdown below, so the
+          badge ("Hand Packing", "Elephant", etc.) would just duplicate
+          it. Kitchen and PO chips don't have a station selector, so the
+          badge stays to label the chip's role. */}
+      {activity.kind !== 'packaging' && (
+        <div
+          style={{
+            display: 'inline-block',
+            padding: '2px 8px',
+            fontSize: 11,
+            background: colors.bg,
+            color: colors.text,
+            borderRadius: 3,
+            marginBottom: 12,
+            textTransform: 'capitalize',
+          }}
+        >
+          {activity.kind === 'kitchen'
+            ? `Kitchen (scheduled)${activity.assemblyNumber ? ` · ${activity.assemblyNumber}` : ''}`
+            : activity.kind === 'kitchen-required'
+            ? 'Kitchen (required by plan)'
+            : activity.kind === 'po-placed'
+            ? 'Purchase order — place by'
+            : activity.kind === 'po-receiving'
+            ? 'Purchase order — arrive by'
+            : '—'}
+        </div>
+      )}
 
       {activity.orphan && (
         <div
@@ -5154,14 +6055,450 @@ function ActivityDrawer({
       )}
 
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Product
+        {/* Product name now lives in the drawer header (above). This
+            section keeps the bare SKU code + Unleashed assembly link
+            so the operator can copy/paste either without scrolling.
+            "View connected" toggles a calendar-wide focus mode that
+            hides every chip except this one and its direct
+            suppliers/consumers (per current FIFO allocation). */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 12,
+            color: 'var(--text-muted)',
+          }}
+        >
+          <span>{activity.productCode}</span>
+          <button
+            type="button"
+            onClick={onToggleFocus}
+            title={
+              focused
+                ? 'Stop focusing — show all calendar chips again.'
+                : 'Hide every chip on the calendar except this one, its direct suppliers/consumers (per current FIFO allocation), and any prior or subsequent runs of the same SKU.'
+            }
+            style={{
+              marginLeft: 'auto',
+              padding: '2px 8px',
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: '0.03em',
+              textTransform: 'uppercase',
+              border: focused
+                ? '0.5px solid #1e40af'
+                : '0.5px solid var(--border)',
+              borderRadius: 3,
+              background: focused ? '#1e40af' : 'var(--bg-page)',
+              color: focused ? '#fff' : 'var(--text-primary)',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            {focused ? 'Showing connected' : 'View connected'}
+          </button>
         </div>
-        <div style={{ fontWeight: 500, fontSize: 14, marginTop: 2 }}>{activity.productName}</div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-          {activity.productCode}
+        {/* Phase 4l.12 — Unleashed assembly number + status. Surfaced
+            for any chip with a source assembly (kitchen-Live or
+            packaging from a non-Lundberg warehouse). */}
+        {activity.assemblyNumber && (
+          <div
+            style={{
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              marginTop: 4,
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 6,
+            }}
+          >
+            <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: 10 }}>
+              Unleashed
+            </span>
+            <code
+              style={{
+                fontFamily: 'monospace',
+                fontSize: 12,
+                color: 'var(--text-primary)',
+              }}
+            >
+              {activity.assemblyNumber}
+            </code>
+            {activity.assemblyStatus && (
+              <span
+                title={`Unleashed AssemblyStatus`}
+                style={{ fontSize: 10, opacity: 0.8 }}
+              >
+                · {activity.assemblyStatus}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ─── Priority actions (Phase 4l.12) ────────────────────
+          Station / SOH / Reschedule / Edit qty / Dismiss live at
+          the top of the drawer so an operator can act without
+          scrolling past the related-chips list and other
+          informational fields. Everything else stays below. */}
+
+      {/* Station selector (packaging only). */}
+      {activity.kind === 'packaging' && (
+        <div style={{ marginBottom: 14 }}>
+          <div
+            style={{
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginBottom: 4,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+            }}
+          >
+            <span>
+              Station
+              {stationOverridden && (
+                <span
+                  style={{
+                    marginLeft: 4,
+                    padding: '0 4px',
+                    fontSize: 9,
+                    background: '#fef3c7',
+                    color: '#92400e',
+                    borderRadius: 2,
+                    fontWeight: 600,
+                  }}
+                >
+                  MODIFIED
+                </span>
+              )}
+            </span>
+            {stationOverridden && originalStation && (
+              <button
+                type="button"
+                onClick={onClearStation}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#1e40af',
+                  fontSize: 10,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontFamily: 'inherit',
+                  padding: 0,
+                }}
+                title={`Reset to planner's original: ${STATION_LABELS[originalStation]}`}
+              >
+                Reset
+              </button>
+            )}
+          </div>
+          <select
+            value={activity.station ?? ''}
+            onChange={(e) => onEditStation(e.target.value as Station)}
+            style={{
+              width: '100%',
+              padding: '6px 8px',
+              fontSize: 13,
+              border: '0.5px solid var(--border)',
+              borderRadius: 3,
+              background: 'var(--bg-page)',
+              color: 'inherit',
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+              fontWeight: stationOverridden ? 600 : 400,
+            }}
+          >
+            {STATIONS.map((s) => (
+              <option key={s} value={s}>
+                {STATION_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          {stationOverridden && originalStation && (
+            <div
+              style={{
+                fontSize: 10,
+                color: 'var(--text-muted)',
+                marginTop: 4,
+              }}
+            >
+              Was: {STATION_LABELS[originalStation]}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Stock on hand (per-warehouse) */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+          Stock on hand
+        </div>
+        {sohBreakdown === null ? (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            No SOH cache. Click Refresh SOH in the header.
+          </div>
+        ) : Object.keys(sohBreakdown).length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            No stock recorded for this product.
+          </div>
+        ) : (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 12 }}>
+            {Object.entries(sohBreakdown)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([wh, qty]) => {
+                const isEligible = eligibleWarehouses.includes(wh);
+                return (
+                  <li
+                    key={wh}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      padding: '2px 0',
+                      color: isEligible ? 'var(--text-primary)' : 'var(--text-muted)',
+                      opacity: isEligible ? 1 : 0.7,
+                    }}
+                  >
+                    <span>
+                      {wh}
+                      {!isEligible && (
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                          {' · excluded'}
+                        </span>
+                      )}
+                    </span>
+                    <span>{qty.toLocaleString()}</span>
+                  </li>
+                );
+              })}
+          </ul>
+        )}
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+          Planner used: {plannerInitialInventory.toLocaleString()} units (sum of{' '}
+          {activity.kind === 'kitchen' || activity.kind === 'kitchen-required'
+            ? 'intermediate-eligible warehouses: Lundberg + MF Packaging + MF Operations'
+            : activity.kind === 'po-placed' || activity.kind === 'po-receiving'
+            ? 'all warehouses (raw materials)'
+            : 'fulfilment-eligible warehouses: TBC + TBC Height + MF Packaging + MF Operations'}
+          )
         </div>
       </div>
+
+      {/* Reschedule (any date) */}
+      <div style={{ marginBottom: 14 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            fontSize: 11,
+            color: 'var(--text-muted)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            marginBottom: 6,
+          }}
+        >
+          <span>Reschedule</span>
+          {original.date !== activity.date && (
+            <span
+              style={{
+                textTransform: 'none',
+                letterSpacing: 0,
+                fontSize: 10,
+                color: 'var(--text-muted)',
+              }}
+            >
+              original: {original.date}
+            </span>
+          )}
+        </div>
+        <input
+          type="date"
+          value={activity.date}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v && v !== activity.date) onReschedule(v);
+          }}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            fontSize: 13,
+            border: '0.5px solid var(--border)',
+            borderRadius: 3,
+            background: 'var(--bg-page)',
+            color: 'inherit',
+            fontFamily: 'inherit',
+          }}
+        />
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 10,
+            color: 'var(--text-muted)',
+          }}
+        >
+          Tip: drag the chip to a day on the calendar to reschedule visually.
+        </div>
+        {rescheduled && (
+          <button
+            type="button"
+            onClick={onClearReschedule}
+            style={{
+              marginTop: 6,
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              fontFamily: 'inherit',
+              textDecoration: 'underline',
+            }}
+          >
+            Reset to original day
+          </button>
+        )}
+      </div>
+
+      {/* Edit quantity */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+          Edit quantity
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            type="number"
+            min={1}
+            value={qtyInput}
+            onChange={(e) => setQtyInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && qtyValid && qtyChanged) {
+                e.preventDefault();
+                onEditQuantity(parsedQty);
+              }
+            }}
+            style={{
+              flex: 1,
+              padding: '6px 8px',
+              fontSize: 13,
+              border: '0.5px solid var(--border)',
+              borderRadius: 3,
+              fontFamily: 'inherit',
+              background: 'var(--bg-page)',
+              color: 'inherit',
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => qtyValid && onEditQuantity(parsedQty)}
+            disabled={!qtyValid || !qtyChanged}
+            style={{
+              padding: '6px 12px',
+              fontSize: 12,
+              border: '0.5px solid var(--border)',
+              borderRadius: 3,
+              background: qtyValid && qtyChanged ? colors.bg : 'var(--bg-page)',
+              color: qtyValid && qtyChanged ? colors.text : 'var(--text-muted)',
+              cursor: qtyValid && qtyChanged ? 'pointer' : 'default',
+              fontFamily: 'inherit',
+            }}
+          >
+            Apply
+          </button>
+        </div>
+        {wouldOversize && qtyChanged && (
+          <div style={{ marginTop: 6, fontSize: 11, color: '#d97706' }}>
+            ⚠ This quantity would exceed the station's daily capacity ({stationDailyMinutes} min).
+          </div>
+        )}
+        {editedQuantity !== null && (
+          <button
+            type="button"
+            onClick={onClearEdit}
+            style={{
+              marginTop: 6,
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              fontFamily: 'inherit',
+              textDecoration: 'underline',
+            }}
+          >
+            Reset to original quantity
+          </button>
+        )}
+      </div>
+
+      {/* Dismiss / Restore */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {dismissed ? (
+          <button
+            type="button"
+            onClick={onUndismiss}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              fontSize: 13,
+              border: '0.5px solid var(--border)',
+              borderRadius: 4,
+              background: 'var(--bg-page)',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Restore
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onDismiss}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              fontSize: 13,
+              border: '0.5px solid #fecaca',
+              borderRadius: 4,
+              background: '#fef2f2',
+              color: '#991b1b',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Dismiss
+          </button>
+        )}
+      </div>
+      {dismissed && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 8,
+            background: '#fef2f2',
+            border: '0.5px solid #fecaca',
+            borderRadius: 4,
+            fontSize: 11,
+            color: '#991b1b',
+          }}
+        >
+          Dismissed — won't count toward day load. Click Restore to re-include.
+        </div>
+      )}
+
+      {/* Divider before the "other fields" section. */}
+      <div
+        style={{
+          height: 1,
+          background: 'var(--border)',
+          opacity: 0.5,
+          margin: '4px 0 16px',
+        }}
+      />
 
       {/* Cluster picker (Phase 4l.6): when this activity is part of a
           same-day same-product cluster, list its siblings so the user can
@@ -5434,95 +6771,11 @@ function ActivityDrawer({
               label="Changeover"
               value={`${Math.round(activity.changeoverMinutes)} min`}
             />
-            {/* Station dropdown (Phase 4l.8): re-allocate this chip's
-                packaging station. Auto-routed chips often need this — they
-                land on hand-packing by default but might really belong on
-                bottlo / dust / elephant. */}
-            <div style={{ gridColumn: 'span 2' }}>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  marginBottom: 4,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'baseline',
-                }}
-              >
-                <span>
-                  Station
-                  {stationOverridden && (
-                    <span
-                      style={{
-                        marginLeft: 4,
-                        padding: '0 4px',
-                        fontSize: 9,
-                        background: '#fef3c7',
-                        color: '#92400e',
-                        borderRadius: 2,
-                        fontWeight: 600,
-                      }}
-                    >
-                      MODIFIED
-                    </span>
-                  )}
-                </span>
-                {stationOverridden && originalStation && (
-                  <button
-                    type="button"
-                    onClick={onClearStation}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#1e40af',
-                      fontSize: 10,
-                      cursor: 'pointer',
-                      textDecoration: 'underline',
-                      fontFamily: 'inherit',
-                      padding: 0,
-                    }}
-                    title={`Reset to planner's original: ${STATION_LABELS[originalStation]}`}
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-              <select
-                value={activity.station ?? ''}
-                onChange={(e) => onEditStation(e.target.value as Station)}
-                style={{
-                  width: '100%',
-                  padding: '6px 8px',
-                  fontSize: 13,
-                  border: '0.5px solid var(--border)',
-                  borderRadius: 3,
-                  background: 'var(--bg-page)',
-                  color: 'inherit',
-                  fontFamily: 'inherit',
-                  cursor: 'pointer',
-                  fontWeight: stationOverridden ? 600 : 400,
-                }}
-              >
-                {STATIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {STATION_LABELS[s]}
-                  </option>
-                ))}
-              </select>
-              {stationOverridden && originalStation && (
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: 'var(--text-muted)',
-                    marginTop: 4,
-                  }}
-                >
-                  Was: {STATION_LABELS[originalStation]}
-                </div>
-              )}
-            </div>
+            {/* Station selector lives in its own block higher in the
+                drawer (just below the Unleashed assembly row) so the
+                operator can re-route a chip without scrolling past
+                everything else. Kept the Production / Changeover
+                fields here since they're informational. */}
             {/* Profit (Phase 4l.9) — surfaces the joint profit × demand
                 signal the day-assigner uses for overflow ranking. Two
                 columns: per-unit profit, batch total. `null` means the
@@ -5669,209 +6922,6 @@ function ActivityDrawer({
             </ul>
           </div>
         )}
-
-      {/* ─── Stock on hand (per-warehouse) ─────────────── */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-          Stock on hand
-        </div>
-        {sohBreakdown === null ? (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            No SOH cache. Click Refresh SOH in the header.
-          </div>
-        ) : Object.keys(sohBreakdown).length === 0 ? (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            No stock recorded for this product.
-          </div>
-        ) : (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 12 }}>
-            {Object.entries(sohBreakdown)
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([wh, qty]) => {
-                const isEligible = eligibleWarehouses.includes(wh);
-                return (
-                  <li
-                    key={wh}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      padding: '2px 0',
-                      color: isEligible ? 'var(--text-primary)' : 'var(--text-muted)',
-                      opacity: isEligible ? 1 : 0.7,
-                    }}
-                  >
-                    <span>
-                      {wh}
-                      {!isEligible && (
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                          {' · excluded'}
-                        </span>
-                      )}
-                    </span>
-                    <span>{qty.toLocaleString()}</span>
-                  </li>
-                );
-              })}
-          </ul>
-        )}
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-          Planner used: {plannerInitialInventory.toLocaleString()} units (sum of{' '}
-          {activity.kind === 'kitchen' || activity.kind === 'kitchen-required'
-            ? 'intermediate-eligible warehouses: Lundberg + MF Packaging + MF Operations'
-            : activity.kind === 'po-placed' || activity.kind === 'po-receiving'
-            ? 'all warehouses (raw materials)'
-            : 'fulfilment-eligible warehouses: TBC + TBC Height + MF Packaging + MF Operations'}
-          )
-        </div>
-      </div>
-
-      {/* ─── Reschedule (any date) ────────────────────── */}
-      <div style={{ marginBottom: 14 }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            fontSize: 11,
-            color: 'var(--text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: 6,
-          }}
-        >
-          <span>Reschedule</span>
-          {original.date !== activity.date && (
-            <span
-              style={{
-                textTransform: 'none',
-                letterSpacing: 0,
-                fontSize: 10,
-                color: 'var(--text-muted)',
-              }}
-            >
-              original: {original.date}
-            </span>
-          )}
-        </div>
-        <input
-          type="date"
-          value={activity.date}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v && v !== activity.date) onReschedule(v);
-          }}
-          style={{
-            width: '100%',
-            padding: '6px 8px',
-            fontSize: 13,
-            border: '0.5px solid var(--border)',
-            borderRadius: 3,
-            background: 'var(--bg-page)',
-            color: 'inherit',
-            fontFamily: 'inherit',
-          }}
-        />
-        <div
-          style={{
-            marginTop: 6,
-            fontSize: 10,
-            color: 'var(--text-muted)',
-          }}
-        >
-          Tip: drag the chip to a day on the calendar to reschedule visually.
-        </div>
-        {rescheduled && (
-          <button
-            type="button"
-            onClick={onClearReschedule}
-            style={{
-              marginTop: 6,
-              fontSize: 11,
-              color: 'var(--text-muted)',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-              fontFamily: 'inherit',
-              textDecoration: 'underline',
-            }}
-          >
-            Reset to original day
-          </button>
-        )}
-      </div>
-
-      {/* ─── Edit quantity ─────────────────────────────── */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-          Edit quantity
-        </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input
-            type="number"
-            min={1}
-            value={qtyInput}
-            onChange={(e) => setQtyInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && qtyValid && qtyChanged) {
-                e.preventDefault();
-                onEditQuantity(parsedQty);
-              }
-            }}
-            style={{
-              flex: 1,
-              padding: '6px 8px',
-              fontSize: 13,
-              border: '0.5px solid var(--border)',
-              borderRadius: 3,
-              fontFamily: 'inherit',
-              background: 'var(--bg-page)',
-              color: 'inherit',
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => qtyValid && onEditQuantity(parsedQty)}
-            disabled={!qtyValid || !qtyChanged}
-            style={{
-              padding: '6px 12px',
-              fontSize: 12,
-              border: '0.5px solid var(--border)',
-              borderRadius: 3,
-              background: qtyValid && qtyChanged ? colors.bg : 'var(--bg-page)',
-              color: qtyValid && qtyChanged ? colors.text : 'var(--text-muted)',
-              cursor: qtyValid && qtyChanged ? 'pointer' : 'default',
-              fontFamily: 'inherit',
-            }}
-          >
-            Apply
-          </button>
-        </div>
-        {wouldOversize && qtyChanged && (
-          <div style={{ marginTop: 6, fontSize: 11, color: '#d97706' }}>
-            ⚠ This quantity would exceed the station's daily capacity ({stationDailyMinutes} min).
-          </div>
-        )}
-        {editedQuantity !== null && (
-          <button
-            type="button"
-            onClick={onClearEdit}
-            style={{
-              marginTop: 6,
-              fontSize: 11,
-              color: 'var(--text-muted)',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-              fontFamily: 'inherit',
-              textDecoration: 'underline',
-            }}
-          >
-            Reset to original quantity
-          </button>
-        )}
-      </div>
 
       {/* ─── Edit lead time (Phase 4m.4) ──────────────────
           Only on synthetic PO chips. Shifts both place-by and arrive-by
@@ -6141,62 +7191,6 @@ function ActivityDrawer({
         stationDailyOutput={stationDailyOutput}
         globalShelfLifeDays={globalShelfLifeDays}
       />
-
-      {/* Action buttons. */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-        {dismissed ? (
-          <button
-            type="button"
-            onClick={onUndismiss}
-            style={{
-              flex: 1,
-              padding: '8px 12px',
-              fontSize: 13,
-              border: '0.5px solid var(--border)',
-              borderRadius: 4,
-              background: 'var(--bg-page)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            Restore
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onDismiss}
-            style={{
-              flex: 1,
-              padding: '8px 12px',
-              fontSize: 13,
-              border: '0.5px solid #fecaca',
-              borderRadius: 4,
-              background: '#fef2f2',
-              color: '#991b1b',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            Dismiss
-          </button>
-        )}
-      </div>
-
-      {dismissed && (
-        <div
-          style={{
-            marginTop: 12,
-            padding: 8,
-            background: '#fef2f2',
-            border: '0.5px solid #fecaca',
-            borderRadius: 4,
-            fontSize: 11,
-            color: '#991b1b',
-          }}
-        >
-          Dismissed — won't count toward day load. Click Restore to re-include.
-        </div>
-      )}
 
     </aside>
   );

@@ -114,11 +114,20 @@ export interface CalendarActivity {
    */
   profitPerItem?: number | null;
   /**
-   * For `kind: 'kitchen'` only — the Unleashed assembly number, surfaced in
-   * the drawer / chip tooltip so the operator can correlate the chip with
-   * the source assembly in Unleashed.
+   * For Unleashed-derived chips — the source assembly number, surfaced
+   * in the drawer / chip tooltip so the operator can correlate the
+   * chip with the source assembly in Unleashed. Set on both
+   * `kind: 'kitchen'` (Lundberg-warehouse assemblies) and
+   * `kind: 'packaging'` (MF Packaging / MF Operations / TBC
+   * assemblies) chips.
    */
   assemblyNumber?: string;
+  /**
+   * Phase 4l.12 — Unleashed AssemblyStatus ("Parked" / "Planned" /
+   * "Open" / etc). Drives a status-letter badge on the chip. Set on
+   * any chip created from an Unleashed assembly.
+   */
+  assemblyStatus?: string;
   /**
    * For `kind: 'po-placed'` and `kind: 'po-receiving'` only — purchasing
    * details. The two chips for one PO share these fields and reference each
