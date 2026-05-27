@@ -1,5 +1,5 @@
 {
-  "fetchedAt": "2026-05-27T02:42:13.806Z",
+  "fetchedAt": "2026-05-27T21:48:24.471Z",
   "byProductCode": {
     "[BAGVACUUM]": {
       "Lundberg Storeroom": 0,
@@ -57,7 +57,7 @@
       "TBC": 0
     },
     "ABCNO": {
-      "Lundberg Storeroom": 26.586,
+      "Lundberg Storeroom": 26.586000000000006,
       "MF Packaging": 51.04,
       "MF Operations": 0
     },
@@ -335,8 +335,7 @@
     },
     "AHHRFCO": {
       "Lundberg Storeroom": 170,
-      "MF Packaging": 117.15,
-      "MF Operations": 0,
+      "MF Packaging": 107.15,
       "TBC": 0
     },
     "AHJSBO": {
@@ -517,7 +516,7 @@
       "TBC": 8
     },
     "AMHNY22": {
-      "Lundberg Storeroom": 36.885999999999996,
+      "Lundberg Storeroom": 36.886,
       "MF Packaging": 0,
       "MF Operations": 0,
       "TBC": 0
@@ -526,22 +525,17 @@
       "Lundberg Storeroom": 1000
     },
     "APRICWH": {
-      "Lundberg Storeroom": 1000
+      "Lundberg Storeroom": 1000,
+      "MF Operations": 0
     },
     "ASHRAWPOW": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 54.1,
       "MF Operations": 0
     },
-    "BAGLARGE": {
-      "Lundberg Storeroom": 0,
-      "MF Packaging": 4963,
-      "MF Operations": 0,
-      "TBC Height": 0
-    },
     "barbaraoneill-selfheal": {
       "Lundberg Storeroom": 0,
-      "TBC": 624
+      "TBC": 621
     },
     "barbaraoneill-sustainme": {
       "Lundberg Storeroom": 0,
@@ -560,7 +554,7 @@
     },
     "BOXSML": {
       "Lundberg Storeroom": 0,
-      "MF Operations": 600,
+      "MF Operations": 556.6839,
       "TBC": 565.837,
       "TBC Height": 0
     },
@@ -636,7 +630,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 23,
+      "TBC": 22,
       "TBC Height": 0
     },
     "BULK-CAYENNE-3KG": {
@@ -708,7 +702,7 @@
       "TBC": 0
     },
     "CHIASEEDS": {
-      "Lundberg Storeroom": 154.0135,
+      "Lundberg Storeroom": 171.0135,
       "MF Operations": 0,
       "TBC": 0,
       "TBC Height": 0
@@ -753,7 +747,7 @@
       "TBC Height": 0
     },
     "Currants": {
-      "Lundberg Storeroom": 93.60749999999999,
+      "Lundberg Storeroom": 73.25,
       "MF Packaging": 0,
       "MF Operations": 12.5,
       "TBC": 0
@@ -796,11 +790,13 @@
       "TBC": 0
     },
     "EABPW": {
-      "Lundberg Storeroom": 40,
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
+      "MF Operations": 0,
       "TBC": 0
     },
     "EABRAMC": {
-      "Lundberg Storeroom": 4.624,
+      "Lundberg Storeroom": 4.6240000000000006,
       "MF Packaging": 0,
       "MF Operations": 0,
       "TBC": 0
@@ -819,9 +815,8 @@
       "TBC": 0
     },
     "EAGRG": {
-      "Lundberg Storeroom": 148.42450000000002,
-      "MF Packaging": 26.200000000000003,
-      "MF Operations": 0,
+      "Lundberg Storeroom": 148.42449999999997,
+      "MF Packaging": 73,
       "TBC": 2.3
     },
     "EAMCP": {
@@ -831,7 +826,7 @@
     },
     "EC-HAZCHOC200": {
       "Lundberg Storeroom": 0,
-      "TBC": 126
+      "TBC": 123
     },
     "EHBLW120": {
       "Lundberg Storeroom": 0,
@@ -839,7 +834,7 @@
     },
     "EHMC200": {
       "Lundberg Storeroom": 0,
-      "TBC": 48
+      "TBC": 37
     },
     "EHNG1kg": {
       "Lundberg Storeroom": 0,
@@ -847,7 +842,7 @@
     },
     "EHNG400": {
       "Lundberg Storeroom": 0,
-      "TBC": 46
+      "TBC": 50
     },
     "FCHAGASM": {
       "Lundberg Storeroom": 0,
@@ -872,8 +867,8 @@
     },
     "FLAMECURRANT": {
       "Lundberg Storeroom": 2.25,
-      "MF Operations": 0,
-      "TBC": 467.25
+      "MF Operations": 305,
+      "TBC": 162.25
     },
     "FLIONMLG": {
       "Lundberg Storeroom": 0,
@@ -886,7 +881,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 198,
+      "TBC": 194,
       "TBC Height": 0
     },
     "FREISHLG": {
@@ -900,21 +895,21 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 151,
+      "TBC": 145,
       "TBC Height": 0
     },
     "FSHROBLG": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 3,
+      "TBC": 1,
       "TBC Height": 0
     },
     "FSHROBSM": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 110,
+      "TBC": 105,
       "TBC Height": 0
     },
     "GBPIS": {
@@ -1002,7 +997,7 @@
       "TBC Height": 0
     },
     "IABKCH": {
-      "Lundberg Storeroom": 277,
+      "Lundberg Storeroom": 0,
       "MF Operations": 0,
       "TBC Height": 0
     },
@@ -1070,6 +1065,11 @@
       "MF Packaging": 0,
       "MF Operations": 0
     },
+    "IAM": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 16,
+      "TBC Height": 0
+    },
     "IAP": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 45.5,
@@ -1120,14 +1120,10 @@
       "MF Operations": 0,
       "TBC Height": 0
     },
-    "IGC": {
-      "Lundberg Storeroom": 0,
-      "MF Operations": 0,
-      "TBC Height": 0
-    },
     "IGE": {
       "Lundberg Storeroom": 0,
-      "MF Operations": 45.25,
+      "MF Packaging": 31.95,
+      "MF Operations": 0,
       "TBC": 0,
       "TBC Height": 0
     },
@@ -1247,7 +1243,7 @@
     },
     "ITC": {
       "Lundberg Storeroom": 0.2,
-      "MF Packaging": 58.4,
+      "MF Packaging": 73.4,
       "MF Operations": 0,
       "TBC Height": 0
     },
@@ -1296,8 +1292,7 @@
     },
     "JAR250SD": {
       "Lundberg Storeroom": 0,
-      "MF Packaging": 10626,
-      "MF Operations": 0,
+      "MF Packaging": 11662,
       "TBC Height": 0
     },
     "KOMBUCHA": {
@@ -1368,6 +1363,10 @@
       "MF Packaging": 0,
       "MF Operations": 0,
       "TBC": 0
+    },
+    "LMFAPRICME": {
+      "Lundberg Storeroom": 0,
+      "MF Operations": 1300
     },
     "LMFASHWAME": {
       "Lundberg Storeroom": 0,
@@ -1551,6 +1550,7 @@
     },
     "LMFCHILBSM": {
       "Lundberg Storeroom": 0,
+      "MF Packaging": 360,
       "MF Operations": 900,
       "TBC": 0
     },
@@ -1663,7 +1663,8 @@
     },
     "LMFGINGGSM": {
       "Lundberg Storeroom": 0,
-      "MF Operations": 1200,
+      "MF Packaging": 30,
+      "MF Operations": 80,
       "TBC": 0
     },
     "LMFGINGRME": {
@@ -1714,7 +1715,8 @@
     },
     "LMFHIBISME": {
       "Lundberg Storeroom": 0,
-      "MF Operations": 2000,
+      "MF Packaging": 15,
+      "MF Operations": 1400,
       "TBC": 0
     },
     "LMFIMMUNME": {
@@ -1925,8 +1927,9 @@
     },
     "LMFPEPPEME": {
       "Lundberg Storeroom": 0,
-      "MF Packaging": 257,
-      "MF Operations": 0
+      "MF Packaging": 42,
+      "MF Operations": 0,
+      "TBC": 0
     },
     "LMFRASFDME": {
       "Lundberg Storeroom": 0,
@@ -2176,7 +2179,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 219,
+      "TBC": 206,
       "TBC Height": 543
     },
     "MFALMONXL": {
@@ -2211,7 +2214,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 67,
+      "TBC": 58,
       "TBC Height": 0
     },
     "MFASHWPXL": {
@@ -2270,20 +2273,20 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 96,
+      "TBC": 91,
       "TBC Height": 0
     },
     "MFBLUBUSM": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
-      "TBC": 100,
+      "TBC": 83,
       "TBC Height": 156
     },
     "MFBRAZNME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 1078,
+      "TBC": 1052,
       "TBC Height": 0
     },
     "MFBRAZNXL": {
@@ -2304,7 +2307,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 227,
+      "TBC": 211,
       "TBC Height": 0
     },
     "MFCACBPB5": {
@@ -2327,14 +2330,14 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 179,
+      "TBC": 177,
       "TBC Height": 72
     },
     "MFCASHEME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 137,
+      "TBC": 129,
       "TBC Height": 1288
     },
     "MFCASHEXL": {
@@ -2360,7 +2363,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 38,
+      "TBC": 28,
       "TBC Height": 0
     },
     "MFCECACXL": {
@@ -2393,28 +2396,28 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 599,
+      "TBC": 594,
       "TBC Height": 0
     },
     "MFCHAMOME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 291,
+      "TBC": 285,
       "TBC Height": 0
     },
     "MFCHERRME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 139,
+      "TBC": 136,
       "TBC Height": 60
     },
     "MFCHIASME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 192,
+      "TBC": 190,
       "TBC Height": 0
     },
     "MFCHICPME": {
@@ -2428,7 +2431,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 232,
+      "TBC": 221,
       "TBC Height": 0
     },
     "MFCHILBSM": {
@@ -2453,14 +2456,14 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 199,
+      "TBC": 195,
       "TBC Height": 0
     },
     "MFCINNPME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 215,
+      "TBC": 211,
       "TBC Height": 0
     },
     "MFCLOVWXL": {
@@ -2506,14 +2509,14 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 22,
+      "TBC": 80,
       "TBC Height": 0
     },
     "MFFIRESME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 183,
+      "TBC": 182,
       "TBC Height": 0
     },
     "MFGINGRME": {
@@ -2534,7 +2537,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 47,
+      "TBC": 45,
       "TBC Height": 54
     },
     "MFGOCHUME": {
@@ -2548,7 +2551,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 37,
+      "TBC": 33,
       "TBC Height": 0
     },
     "MFGOTUKME": {
@@ -2569,7 +2572,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 69,
+      "TBC": 67,
       "TBC Height": 0
     },
     "MFHIBISME": {
@@ -2589,7 +2592,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 186,
+      "TBC": 183,
       "TBC Height": 0
     },
     "MFIRPIS": {
@@ -2603,7 +2606,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 31,
+      "TBC": 27,
       "TBC Height": 216
     },
     "MFJUNIPME": {
@@ -2617,34 +2620,34 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 371,
+      "TBC": 364,
       "TBC Height": 540
     },
     "MFKELPMME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 192,
+      "TBC": 188,
       "TBC Height": 0
     },
     "MFLAVENME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 43,
+      "TBC": 41,
       "TBC Height": 0
     },
     "MFLBALMME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 389,
+      "TBC": 385,
       "TBC Height": 0
     },
     "MFLEMMPSM": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
-      "TBC": 161
+      "TBC": 155
     },
     "MFLINSEB6.5": {
       "Lundberg Storeroom": 0,
@@ -2663,21 +2666,21 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 92,
+      "TBC": 90,
       "TBC Height": 0
     },
     "MFLOTUSME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 271,
+      "TBC": 268,
       "TBC Height": 0
     },
     "MFLOTUSSM": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 87,
+      "TBC": 81,
       "TBC Height": 0
     },
     "MFMACADB10": {
@@ -2705,20 +2708,20 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 118,
+      "TBC": 117,
       "TBC Height": 0
     },
     "MFMAPLEME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 92,
+      "TBC": 79,
       "TBC Height": 0
     },
     "MFMAPLESM": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
-      "TBC": 659,
+      "TBC": 657,
       "TBC Height": 0
     },
     "MFMAPLEXL": {
@@ -2744,21 +2747,21 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 121,
+      "TBC": 115,
       "TBC Height": 0
     },
     "MFMIXENME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 118,
+      "TBC": 109,
       "TBC Height": 0
     },
     "MFMIXENXL": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 13,
+      "TBC": 12,
       "TBC Height": 0
     },
     "MFMORINME": {
@@ -2793,28 +2796,28 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 26,
+      "TBC": 25,
       "TBC Height": 228
     },
     "MFPECANME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 554,
+      "TBC": 545,
       "TBC Height": 0
     },
     "MFPECANXL": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 27,
+      "TBC": 23,
       "TBC Height": 0
     },
     "MFPEPITME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 567,
+      "TBC": 558,
       "TBC Height": 0
     },
     "MFPEPPEME": {
@@ -2847,7 +2850,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 1,
-      "TBC": 155,
+      "TBC": 149,
       "TBC Height": 0
     },
     "MFRASLFME": {
@@ -2873,7 +2876,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 166,
+      "TBC": 163,
       "TBC Height": 0
     },
     "MFROSHBME": {
@@ -2887,7 +2890,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 420,
+      "TBC": 417,
       "TBC Height": 0
     },
     "MFSLIPPME": {
@@ -2933,14 +2936,14 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 131,
+      "TBC": 128,
       "TBC Height": 0
     },
     "MFTAMARSMJAR": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 240,
+      "TBC": 239,
       "TBC Height": 0
     },
     "MFTERIMLG": {
@@ -2954,41 +2957,41 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 202,
+      "TBC": 194,
       "TBC Height": 0
     },
     "MFTULSIME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 25,
+      "TBC": 23,
       "TBC Height": 0
     },
     "MFTUMMTME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 214,
+      "TBC": 207,
       "TBC Height": 720
     },
     "MFTUMMTSM": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
-      "TBC": 16,
+      "TBC": 7,
       "TBC Height": 0
     },
     "MFTURMEME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 165,
+      "TBC": 161,
       "TBC Height": 0
     },
     "MFWALNUME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 72,
+      "TBC": 62,
       "TBC Height": 1236
     },
     "MFWALNUXL": {
@@ -3001,28 +3004,28 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 162,
+      "TBC": 159,
       "TBC Height": 240
     },
     "MFWILDCSM": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 105,
+      "TBC": 99,
       "TBC Height": 0
     },
     "MFWILDCSMJAR": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 16,
+      "TBC": 15,
       "TBC Height": 0
     },
     "MFYEASTME": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 223,
+      "TBC": 218,
       "TBC Height": 90
     },
     "MFYERBAME": {
@@ -3068,7 +3071,7 @@
     "NT-AFTERSUN100": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
-      "TBC": 82
+      "TBC": 76
     },
     "NT-BABYBALM-45": {
       "Lundberg Storeroom": 0,
@@ -3082,12 +3085,12 @@
     "NT-BARUNSCENT": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
-      "TBC": 71
+      "TBC": 61
     },
     "NT-CB50": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
-      "TBC": 59
+      "TBC": 51
     },
     "NT-FRANKFACE-45": {
       "Lundberg Storeroom": 0,
@@ -3098,23 +3101,22 @@
     },
     "NT-LEMON100": {
       "Lundberg Storeroom": 0,
-      "MF Packaging": 0,
-      "TBC": 0
+      "MF Packaging": 0
     },
     "NT-LIP10": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
-      "TBC": 33
+      "TBC": 27
     },
     "NT-LOVE100": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
-      "TBC": 3
+      "TBC": 0
     },
     "NT-SLEEP100": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
-      "TBC": 28
+      "TBC": 24
     },
     "OH-LEM-GT375-SAMPLE": {
       "Lundberg Storeroom": 3,
@@ -3211,6 +3213,7 @@
     },
     "PBMFEROLVXL": {
       "Lundberg Storeroom": 0,
+      "MF Packaging": 0,
       "MF Operations": 0,
       "TBC": 0,
       "TBC Height": 0
@@ -3232,6 +3235,13 @@
     "PBMFMAPLMXL": {
       "Lundberg Storeroom": 0,
       "MF Operations": 0,
+      "TBC Height": 0
+    },
+    "PBMFMIXENXL": {
+      "Lundberg Storeroom": 0,
+      "MF Packaging": 53,
+      "MF Operations": 0,
+      "TBC": 0,
       "TBC Height": 0
     },
     "PBMFPECANXL": {
@@ -3343,14 +3353,14 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 28,
+      "TBC": 27,
       "TBC Height": 0
     },
     "SDCACAOSM": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 371,
+      "TBC": 344,
       "TBC Height": 0
     },
     "SDCREATME": {
@@ -3362,15 +3372,14 @@
     },
     "SDLID53": {
       "Lundberg Storeroom": 0,
-      "MF Packaging": 11235,
-      "MF Operations": 0,
+      "MF Packaging": 12271,
       "TBC Height": 0
     },
     "SDPCHOCLG": {
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 67,
+      "TBC": 62,
       "TBC Height": 0
     },
     "SDREDLOB3": {
@@ -3391,7 +3400,7 @@
       "Lundberg Storeroom": 0,
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 334,
+      "TBC": 326,
       "TBC Height": 0
     },
     "SDREDLOXL": {
@@ -3426,7 +3435,7 @@
       "TBC": 0
     },
     "SESAMESEED": {
-      "Lundberg Storeroom": 102.88,
+      "Lundberg Storeroom": 119.88,
       "MF Packaging": 81.51,
       "MF Operations": 0
     },
@@ -3448,7 +3457,7 @@
       "TBC Height": 0
     },
     "SLTC": {
-      "Lundberg Storeroom": 33.5052,
+      "Lundberg Storeroom": 33.8227,
       "MF Packaging": 0,
       "MF Operations": 0,
       "TBC": 0,
@@ -3553,18 +3562,13 @@
       "TBC Height": 0
     },
     "[BOXMED6]": {
-      "MF Packaging": 2848.9044000000004,
-      "MF Operations": 1243.32,
+      "MF Packaging": 2912.8144,
+      "MF Operations": 1143.72,
       "TBC Height": 0.262
     },
     "ABBFO": {
       "MF Packaging": 0,
       "TBC": 0
-    },
-    "ABCTCO": {
-      "MF Packaging": 0,
-      "MF Operations": 0,
-      "TBC Height": 0
     },
     "ABCTS": {
       "MF Packaging": 3.8,
@@ -3647,10 +3651,6 @@
       "MF Packaging": 0,
       "TBC": 0
     },
-    "AHPLO": {
-      "MF Packaging": 0,
-      "MF Operations": 0
-    },
     "AHROAG": {
       "MF Packaging": 0.5525999999999998,
       "MF Operations": 0,
@@ -3672,6 +3672,11 @@
       "MF Packaging": 7.6,
       "TBC": 0
     },
+    "BAGLARGE": {
+      "MF Packaging": 5145,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
     "BAGSMALL": {
       "MF Packaging": 105,
       "TBC": 0
@@ -3687,7 +3692,7 @@
       "TBC Height": 0
     },
     "BOX1KG": {
-      "MF Packaging": 341.87630000000007,
+      "MF Packaging": 330.20930000000004,
       "TBC": 242.60359999999997,
       "TBC Height": 0
     },
@@ -3875,7 +3880,7 @@
     },
     "EHBLM120": {
       "MF Packaging": 0,
-      "TBC": 21
+      "TBC": 15
     },
     "ENKCOG50": {
       "MF Packaging": 0,
@@ -3903,7 +3908,7 @@
     },
     "HPShil15g": {
       "MF Packaging": 0,
-      "TBC": 305
+      "TBC": 296
     },
     "IAB": {
       "MF Packaging": 0,
@@ -3949,6 +3954,11 @@
       "MF Packaging": 5.95,
       "TBC": 0
     },
+    "IGC": {
+      "MF Packaging": 131.79999999999995,
+      "MF Operations": 0,
+      "TBC Height": 0
+    },
     "IIFDLP": {
       "MF Packaging": 0,
       "MF Operations": 0,
@@ -3992,8 +4002,8 @@
       "TBC": 1650
     },
     "JAR555": {
-      "MF Packaging": 50,
-      "MF Operations": 6423,
+      "MF Packaging": 435,
+      "MF Operations": 5823,
       "TBC Height": 0
     },
     "JARAMBER": {
@@ -4077,6 +4087,10 @@
       "TBC": 0
     },
     "LMFCACBPSM": {
+      "MF Packaging": 0,
+      "TBC": 0
+    },
+    "LMFCACBPXL": {
       "MF Packaging": 0,
       "TBC": 0
     },
@@ -4340,9 +4354,9 @@
       "TBC": 0
     },
     "M6FOAM": {
-      "MF Packaging": 3494.9144,
+      "MF Packaging": 3459.2244,
       "MF Operations": 722.776,
-      "TBC": 619.8920000000003,
+      "TBC": 655.5820000000001,
       "TBC Height": 0.262
     },
     "MFALMONB10": {
@@ -4351,7 +4365,7 @@
     },
     "MFALMONLG": {
       "MF Packaging": 0,
-      "TBC": 120,
+      "TBC": 117,
       "TBC Height": 0
     },
     "MFALMONSM": {
@@ -4361,12 +4375,12 @@
     },
     "MFASHWPSM": {
       "MF Packaging": 0,
-      "TBC": 368,
+      "TBC": 357,
       "TBC Height": 0
     },
     "MFBEETPSM": {
       "MF Packaging": 0,
-      "TBC": 39
+      "TBC": 29
     },
     "MFBIRPBB12": {
       "MF Packaging": 0,
@@ -4420,7 +4434,7 @@
     },
     "MFBRAZNLG": {
       "MF Packaging": 0,
-      "TBC": 112,
+      "TBC": 107,
       "TBC Height": 0
     },
     "MFBRICEB5": {
@@ -4450,7 +4464,7 @@
     },
     "MFCACAPLG": {
       "MF Packaging": 1,
-      "TBC": 69,
+      "TBC": 62,
       "TBC Height": 216
     },
     "MFCACAPSM": {
@@ -4486,7 +4500,7 @@
     },
     "MFCARCLLG": {
       "MF Packaging": 0,
-      "TBC": 231,
+      "TBC": 229,
       "TBC Height": 0
     },
     "MFCARCLSM": {
@@ -4518,7 +4532,7 @@
     },
     "MFCHIASLG": {
       "MF Packaging": 0,
-      "TBC": 184,
+      "TBC": 182,
       "TBC Height": 0
     },
     "MFCHIASSM": {
@@ -4545,13 +4559,13 @@
     "MFCHOCLSM": {
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 227,
+      "TBC": 222,
       "TBC Height": 0
     },
     "MFCINNPSM": {
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 888,
+      "TBC": 871,
       "TBC Height": 0
     },
     "MFCINNPXL": {
@@ -4610,13 +4624,13 @@
     },
     "MFEROLVLG": {
       "MF Packaging": 0,
-      "TBC": 647,
+      "TBC": 642,
       "TBC Height": 0
     },
     "MFEROLVSM": {
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 124,
+      "TBC": 119,
       "TBC Height": 0
     },
     "MFFENNSB4": {
@@ -4626,7 +4640,7 @@
     "MFGARLPSM": {
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 98,
+      "TBC": 92,
       "TBC Height": 0
     },
     "MFGINGGME": {
@@ -4648,7 +4662,7 @@
     },
     "MFGOLDGLG": {
       "MF Packaging": 0,
-      "TBC": 210,
+      "TBC": 204,
       "TBC Height": 0
     },
     "MFGOLDGSM": {
@@ -4716,7 +4730,7 @@
     },
     "MFKBBQMLG": {
       "MF Packaging": 0,
-      "TBC": 85,
+      "TBC": 84,
       "TBC Height": 0
     },
     "MFKBBQMSM": {
@@ -4770,7 +4784,7 @@
     },
     "MFMESQPSM": {
       "MF Packaging": 0,
-      "TBC": 134,
+      "TBC": 129,
       "TBC Height": 0
     },
     "MFMIXENB11": {
@@ -4783,12 +4797,12 @@
     },
     "MFMIXENLG": {
       "MF Packaging": 0,
-      "TBC": 15,
+      "TBC": 2,
       "TBC Height": 768
     },
     "MFMIXENSM": {
       "MF Packaging": 0,
-      "TBC": 251,
+      "TBC": 249,
       "TBC Height": 0
     },
     "MFNUTMESM": {
@@ -4826,12 +4840,12 @@
     },
     "MFPECANLG": {
       "MF Packaging": 0,
-      "TBC": 47,
+      "TBC": 46,
       "TBC Height": 360
     },
     "MFPEPITLG": {
       "MF Packaging": 0,
-      "TBC": 100,
+      "TBC": 95,
       "TBC Height": 90
     },
     "MFPEPITXL": {
@@ -4861,7 +4875,7 @@
     },
     "MFROSEPSM": {
       "MF Packaging": 0,
-      "TBC": 67,
+      "TBC": 64,
       "TBC Height": 0
     },
     "MFSEAMOME": {
@@ -4915,13 +4929,13 @@
     },
     "MFTAMARLG": {
       "MF Packaging": 0,
-      "TBC": 78,
+      "TBC": 72,
       "TBC Height": 90
     },
     "MFTAMARSM": {
       "MF Packaging": 0,
       "MF Operations": 0,
-      "TBC": 334,
+      "TBC": 327,
       "TBC Height": 0
     },
     "MFTERIMB10": {
@@ -4938,7 +4952,7 @@
     },
     "MFTURMESM": {
       "MF Packaging": 0,
-      "TBC": 475
+      "TBC": 455
     },
     "MFVALERSM": {
       "MF Packaging": 0,
@@ -4952,7 +4966,7 @@
     },
     "MFWALNULG": {
       "MF Packaging": 0,
-      "TBC": 248,
+      "TBC": 243,
       "TBC Height": 743
     },
     "MFWILDCAS10": {
@@ -4965,7 +4979,7 @@
     },
     "MFWILDCLG": {
       "MF Packaging": 0,
-      "TBC": 24,
+      "TBC": 18,
       "TBC Height": 72
     },
     "MFYUMMBB12": {
@@ -5001,7 +5015,7 @@
     },
     "MYCROLM30": {
       "MF Packaging": 0,
-      "TBC": 57
+      "TBC": 55
     },
     "MYCRO-POS": {
       "MF Packaging": 0,
@@ -5017,7 +5031,7 @@
     },
     "NT-FACESERUM-30": {
       "MF Packaging": 0,
-      "TBC": 23
+      "TBC": 20
     },
     "NT-LEMON220": {
       "MF Packaging": 0,
@@ -5032,12 +5046,11 @@
       "TBC": 10
     },
     "NT-NAKED100": {
-      "MF Packaging": 0,
-      "TBC": 2
+      "MF Packaging": 0
     },
     "NT-NAKED220": {
       "MF Packaging": 0,
-      "TBC": 27
+      "TBC": 19
     },
     "NT-SLEEP220": {
       "MF Packaging": 0
@@ -5062,12 +5075,6 @@
     "PBMFGOLDGSM": {
       "MF Packaging": 0,
       "TBC": 0
-    },
-    "PBMFMIXENXL": {
-      "MF Packaging": 303,
-      "MF Operations": 0,
-      "TBC": 0,
-      "TBC Height": 0
     },
     "PECANS": {
       "MF Packaging": 8.5,
@@ -5118,7 +5125,7 @@
     },
     "SDBLUEISM": {
       "MF Packaging": 0,
-      "TBC": 492,
+      "TBC": 480,
       "TBC Height": 0
     },
     "SDBLUEIXL": {
@@ -5139,11 +5146,11 @@
     },
     "SDGREENLG": {
       "MF Packaging": 0,
-      "TBC": 12
+      "TBC": 11
     },
     "SDGREENSM": {
       "MF Packaging": 0,
-      "TBC": 71,
+      "TBC": 66,
       "TBC Height": 0
     },
     "SDGREENXLSOURCE": {
@@ -5174,7 +5181,7 @@
     },
     "SDYELLOSM": {
       "MF Packaging": 0,
-      "TBC": 457,
+      "TBC": 415,
       "TBC Height": 0
     },
     "SOSGCO275G": {
@@ -5189,8 +5196,8 @@
       "MF Packaging": 12000
     },
     "STRIPMF": {
-      "MF Packaging": 16327,
-      "MF Operations": 51391,
+      "MF Packaging": 17748,
+      "MF Operations": 50271,
       "TBC Height": 0
     },
     "STRIPSD": {
@@ -5228,13 +5235,18 @@
       "MF Packaging": 0,
       "TBC": 0
     },
-    "IAA": {
+    "ABCTCO": {
+      "MF Operations": 0,
+      "TBC": 0.063,
+      "TBC Height": 0
+    },
+    "AHPLO": {
       "MF Operations": 0,
       "TBC": 0
     },
-    "IAM": {
-      "MF Operations": 16,
-      "TBC Height": 0
+    "IAA": {
+      "MF Operations": 0,
+      "TBC": 0
     },
     "IMS": {
       "MF Operations": 0,
@@ -5242,14 +5254,11 @@
       "TBC Height": 0
     },
     "LID82": {
-      "MF Operations": 32006,
+      "MF Operations": 31406,
       "TBC Height": 0
     },
     "LMFAPRICLG": {
       "MF Operations": 750
-    },
-    "LMFAPRICME": {
-      "MF Operations": 1300
     },
     "LMFCHILFSM": {
       "MF Operations": 200
@@ -5257,6 +5266,9 @@
     "LMFMIXENSM": {
       "MF Operations": 1900,
       "TBC": 0
+    },
+    "LMFWILDCSMJAR": {
+      "MF Operations": 0
     },
     "NSC-KIDS-100g": {
       "MF Operations": 0,
@@ -5295,11 +5307,8 @@
     "AE-ACDCER001": {
       "TBC": 0
     },
-    "AE-ACDFGR001": {
-      "TBC": 1
-    },
     "AE-ACDFSV001": {
-      "TBC": 23
+      "TBC": 20
     },
     "AE-BBMAS030T": {
       "TBC": 9
@@ -5338,16 +5347,13 @@
       "TBC": 5
     },
     "AE-BCHHE005T": {
-      "TBC": 7
+      "TBC": 6
     },
     "AE-BCHHE010": {
-      "TBC": 8
+      "TBC": 5
     },
     "AE-BCHNA005T": {
       "TBC": 3
-    },
-    "AE-BCHNA010": {
-      "TBC": 0
     },
     "AE-BCHS002": {
       "TBC": 11
@@ -5365,16 +5371,16 @@
       "TBC": 14
     },
     "AE-BCIIP005T": {
-      "TBC": 5
+      "TBC": 4
     },
     "AE-BCIIP010": {
-      "TBC": 3
+      "TBC": 0
     },
     "AE-BERG005T": {
       "TBC": 12
     },
     "AE-BERG010": {
-      "TBC": 6
+      "TBC": 5
     },
     "AE-BHEYE030T": {
       "TBC": 3
@@ -5407,10 +5413,10 @@
       "TBC": 9
     },
     "AE-BPSBT001T": {
-      "TBC": 10
+      "TBC": 9
     },
     "AE-BPSBT005": {
-      "TBC": 12
+      "TBC": 9
     },
     "AE-BROSX005T": {
       "TBC": 8
@@ -5476,7 +5482,7 @@
       "TBC": 10
     },
     "AE-BSDRT005T": {
-      "TBC": 9
+      "TBC": 8
     },
     "AE-BSFAC005T": {
       "TBC": 11
@@ -5491,10 +5497,10 @@
       "TBC": 12
     },
     "AE-BSGOF005T": {
-      "TBC": 7
+      "TBC": 6
     },
     "AE-BSGOF010": {
-      "TBC": 16
+      "TBC": 13
     },
     "AE-BSHED005T": {
       "TBC": 12
@@ -5536,10 +5542,10 @@
       "TBC": 15
     },
     "AE-BSSIN005T": {
-      "TBC": 17
+      "TBC": 16
     },
     "AE-BSSIN010": {
-      "TBC": 18
+      "TBC": 15
     },
     "AE-BSSWR005T": {
       "TBC": 5
@@ -5547,11 +5553,8 @@
     "AE-BSSWR010": {
       "TBC": 3
     },
-    "AE-BSTRA005T": {
-      "TBC": 0
-    },
     "AE-BSTRA010": {
-      "TBC": 14
+      "TBC": 11
     },
     "AE-BSTWS005T": {
       "TBC": 8
@@ -5689,7 +5692,7 @@
       "TBC": 10
     },
     "AE-FRAN005": {
-      "TBC": 24
+      "TBC": 22
     },
     "AE-GBRF002": {
       "TBC": 6
@@ -5794,7 +5797,7 @@
       "TBC": 1
     },
     "AE-STAND-SB-SML": {
-      "TBC": 5
+      "TBC": 4
     },
     "AE-STAND-TB-LRG": {
       "TBC": 2
@@ -5914,7 +5917,7 @@
       "TBC": 719
     },
     "BAJA-FINE450g": {
-      "TBC": 1554
+      "TBC": 1548
     },
     "BAJA-GRIND-4PACKx56": {
       "TBC": 529
@@ -6004,7 +6007,7 @@
       "TBC": 93
     },
     "BBPB-CR-SALT": {
-      "TBC": 134
+      "TBC": 128
     },
     "BBPB-CR-SALT-1kg": {
       "TBC": 25
@@ -6013,7 +6016,7 @@
       "TBC": 63
     },
     "BBPB-SM-SALT": {
-      "TBC": 174
+      "TBC": 168
     },
     "BBPB-SM-SALT-1kg": {
       "TBC": 16
@@ -6376,10 +6379,10 @@
       "TBC": 18
     },
     "CP-LIP-CBUT-6g": {
-      "TBC": 146
+      "TBC": 140
     },
     "CP-LIP-COFC-6g": {
-      "TBC": 177
+      "TBC": 171
     },
     "CP-LIP-COFC-HANG": {
       "TBC": 76
@@ -6391,19 +6394,19 @@
       "TBC": 4
     },
     "CP-LIP-MANU-6g": {
-      "TBC": 209
+      "TBC": 203
     },
     "CP-LIP-MANU-HANG": {
       "TBC": 83
     },
     "CP-LIP-PAWP-6g": {
-      "TBC": 221
+      "TBC": 215
     },
     "CP-LIP-PAWP-HANG": {
       "TBC": 103
     },
     "CP-LIP-STRW-6g": {
-      "TBC": 245
+      "TBC": 239
     },
     "CP-LIP-STRW-HANG": {
       "TBC": 79
@@ -6493,7 +6496,7 @@
       "TBC": 0
     },
     "DC-ACC": {
-      "TBC": 4
+      "TBC": 3
     },
     "DC-BCC": {
       "TBC": 4
@@ -6511,10 +6514,10 @@
       "TBC": 8
     },
     "DC-DUKE-200-GR": {
-      "TBC": 16
+      "TBC": 10
     },
     "DC-DUKE-200-WB": {
-      "TBC": 18
+      "TBC": 12
     },
     "DC-HIGH-200-GR": {
       "TBC": 16
@@ -6523,7 +6526,7 @@
       "TBC": 4
     },
     "DC-HIGH-500-WB": {
-      "TBC": 19
+      "TBC": 17
     },
     "DC-MRKT-200-GR": {
       "TBC": 20
@@ -6589,13 +6592,13 @@
       "TBC": 3
     },
     "EC-HAZCRCH200": {
-      "TBC": 141
+      "TBC": 140
     },
     "EC-HAZCRCH-TESTER": {
       "TBC": 3
     },
     "EC-PISTCRCH200": {
-      "TBC": 125
+      "TBC": 124
     },
     "EC-PISTCRCH-TESTER": {
       "TBC": 4
@@ -6631,31 +6634,31 @@
       "TBC": 26
     },
     "EG-Deep-500": {
-      "TBC": 43
-    },
-    "EG-Dish-500": {
-      "TBC": 28
-    },
-    "EG-Laundry-1000": {
       "TBC": 39
     },
+    "EG-Dish-500": {
+      "TBC": 24
+    },
+    "EG-Laundry-1000": {
+      "TBC": 35
+    },
     "EG-Multi-1000": {
-      "TBC": 31
+      "TBC": 27
     },
     "EG-Multi-RTU-500": {
-      "TBC": 47
+      "TBC": 37
     },
     "EG-Pet-500": {
-      "TBC": 19
+      "TBC": 15
     },
     "EG-Refill-500": {
-      "TBC": 37
+      "TBC": 33
     },
     "EG-Silk-500": {
       "TBC": 0
     },
     "EHBC250": {
-      "TBC": 85
+      "TBC": 79
     },
     "EHBC500": {
       "TBC": 8
@@ -6937,7 +6940,7 @@
       "TBC": 0
     },
     "IH-BLKSDOIL100": {
-      "TBC": 170
+      "TBC": 162
     },
     "IH-BLKSDOIL200": {
       "TBC": 173
@@ -6964,10 +6967,10 @@
       "TBC": 30
     },
     "KIP-MGO514+250g": {
-      "TBC": 29
+      "TBC": 25
     },
     "KIP-MGO829+250g": {
-      "TBC": 27
+      "TBC": 26
     },
     "KIP-MGO988+250g": {
       "TBC": 38
@@ -7029,9 +7032,6 @@
     "LMFBRAZNXL": {
       "TBC": 0
     },
-    "LMFCACBPXL": {
-      "TBC": 0
-    },
     "LMFCASHEXL": {
       "TBC": 0
     },
@@ -7087,16 +7087,16 @@
       "TBC": 45
     },
     "MC-Cinn-8pcs": {
-      "TBC": 22
+      "TBC": 20
     },
     "MC-Mint-8pcs": {
-      "TBC": 4
+      "TBC": 3
     },
     "MC-OGMT-8pcs": {
-      "TBC": 13
+      "TBC": 12
     },
     "MC-Orig-8pcs": {
-      "TBC": 9
+      "TBC": 6
     },
     "MC-STRB-8pcs": {
       "TBC": 29
@@ -7135,7 +7135,11 @@
       "TBC": 0
     },
     "MFBLCUMSM": {
-      "TBC": 224,
+      "TBC": 221,
+      "TBC Height": 0
+    },
+    "MFBLPEPSM": {
+      "TBC": 193,
       "TBC Height": 0
     },
     "MFBLUBUME": {
@@ -7206,7 +7210,7 @@
       "TBC": 8
     },
     "MFDMTEASM": {
-      "TBC": 229
+      "TBC": 226
     },
     "MFENGLBB3.6": {
       "TBC": 0
@@ -7282,7 +7286,7 @@
       "TBC": 0
     },
     "MFKELPMSM": {
-      "TBC": 520,
+      "TBC": 518,
       "TBC Height": 0
     },
     "MFLAVENB1.2": {
@@ -7438,7 +7442,7 @@
       "TBC": 0
     },
     "MFTUMMTB.8": {
-      "TBC": 14
+      "TBC": 13
     },
     "MFVALERB4.4": {
       "TBC": 0
@@ -7472,13 +7476,13 @@
       "TBC": 14
     },
     "MMCAROBALMOND": {
-      "TBC": 328
+      "TBC": 304
     },
     "MMCAROBCHILLI": {
-      "TBC": 167
+      "TBC": 161
     },
     "MMCAROBCOCOGOJI": {
-      "TBC": 190
+      "TBC": 180
     },
     "MMCAROBELIX150g": {
       "TBC": 22
@@ -7487,7 +7491,7 @@
       "TBC": 0
     },
     "MMCAROBHAZEL": {
-      "TBC": 148
+      "TBC": 132
     },
     "MMCAROBPEPBUCK": {
       "TBC": 96
@@ -7550,13 +7554,10 @@
       "TBC": 17
     },
     "MYCROZEROLM30": {
-      "TBC": 18
-    },
-    "MYCROZERORE30": {
-      "TBC": 1
+      "TBC": 14
     },
     "MYCROZEROTT30": {
-      "TBC": 27
+      "TBC": 23
     },
     "MYCROZPM100": {
       "TBC": 22
@@ -7622,7 +7623,7 @@
       "TBC": 7
     },
     "NT-OIL100": {
-      "TBC": 24
+      "TBC": 23
     },
     "NT-OIL100TESTER": {
       "TBC": 40
@@ -7655,7 +7656,7 @@
       "TBC": 33
     },
     "NT-SOOTHMASK-45": {
-      "TBC": 35
+      "TBC": 32
     },
     "NT-STICKS1000": {
       "TBC": 0
@@ -7676,7 +7677,7 @@
       "TBC": 99
     },
     "OH-CONSC-750": {
-      "TBC": 120
+      "TBC": 114
     },
     "OH-CONSC-750-SAMPLE": {
       "TBC": 0
@@ -7760,31 +7761,31 @@
       "TBC": 38
     },
     "PTAB50": {
-      "TBC": 30
+      "TBC": 29
     },
     "PTACV500": {
       "TBC": 38
     },
     "PT-CALMBITT50": {
-      "TBC": 45
+      "TBC": 42
     },
     "PT-ENRGBITT50": {
-      "TBC": 51
+      "TBC": 50
     },
     "PTFIRE200": {
-      "TBC": 60
+      "TBC": 57
     },
     "PTFIRE500": {
-      "TBC": 17
+      "TBC": 15
     },
     "PTFLORA200": {
-      "TBC": 66
+      "TBC": 65
     },
     "PTFLORA500": {
       "TBC": 19
     },
     "PTFOREST200": {
-      "TBC": 12
+      "TBC": 11
     },
     "PTFOREST500": {
       "TBC": 23
@@ -8096,7 +8097,7 @@
       "TBC": 5
     },
     "SBBarsCalmDblChoc10PK": {
-      "TBC": 25
+      "TBC": 24
     },
     "SBBarsCalmPB35G10PK": {
       "TBC": 18
@@ -8114,13 +8115,13 @@
       "TBC": 20
     },
     "SBBBDCOL": {
-      "TBC": 420
+      "TBC": 408
     },
     "SBBBDMIX": {
       "TBC": 120
     },
     "SB-BLC-BOX10": {
-      "TBC": 11
+      "TBC": 10
     },
     "SBCalmWater15": {
       "TBC": 16
@@ -8195,7 +8196,7 @@
       "TBC": 1
     },
     "SEM-CC-100-BLK": {
-      "TBC": 116
+      "TBC": 110
     },
     "SEM-CC-200-BLK": {
       "TBC": 59
@@ -8213,7 +8214,7 @@
       "TBC": 27
     },
     "SIS-MagBottle-30ml": {
-      "TBC": 22
+      "TBC": 16
     },
     "SIS-MagCedar-100ml": {
       "TBC": 24
@@ -8315,7 +8316,7 @@
       "TBC": 0
     },
     "SOSGGF450G": {
-      "TBC": 97
+      "TBC": 96
     },
     "SOSGGF5KG": {
       "TBC": 0
@@ -8378,16 +8379,16 @@
       "TBC": 68
     },
     "TL-POS-WY.WOBBLER": {
-      "TBC": 54
+      "TBC": 53
     },
     "TLWYC100": {
-      "TBC": 116
+      "TBC": 112
     },
     "TLWYC100-MENS": {
-      "TBC": 37
+      "TBC": 36
     },
     "TLWYC100-TEEN": {
-      "TBC": 56
+      "TBC": 53
     },
     "TR-Chai250": {
       "TBC": 48
@@ -8619,9 +8620,6 @@
     },
     "ZW-WATESHRUB": {
       "TBC": 26
-    },
-    "MFBLPEPSM": {
-      "TBC Height": 0
     }
   },
   "warehouses": [
@@ -8631,5 +8629,5 @@
     "TBC",
     "TBC Height"
   ],
-  "totalRecords": 4384
+  "totalRecords": 4388
 }

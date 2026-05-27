@@ -14,7 +14,7 @@ import {
 import {
   detectTransferGaps,
   extractKitchenDemandsFromSchedule,
-  type PackagingDemandItem,
+  extractPackagingDemands,
 } from '@/lib/engine/transfer-detection';
 import { INTERMEDIATE_REGISTRY } from '../kitchen/data/intermediate-registry';
 
@@ -94,6 +94,9 @@ export default function LogisticsPage() {
   // Data state
   const [sohItems, setSOHItems] = useState<StockOnHandItem[]>([]);
   const [assemblies, setAssemblies] = useState<Assembly[]>([]);
+  // All open assemblies incl. PACKAGING (FG) ones — source for packaging
+  // transfer demands. (Kitchen-data only returns MF-Intermediate group.)
+  const [allOpenAssemblies, setAllOpenAssemblies] = useState<Assembly[]>([]);
   const [consumptionSchedule, setConsumptionSchedule] = useState<Record<string, KitchenBatch[]>>({});
   const [componentNames, setComponentNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -148,6 +151,10 @@ export default function LogisticsPage() {
         );
         setConsumptionSchedule(schedule);
 
+        // Keep ALL open assemblies (incl. packaging FGs) so we can derive
+        // packaging-run input demands for transfer detection.
+        setAllOpenAssemblies(purchasingData.assemblies);
+
         // Build name map from SOH items
         const names: Record<string, string> = {};
         for (const item of kitchenData.sohItems) {
@@ -181,7 +188,14 @@ export default function LogisticsPage() {
     if (sohItems.length === 0) return [];
 
     const kitchenDemands = extractKitchenDemandsFromSchedule(consumptionSchedule);
-    const packagingDemands: PackagingDemandItem[] = []; // Packaging demands added in future
+    // Packaging-run input demands (intermediates + labels/jars/lids/boxes)
+    // at each run's own warehouse — Bottlo → MF Operations, all other
+    // packaging stations → MF Packaging (read from the assembly).
+    const packagingDemands = extractPackagingDemands(
+      allOpenAssemblies,
+      (code) => code in INTERMEDIATE_REGISTRY,
+      WAREHOUSES.MF_PACKAGING,
+    );
 
     return detectTransferGaps({
       soh,
@@ -189,7 +203,7 @@ export default function LogisticsPage() {
       packagingDemands,
       productNames: componentNames,
     });
-  }, [sohItems, consumptionSchedule, soh, componentNames]);
+  }, [sohItems, consumptionSchedule, allOpenAssemblies, soh, componentNames]);
 
   // Filter gaps by search
   const filteredGaps = useMemo(() => {

@@ -33,10 +33,69 @@ export interface KitchenDemandItem {
 export interface PackagingDemandItem {
   runId: string;
   runName: string;
+  /** The INPUT needed (intermediate OR packaging material: label/jar/lid/box/…). */
   productCode: string;
   productName: string;
   quantityNeeded: number;
   scheduledDate: Date;
+  /**
+   * Warehouse where the packaging run happens (= where this input must be).
+   * Derived from the assembly's own warehouse. Bottlo runs are at
+   * MF Operations; all other packaging stations are at MF Packaging — but
+   * we read the assembly's `warehouseName` directly rather than re-deriving
+   * from the station, since Unleashed already records where it's assembled.
+   * Falls back to MF Packaging when absent.
+   */
+  destinationWarehouse: string;
+}
+
+/**
+ * Build packaging-run input demands from Unleashed FG assemblies.
+ *
+ * A packaging assembly's `assemblyLines` ARE its full depth-1 BOM — the
+ * intermediate(s) PLUS every packaging material (label, jar, lid, box,
+ * strip, foam …). Each line becomes a demand for that input at the
+ * warehouse where the assembly is built, so the transfer detector can flag
+ * any input that's sitting in the wrong warehouse for the run's date.
+ *
+ * Intermediate assemblies (kitchen batches) are skipped — those are handled
+ * by the kitchen-demand path, whose destination is Lundberg Storeroom.
+ *
+ * @param assemblies         all open assemblies (incl. FG/packaging ones)
+ * @param isIntermediate     predicate: is this productCode a kitchen intermediate?
+ * @param fallbackWarehouse  destination when an assembly has no warehouse
+ */
+export function extractPackagingDemands(
+  assemblies: Assembly[],
+  isIntermediate: (code: string) => boolean,
+  fallbackWarehouse: string,
+): PackagingDemandItem[] {
+  const demands: PackagingDemandItem[] = [];
+
+  for (const assembly of assemblies) {
+    // Skip kitchen batches — those go through the kitchen-demand path.
+    if (isIntermediate(assembly.productCode)) continue;
+
+    const scheduledDate = new Date(
+      assembly.assembleBy || assembly.lastModifiedOn || assembly.createdOn,
+    );
+    const destinationWarehouse = assembly.warehouseName || fallbackWarehouse;
+
+    for (const line of assembly.assemblyLines) {
+      if (!line.productCode || line.componentQuantity <= 0) continue;
+      demands.push({
+        runId: assembly.assemblyId,
+        runName: `${assembly.productCode} - ${assembly.productName}`,
+        productCode: line.productCode,
+        productName: line.productDescription || line.productCode,
+        quantityNeeded: line.componentQuantity,
+        scheduledDate,
+        destinationWarehouse,
+      });
+    }
+  }
+
+  return demands;
 }
 
 // ─── Kitchen demand extraction ────────────────────────────
@@ -158,12 +217,14 @@ export function detectTransferGaps(options: DetectGapsOptions): TransferGap[] {
     });
   }
 
-  // Packaging demands → destination is MF Packaging
+  // Packaging demands → destination is the run's own warehouse
+  // (Bottlo = MF Operations; all other stations = MF Packaging — read
+  // from the assembly rather than re-derived).
   for (const d of packagingDemands) {
     allDemands.push({
       productCode: d.productCode,
       productName: productNames?.[d.productCode] || d.productName,
-      destinationWarehouse: WAREHOUSES.MF_PACKAGING,
+      destinationWarehouse: d.destinationWarehouse || WAREHOUSES.MF_PACKAGING,
       quantityNeeded: d.quantityNeeded,
       scheduledDate: d.scheduledDate,
       demandSource: {
