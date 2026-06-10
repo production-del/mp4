@@ -1169,4 +1169,93 @@ describe('resolveScheduleConflicts', () => {
       expect(result.remainingConflicts).toEqual([]);
     });
   });
+
+  // ─── Unleashed-sourced chips are immovable ───────────────────────
+  describe('unleashed-assembly chips are not rescheduled', () => {
+    test('push: never reschedules an Unleashed packaging chip as a consumer', () => {
+      // Unleashed packaging chip needs ICC; the only ICC supply finishes
+      // AFTER the chip's date. Push would normally move the consumer
+      // forward — but for Unleashed chips it must mark unplaceable instead.
+      const activities: CalendarActivity[] = [
+        kitchenRequired({
+          stableId: 'K-ICC',
+          productCode: 'ICC',
+          startDate: '2026-06-04',
+          finishDate: '2026-06-04',
+        }),
+        packagingActivity({
+          stableId: 'unleashed-assembly|AS-00099999',
+          productCode: 'MFTEST',
+          date: '2026-06-01', // ingredient finishes June 4, chip is June 1 → conflict
+        }),
+      ];
+      const result = resolveScheduleConflicts({
+        activities,
+        mutations: {},
+        consumesMap: { MFTEST: ['ICC'] },
+        strategy: 'push',
+      });
+      // Unleashed chip stays put.
+      expect(result.mutations['unleashed-assembly|AS-00099999']).toBeUndefined();
+      // Conflict is reported as remaining (caller decides what to do).
+      expect(result.remainingConflicts.length).toBeGreaterThan(0);
+    });
+
+    test('pull: never pulls an Unleashed kitchen blocker earlier', () => {
+      // Unleashed kitchen assembly finishes too late for a packaging
+      // consumer. Pull would normally move it earlier — guard must skip it.
+      const activities: CalendarActivity[] = [
+        kitchenRequired({
+          stableId: 'unleashed-assembly|AS-00088888',
+          productCode: 'ICC',
+          startDate: '2026-06-10',
+          finishDate: '2026-06-10',
+        }),
+        packagingActivity({
+          stableId: 'P1',
+          productCode: 'MFTEST',
+          date: '2026-06-05',
+        }),
+      ];
+      const result = resolveScheduleConflicts({
+        activities,
+        mutations: {},
+        consumesMap: { MFTEST: ['ICC'] },
+        strategy: 'pull',
+        earliestDate: '2026-05-01',
+      });
+      // Unleashed blocker stays put — no reschedule on it.
+      expect(result.mutations['unleashed-assembly|AS-00088888']).toBeUndefined();
+    });
+
+    test('auto: falls through to push-consumer when blocker is Unleashed, but never moves another Unleashed consumer', () => {
+      // Unleashed kitchen blocker + planner packaging consumer.
+      // Pull tries to move the blocker (skipped — it's Unleashed) → auto
+      // falls through to push, which moves the planner consumer instead.
+      const activities: CalendarActivity[] = [
+        kitchenRequired({
+          stableId: 'unleashed-assembly|AS-00077777',
+          productCode: 'ICC',
+          startDate: '2026-06-10',
+          finishDate: '2026-06-10',
+        }),
+        packagingActivity({
+          stableId: 'P-planner',
+          productCode: 'MFTEST',
+          date: '2026-06-05',
+        }),
+      ];
+      const result = resolveScheduleConflicts({
+        activities,
+        mutations: {},
+        consumesMap: { MFTEST: ['ICC'] },
+        strategy: 'auto',
+        earliestDate: '2026-05-01',
+      });
+      // Blocker untouched.
+      expect(result.mutations['unleashed-assembly|AS-00077777']).toBeUndefined();
+      // Planner consumer pushed past blocker finish.
+      expect(result.mutations['P-planner']?.rescheduledTo).toBe('2026-06-11');
+    });
+  });
 });

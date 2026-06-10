@@ -10,6 +10,7 @@ function intermediate(o: {
   productCode?: string;
   steps?: string[];
   dehydHours?: number | null;
+  preferredBatchSize?: number | null;
 }) {
   return {
     productCode: o.productCode ?? 'X',
@@ -25,35 +26,50 @@ function intermediate(o: {
     dehydHours: o.dehydHours ?? null,
     humidity: null,
     yieldRate: null,
-    preferredBatchSize: null,
+    preferredBatchSize: o.preferredBatchSize ?? null,
   };
 }
 
-describe('kitchenTeamMinutesFor (non-dehydrator: legacy fixed cost)', () => {
-  test('cook only → COOK_MINUTES (no dehyd; quantity ignored)', () => {
-    expect(kitchenTeamMinutesFor(intermediate({ steps: ['cook'] }), 1000)).toBe(COOK_MINUTES);
+describe('kitchenTeamMinutesFor (non-dehydrator: cook/default scale with quantity — Phase 4l.14)', () => {
+  // Cook & default recipes now scale linearly (half batch = half the time).
+  // Reference batch = preferredBatchSize when set, else a nominal 250, so a
+  // full reference batch costs the legacy flat figure.
+  test('cook scales linearly; a 250-unit nominal batch = COOK_MINUTES', () => {
+    expect(kitchenTeamMinutesFor(intermediate({ steps: ['cook'] }), 250)).toBe(COOK_MINUTES);
+    expect(kitchenTeamMinutesFor(intermediate({ steps: ['cook'] }), 125)).toBe(
+      Math.round(COOK_MINUTES / 2),
+    );
+    expect(kitchenTeamMinutesFor(intermediate({ steps: ['cook'] }), 500)).toBe(COOK_MINUTES * 2);
   });
 
-  test('soak only (no dehyd) → SOAK_SETUP_MINUTES', () => {
+  test('cook uses preferredBatchSize as the reference when set (full batch = COOK_MINUTES)', () => {
+    const i = intermediate({ steps: ['cook'], preferredBatchSize: 270 });
+    expect(kitchenTeamMinutesFor(i, 270)).toBe(COOK_MINUTES); // full batch
+    expect(kitchenTeamMinutesFor(i, 135)).toBe(Math.round(COOK_MINUTES / 2)); // half
+    expect(kitchenTeamMinutesFor(i, 18)).toBe(Math.round((COOK_MINUTES / 270) * 18)); // sub-batch shard
+  });
+
+  test('soak only (no dehyd) → flat SOAK_SETUP_MINUTES (setup cost, not size-scaled)', () => {
     expect(kitchenTeamMinutesFor(intermediate({ steps: ['soak'] }))).toBe(SOAK_SETUP_MINUTES);
   });
 
-  test('cook with explicit dehydHours=0 stays in legacy fixed cost path', () => {
+  test('cook with dehydHours=0 stays in the non-dehydrator (scaled) path', () => {
+    // Default quantity 250 against the nominal 250 reference = COOK_MINUTES.
     expect(
       kitchenTeamMinutesFor(intermediate({ steps: ['cook'], dehydHours: 0 })),
     ).toBe(COOK_MINUTES);
   });
 
-  test('dehydHours=null treated same as 0 → cook-only fixed cost', () => {
+  test('dehydHours=null treated same as 0 → cook (scaled) path', () => {
     expect(
       kitchenTeamMinutesFor(intermediate({ steps: ['cook'], dehydHours: null })),
     ).toBe(COOK_MINUTES);
   });
 
-  test('no recognised steps → KITCHEN_DEFAULT_MINUTES fallback', () => {
-    expect(kitchenTeamMinutesFor(intermediate({ steps: [] }))).toBe(KITCHEN_DEFAULT_MINUTES);
-    expect(kitchenTeamMinutesFor(intermediate({ steps: ['mystery'] }))).toBe(
-      KITCHEN_DEFAULT_MINUTES,
+  test('no recognised steps → KITCHEN_DEFAULT_MINUTES scaled (250 nominal = default)', () => {
+    expect(kitchenTeamMinutesFor(intermediate({ steps: [] }), 250)).toBe(KITCHEN_DEFAULT_MINUTES);
+    expect(kitchenTeamMinutesFor(intermediate({ steps: ['mystery'] }), 125)).toBe(
+      Math.round(KITCHEN_DEFAULT_MINUTES / 2),
     );
   });
 });

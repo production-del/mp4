@@ -20,8 +20,10 @@ import {
   readMutationsFromStorage,
   writeMutationsToStorage,
   staleStableIds,
+  applyMutationToActivity,
   type MutationsMap,
 } from '@/lib/planning/calendar-mutations';
+import type { CalendarActivity } from '@/lib/planning/calendar-projection';
 
 describe('calendar-mutations: pure operations', () => {
   describe('applyDismiss', () => {
@@ -109,6 +111,60 @@ describe('calendar-mutations: pure operations', () => {
       m = applyReschedule(m, 'A', '2026-05-06');
       expect(isDismissed(m, 'A')).toBe(true);
       expect(rescheduledTo(m, 'A')).toBe('2026-05-06');
+    });
+  });
+
+  describe('applyMutationToActivity — Unleashed-assembly reschedule guard (Phase 4l.14)', () => {
+    const mut = (
+      over: Partial<import('@/lib/planning/calendar-mutations').ActivityMutation>,
+    ) => ({ stableId: 'A|2026-06-01|0', updatedAt: '2026-06-01T00:00:00Z', ...over });
+    const base = (over: Partial<CalendarActivity>): CalendarActivity =>
+      ({
+        id: 'x',
+        stableId: 'A|2026-06-01|0',
+        kind: 'packaging',
+        date: '2026-06-01',
+        weekStart: '2026-06-01',
+        orderInWeek: 0,
+        station: 'hand-packing',
+        productCode: 'SDYELLOSM',
+        productName: 'Star Dust Yellow SM',
+        quantity: 1000,
+        durationMinutes: 60,
+        changeoverMinutes: 0,
+        family: null,
+        extendedFamily: null,
+        ...over,
+      }) as CalendarActivity;
+
+    test('Parked assembly IS rescheduled', () => {
+      const a = base({ assemblyNumber: 'AS-1', assemblyStatus: 'Parked' });
+      const out = applyMutationToActivity(a, mut({ rescheduledTo: '2026-06-15' }));
+      expect(out.date).toBe('2026-06-15');
+    });
+
+    test('committed (non-Parked) assembly is NOT rescheduled', () => {
+      for (const status of ['Planned', 'Open', 'To Do', 'InProgress']) {
+        const a = base({ assemblyNumber: 'AS-1', assemblyStatus: status });
+        const out = applyMutationToActivity(a, mut({ rescheduledTo: '2026-06-15' }));
+        expect(out.date).toBe('2026-06-01'); // unchanged — anchor of truth
+      }
+    });
+
+    test('committed assembly still honours qty edits (only reschedule is blocked)', () => {
+      const a = base({ assemblyNumber: 'AS-1', assemblyStatus: 'Planned' });
+      const out = applyMutationToActivity(
+        a,
+        mut({ rescheduledTo: '2026-06-15', editedQuantity: 500 }),
+      );
+      expect(out.date).toBe('2026-06-01');
+      expect(out.quantity).toBe(500);
+    });
+
+    test('planner-emitted chip (no assemblyNumber) reschedules normally', () => {
+      const a = base({ assemblyNumber: undefined, assemblyStatus: undefined });
+      const out = applyMutationToActivity(a, mut({ rescheduledTo: '2026-06-15' }));
+      expect(out.date).toBe('2026-06-15');
     });
   });
 

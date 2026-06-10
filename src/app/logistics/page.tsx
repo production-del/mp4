@@ -86,6 +86,39 @@ function subtractWorkingDays(date: Date, days: number): Date {
   return result;
 }
 
+/**
+ * Stable identity for a gap — used to key the (transient) transfer-qty
+ * state so it survives table re-sorting. Mirrors the aggregation key the
+ * detector uses: product + destination + need-by date.
+ */
+function gapKeyOf(gap: TransferGap): string {
+  // Local-ISO must match the detector's aggregation key (transfer-detection.ts)
+  // which now uses `toLocalISODate`. Using `.toISOString()` here would drift
+  // by a day for AEST local-midnight dates.
+  return `${gap.productCode}|${gap.destinationWarehouse}|${localISODate(gap.needByDate)}`;
+}
+
+/** Local YYYY-MM-DD for a date (used by the need-by date-range picker). */
+function localISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function todayISO(): string {
+  return localISODate(new Date());
+}
+/** Monday-of-this-week and Sunday, as YYYY-MM-DD — for the "This week" preset. */
+function thisWeekRange(): { from: string; to: string } {
+  const now = new Date();
+  const dow = (now.getDay() + 6) % 7; // 0 = Monday
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - dow);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  return { from: localISODate(mon), to: localISODate(sun) };
+}
+
 // ─── Page ──────────────────────────────────────────────────
 
 type TabKey = 'gaps' | 'manifest';
@@ -108,6 +141,18 @@ export default function LogisticsPage() {
   const [transferQtys, setTransferQtys] = useState<Record<string, Record<string, number>>>({});
   const [leadTimeDays, setLeadTimeDays] = useState(DEFAULT_LEAD_TIME_DAYS);
   const [search, setSearch] = useState('');
+  // Need-by date-range filter (driven by the popout in the table's "Need by"
+  // header). `from` defaults to today so past-dated transfers are hidden by
+  // default; the user can widen/clear it. Empty string = open-ended on that
+  // side.
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({
+    from: todayISO(),
+    to: '',
+  });
+  // Column filters (empty set / string = no filter = show all).
+  const [destFilter, setDestFilter] = useState<Set<string>>(new Set());
+  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
+  const [demandSkuFilter, setDemandSkuFilter] = useState('');
 
   // ── Data fetching ────────────────────────────────────────
 
@@ -146,8 +191,15 @@ export default function LogisticsPage() {
 
         // Derive consumption schedule via the shared demand helper.
         // Same derivation used by purchasing — single source now.
+        // Restrict to intermediate (kitchen) assemblies — packaging-FG BOM
+        // lines (labels/jars/lids/boxes/strips) are NOT kitchen demands at
+        // Lundberg; they're handled by extractPackagingDemands, which routes
+        // them to the run's own warehouse (Bottlo → MF Ops, others → MF Pkg).
         const schedule = consumptionScheduleFromDemands(
-          demandsFromKitchenAssemblies(purchasingData.assemblies),
+          demandsFromKitchenAssemblies(
+            purchasingData.assemblies,
+            (a) => a.productCode in INTERMEDIATE_REGISTRY,
+          ),
         );
         setConsumptionSchedule(schedule);
 
@@ -197,6 +249,9 @@ export default function LogisticsPage() {
       WAREHOUSES.MF_PACKAGING,
     );
 
+    // Date filtering (incl. the today-floor default) is applied in
+    // `filteredGaps` from the need-by date-range picker, so the user can
+    // widen the window to see past/overdue transfers when they want.
     return detectTransferGaps({
       soh,
       kitchenDemands,
@@ -205,44 +260,92 @@ export default function LogisticsPage() {
     });
   }, [sohItems, consumptionSchedule, allOpenAssemblies, soh, componentNames]);
 
-  // Filter gaps by search
+  // Filter gaps by search + need-by date range + column filters
+  // (destination, source warehouse, demand-source SKU).
   const filteredGaps = useMemo(() => {
-    if (!search) return gaps;
-    const q = search.toLowerCase();
-    return gaps.filter(g =>
-      g.productCode.toLowerCase().includes(q) ||
-      g.productName.toLowerCase().includes(q) ||
-      g.destinationWarehouse.toLowerCase().includes(q)
-    );
-  }, [gaps, search]);
+    const q = search.trim().toLowerCase();
+    const demandQ = demandSkuFilter.trim().toLowerCase();
+    const { from, to } = dateRange;
+    const out: TransferGap[] = [];
+    for (const g of gaps) {
+      // Search match
+      if (q) {
+        const hit =
+          g.productCode.toLowerCase().includes(q) ||
+          g.productName.toLowerCase().includes(q) ||
+          g.destinationWarehouse.toLowerCase().includes(q);
+        if (!hit) continue;
+      }
+      // Need-by date range (inclusive). Compare local YYYY-MM-DD strings.
+      const needBy = localISODate(g.needByDate);
+      if (from && needBy < from) continue;
+      if (to && needBy > to) continue;
+      // Destination warehouse toggle
+      if (destFilter.size > 0 && !destFilter.has(g.destinationWarehouse)) continue;
+      // Demand-source SKU/name filter
+      if (demandQ && !g.demandSource.name.toLowerCase().includes(demandQ)) continue;
+      // Source-warehouse toggle — narrow the source options; drop the gap
+      // entirely if none of its sources are in the selected set.
+      let sourceOptions = g.sourceOptions;
+      if (sourceFilter.size > 0) {
+        sourceOptions = sourceOptions.filter((s) => sourceFilter.has(s.warehouse));
+        if (sourceOptions.length === 0) continue;
+      }
+      out.push(sourceOptions === g.sourceOptions ? g : { ...g, sourceOptions });
+    }
+    return out;
+  }, [gaps, search, dateRange, destFilter, sourceFilter, demandSkuFilter]);
 
   // ── Transfer qty management ──────────────────────────────
 
-  const getTransferQty = useCallback((gapIndex: number, sourceWh: string): number => {
-    const key = `${gapIndex}`;
-    return transferQtys[key]?.[sourceWh] ?? 0;
+  // Pre-fill: seed each gap's BEST source with the needed qty (capped at
+  // what's available there), so the operator can plan in one click and
+  // only edit the qty / switch source where necessary. Seeds once per gap
+  // — only when there's no entry yet, so it never overwrites a value the
+  // user typed, zeroed, or that was cleared after planning.
+  useEffect(() => {
+    if (gaps.length === 0) return;
+    setTransferQtys(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const gap of gaps) {
+        if (gap.sourceOptions.length === 0) continue;
+        const key = gapKeyOf(gap);
+        if (next[key]) continue; // already seeded or user-touched
+        const best = gap.sourceOptions[0]; // sorted by available desc
+        const qty = Math.min(best.available, gap.quantityNeeded);
+        if (qty <= 0) continue;
+        next[key] = { [best.warehouse]: Math.round(qty * 100) / 100 };
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [gaps]);
+
+  const getTransferQty = useCallback((gapKey: string, sourceWh: string): number => {
+    return transferQtys[gapKey]?.[sourceWh] ?? 0;
   }, [transferQtys]);
 
-  const setTransferQty = useCallback((gapIndex: number, sourceWh: string, qty: number) => {
-    const key = `${gapIndex}`;
+  const setTransferQty = useCallback((gapKey: string, sourceWh: string, qty: number) => {
     setTransferQtys(prev => ({
       ...prev,
-      [key]: { ...(prev[key] || {}), [sourceWh]: qty },
+      [gapKey]: { ...(prev[gapKey] || {}), [sourceWh]: qty },
     }));
   }, []);
 
   // Auto-fill a gap's transfer qty from the best source
-  const autoFillGap = useCallback((gapIndex: number, gap: TransferGap) => {
+  const autoFillGap = useCallback((gap: TransferGap) => {
     if (gap.sourceOptions.length === 0) return;
     const best = gap.sourceOptions[0]; // Already sorted by available desc
     const qty = Math.min(best.available, gap.quantityNeeded);
-    setTransferQty(gapIndex, best.warehouse, Math.round(qty * 100) / 100);
+    setTransferQty(gapKeyOf(gap), best.warehouse, Math.round(qty * 100) / 100);
   }, [setTransferQty]);
 
   // ── Plan a transfer ──────────────────────────────────────
 
-  const planTransfer = useCallback((gapIndex: number, gap: TransferGap, sourceWh: string) => {
-    const qty = getTransferQty(gapIndex, sourceWh);
+  const planTransfer = useCallback((gap: TransferGap, sourceWh: string) => {
+    const gapKey = gapKeyOf(gap);
+    const qty = getTransferQty(gapKey, sourceWh);
     if (qty <= 0) return;
 
     const transferDate = subtractWorkingDays(gap.needByDate, leadTimeDays);
@@ -268,7 +371,7 @@ export default function LogisticsPage() {
     });
 
     // Clear the transfer qty for this gap
-    setTransferQty(gapIndex, sourceWh, 0);
+    setTransferQty(gapKey, sourceWh, 0);
   }, [getTransferQty, leadTimeDays, setTransferQty]);
 
   // ── Remove a draft ───────────────────────────────────────
@@ -441,6 +544,14 @@ export default function LogisticsPage() {
             setTransferQty={setTransferQty}
             autoFillGap={autoFillGap}
             planTransfer={planTransfer}
+            dateRange={dateRange}
+            setDateRange={setDateRange}
+            destFilter={destFilter}
+            setDestFilter={setDestFilter}
+            sourceFilter={sourceFilter}
+            setSourceFilter={setSourceFilter}
+            demandSkuFilter={demandSkuFilter}
+            setDemandSkuFilter={setDemandSkuFilter}
           />
         ) : (
           <ManifestView
@@ -455,6 +566,51 @@ export default function LogisticsPage() {
 
 // ─── Gaps Table ────────────────────────────────────────────
 
+type GapSortKey = 'product' | 'destination' | 'needBy' | 'source' | 'qty';
+
+/** Clean line-art calendar icon (matches the native date-input glyph). */
+function CalendarIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-1px' }}>
+      <rect x="2" y="3" width="12" height="11" rx="1.5" />
+      <line x1="2" y1="6" x2="14" y2="6" />
+      <line x1="5.5" y1="1.5" x2="5.5" y2="4" />
+      <line x1="10.5" y1="1.5" x2="10.5" y2="4" />
+    </svg>
+  );
+}
+
+/** Funnel icon used on filterable column headers. */
+function FilterIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-1px' }}>
+      <path d="M2 3h12l-4.5 5.5V13l-3 1.5V8.5L2 3z" />
+    </svg>
+  );
+}
+
+/** Small preset button used inside the need-by date-range popout. */
+function PresetBtn({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        fontSize: 10,
+        padding: '2px 6px',
+        borderRadius: 3,
+        border: '0.5px solid var(--border)',
+        background: 'var(--bg-page)',
+        color: 'var(--text-secondary)',
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 function GapsTable({
   gaps,
   draftTransfers,
@@ -462,14 +618,85 @@ function GapsTable({
   setTransferQty,
   autoFillGap,
   planTransfer,
+  dateRange,
+  setDateRange,
+  destFilter,
+  setDestFilter,
+  sourceFilter,
+  setSourceFilter,
+  demandSkuFilter,
+  setDemandSkuFilter,
 }: {
   gaps: TransferGap[];
   draftTransfers: DraftTransfer[];
-  getTransferQty: (idx: number, wh: string) => number;
-  setTransferQty: (idx: number, wh: string, qty: number) => void;
-  autoFillGap: (idx: number, gap: TransferGap) => void;
-  planTransfer: (idx: number, gap: TransferGap, sourceWh: string) => void;
+  getTransferQty: (gapKey: string, wh: string) => number;
+  setTransferQty: (gapKey: string, wh: string, qty: number) => void;
+  autoFillGap: (gap: TransferGap) => void;
+  planTransfer: (gap: TransferGap, sourceWh: string) => void;
+  dateRange: { from: string; to: string };
+  setDateRange: (r: { from: string; to: string }) => void;
+  destFilter: Set<string>;
+  setDestFilter: (s: Set<string>) => void;
+  sourceFilter: Set<string>;
+  setSourceFilter: (s: Set<string>) => void;
+  demandSkuFilter: string;
+  setDemandSkuFilter: (s: string) => void;
 }) {
+  // Sortable headers — default to earliest need-by (most urgent first).
+  const [sort, setSort] = useState<{ key: GapSortKey; dir: 'asc' | 'desc' }>({
+    key: 'needBy',
+    dir: 'asc',
+  });
+  // Which column's filter popout is open (only one at a time).
+  const [openFilter, setOpenFilter] = useState<null | 'date' | 'dest' | 'source' | 'demand'>(null);
+  const dateFilterActive = dateRange.from !== '' || dateRange.to !== '';
+
+  // Toggle a warehouse in a Set-based filter (returns a NEW set).
+  const toggleInSet = (set: Set<string>, value: string): Set<string> => {
+    const next = new Set(set);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    return next;
+  };
+  const allWarehouses = Object.values(WAREHOUSES);
+
+  const toggleSort = (key: GapSortKey) => {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: key === 'qty' ? 'desc' : 'asc' },
+    );
+  };
+
+  const sortedGaps = useMemo(() => {
+    const dir = sort.dir === 'asc' ? 1 : -1;
+    const copy = [...gaps];
+    copy.sort((a, b) => {
+      let cmp = 0;
+      switch (sort.key) {
+        case 'product':
+          cmp = a.productCode.localeCompare(b.productCode);
+          break;
+        case 'destination':
+          cmp = a.destinationWarehouse.localeCompare(b.destinationWarehouse);
+          break;
+        case 'needBy':
+          cmp = a.needByDate.getTime() - b.needByDate.getTime();
+          break;
+        case 'source':
+          cmp = a.demandSource.name.localeCompare(b.demandSource.name);
+          break;
+        case 'qty':
+          cmp = a.quantityNeeded - b.quantityNeeded;
+          break;
+      }
+      // Stable tiebreak so equal keys keep a deterministic order.
+      if (cmp === 0) cmp = gapKeyOf(a).localeCompare(gapKeyOf(b));
+      return cmp * dir;
+    });
+    return copy;
+  }, [gaps, sort]);
+
   if (gaps.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -487,19 +714,168 @@ function GapsTable({
     <table className="text-xs w-full" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
       <thead className="sticky top-0 z-10">
         <tr>
-          {['Product', 'Destination', 'Need by', 'Demand source', 'Qty needed', 'Source', 'Available', 'Transfer qty', ''].map(h => (
-            <th
-              key={h}
-              className={`px-3 py-2 ${h === 'Qty needed' || h === 'Available' || h === 'Transfer qty' ? 'text-right' : 'text-left'}`}
-              style={{ fontWeight: 600, fontSize: '11px', color: 'var(--text-secondary)', background: 'var(--bg-surface)', borderBottom: '0.5px solid var(--border)' }}
-            >
-              {h}
-            </th>
-          ))}
+          {([
+            { label: 'Product', key: 'product', align: 'left', filter: null },
+            { label: 'Destination', key: 'destination', align: 'left', filter: 'dest' },
+            { label: 'Need by', key: 'needBy', align: 'left', filter: 'date' },
+            { label: 'Demand source', key: 'source', align: 'left', filter: 'demand' },
+            { label: 'Qty needed', key: 'qty', align: 'right', filter: null },
+            { label: 'Source', key: null, align: 'left', filter: 'source' },
+            { label: 'Available', key: null, align: 'right', filter: null },
+            { label: 'Transfer qty', key: null, align: 'right', filter: null },
+            { label: '', key: null, align: 'left', filter: null },
+          ] as { label: string; key: GapSortKey | null; align: 'left' | 'right'; filter: null | 'date' | 'dest' | 'source' | 'demand' }[]).map((col, i) => {
+            const sortable = col.key !== null;
+            const active = sortable && sort.key === col.key;
+            const filterActive =
+              col.filter === 'date' ? dateFilterActive
+              : col.filter === 'dest' ? destFilter.size > 0
+              : col.filter === 'source' ? sourceFilter.size > 0
+              : col.filter === 'demand' ? demandSkuFilter.trim() !== ''
+              : false;
+            const isOpen = col.filter !== null && openFilter === col.filter;
+            return (
+              <th
+                key={col.label || `col-${i}`}
+                className={`px-3 py-2 ${col.align === 'right' ? 'text-right' : 'text-left'}`}
+                style={{
+                  fontWeight: 600,
+                  fontSize: '11px',
+                  color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  background: 'var(--bg-surface)',
+                  borderBottom: '0.5px solid var(--border)',
+                  whiteSpace: 'nowrap',
+                  userSelect: 'none',
+                  position: col.filter ? 'relative' : undefined,
+                }}
+              >
+                <span
+                  onClick={sortable ? () => toggleSort(col.key as GapSortKey) : undefined}
+                  className={sortable ? 'cursor-pointer select-none' : ''}
+                  title={sortable ? `Sort by ${col.label}` : undefined}
+                >
+                  {col.label}
+                  {sortable && (
+                    <span style={{ marginLeft: 4, opacity: active ? 1 : 0.3, fontSize: '9px' }}>
+                      {active ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                    </span>
+                  )}
+                </span>
+                {col.filter && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenFilter(isOpen ? null : col.filter);
+                    }}
+                    title={col.filter === 'date' ? 'Filter by need-by date or range' : col.filter === 'demand' ? 'Filter by demand-source SKU' : 'Filter by warehouse'}
+                    style={{
+                      marginLeft: 6,
+                      lineHeight: 1,
+                      cursor: 'pointer',
+                      background: filterActive ? 'var(--accent-light)' : 'transparent',
+                      color: filterActive ? 'var(--accent)' : 'var(--text-muted)',
+                      border: filterActive ? '0.5px solid var(--accent)' : '0.5px solid transparent',
+                      borderRadius: 3,
+                      padding: '2px 4px',
+                    }}
+                  >
+                    {col.filter === 'date' ? <CalendarIcon /> : <FilterIcon />}
+                  </button>
+                )}
+                {isOpen && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      marginTop: 4,
+                      zIndex: 30,
+                      background: 'var(--bg-surface)',
+                      border: '0.5px solid var(--border)',
+                      borderRadius: 6,
+                      boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
+                      padding: 12,
+                      minWidth: 200,
+                      fontWeight: 400,
+                      textTransform: 'none',
+                      letterSpacing: 0,
+                      cursor: 'default',
+                    }}
+                  >
+                    {/* ── Date range ── */}
+                    {col.filter === 'date' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                          From
+                          <input type="date" value={dateRange.from} onChange={(e) => setDateRange({ ...dateRange, from: e.target.value })}
+                            style={{ fontSize: 11, padding: '2px 6px', borderRadius: 3, border: '0.5px solid var(--border)', background: 'var(--bg-page)', color: 'var(--text-primary)' }} />
+                        </label>
+                        <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                          To
+                          <input type="date" value={dateRange.to} onChange={(e) => setDateRange({ ...dateRange, to: e.target.value })}
+                            style={{ fontSize: 11, padding: '2px 6px', borderRadius: 3, border: '0.5px solid var(--border)', background: 'var(--bg-page)', color: 'var(--text-primary)' }} />
+                        </label>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+                          <PresetBtn label="Today" onClick={() => setDateRange({ from: todayISO(), to: todayISO() })} />
+                          <PresetBtn label="Today on" onClick={() => setDateRange({ from: todayISO(), to: '' })} />
+                          <PresetBtn label="This week" onClick={() => setDateRange(thisWeekRange())} />
+                          <PresetBtn label="All dates" onClick={() => setDateRange({ from: '', to: '' })} />
+                        </div>
+                      </div>
+                    )}
+                    {/* ── Warehouse toggle (destination / source) ── */}
+                    {(col.filter === 'dest' || col.filter === 'source') && (() => {
+                      const set = col.filter === 'dest' ? destFilter : sourceFilter;
+                      const setFn = col.filter === 'dest' ? setDestFilter : setSourceFilter;
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {allWarehouses.map((wh) => (
+                            <label key={wh} style={{ fontSize: 11, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={set.size === 0 || set.has(wh)}
+                                onChange={() => setFn(toggleInSet(set, wh))}
+                              />
+                              {whShort(wh)}
+                            </label>
+                          ))}
+                          <PresetBtn label="All warehouses" onClick={() => setFn(new Set())} />
+                        </div>
+                      );
+                    })()}
+                    {/* ── Demand-source SKU filter ── */}
+                    {col.filter === 'demand' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="SKU or run name…"
+                          value={demandSkuFilter}
+                          onChange={(e) => setDemandSkuFilter(e.target.value)}
+                          style={{ fontSize: 11, padding: '4px 6px', borderRadius: 3, border: '0.5px solid var(--border)', background: 'var(--bg-page)', color: 'var(--text-primary)', width: 180 }}
+                        />
+                        <PresetBtn label="Clear" onClick={() => setDemandSkuFilter('')} />
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setOpenFilter(null)}
+                      style={{ marginTop: 8, width: '100%', fontSize: 11, padding: '3px 0', borderRadius: 3, border: '0.5px solid var(--border)', background: 'var(--bg-page)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                )}
+              </th>
+            );
+          })}
         </tr>
       </thead>
       <tbody>
-        {gaps.map((gap, gapIdx) => {
+        {sortedGaps.map((gap) => {
+          const gapKey = gapKeyOf(gap);
           // Check for existing draft transfers covering this gap
           const draftedQty = draftTransfers
             .filter(t => t.productCode === gap.productCode && t.toWarehouse === gap.destinationWarehouse)
@@ -509,12 +885,12 @@ function GapsTable({
           // One row per source option per gap
           return gap.sourceOptions.map((source, srcIdx) => {
             const isFirst = srcIdx === 0;
-            const qty = getTransferQty(gapIdx, source.warehouse);
+            const qty = getTransferQty(gapKey, source.warehouse);
             const canPlan = qty > 0;
 
             return (
               <tr
-                key={`${gapIdx}-${srcIdx}`}
+                key={`${gapKey}-${srcIdx}`}
                 style={{ borderBottom: isFirst ? undefined : '0.5px solid var(--border)' }}
                 className="transition"
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-surface)'; }}
@@ -576,11 +952,20 @@ function GapsTable({
                   </td>
                 ) : null}
 
-                {/* Source warehouse */}
+                {/* Source warehouse — first row is the pre-filled best source */}
                 <td className="px-3 py-1.5" style={{ borderBottom: '0.5px solid var(--border)' }}>
                   <span className="text-[10px]" style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
                     {whShort(source.warehouse)}
                   </span>
+                  {isFirst && gap.sourceOptions.length > 1 && (
+                    <span
+                      className="ml-1 text-[8px] px-1 py-0.5 rounded"
+                      style={{ color: 'var(--accent)', background: 'var(--accent-light)', fontWeight: 600 }}
+                      title="Suggested source — most stock available. Pre-filled below; edit the qty or enter a qty on another source row to switch."
+                    >
+                      best
+                    </span>
+                  )}
                 </td>
 
                 {/* Available at source */}
@@ -593,7 +978,7 @@ function GapsTable({
                   <div className="flex items-center justify-end gap-1">
                     {isFirst && (
                       <button
-                        onClick={() => autoFillGap(gapIdx, gap)}
+                        onClick={() => autoFillGap(gap)}
                         className="text-[9px] px-1 py-0.5 rounded transition hover:opacity-70"
                         style={{ color: 'var(--accent)', background: 'var(--accent-light)', border: '0.5px solid var(--accent)' }}
                         title="Auto-fill from best source"
@@ -606,7 +991,7 @@ function GapsTable({
                       min={0}
                       max={source.available}
                       value={qty || ''}
-                      onChange={e => setTransferQty(gapIdx, source.warehouse, Math.max(0, parseFloat(e.target.value) || 0))}
+                      onChange={e => setTransferQty(gapKey, source.warehouse, Math.max(0, parseFloat(e.target.value) || 0))}
                       className="w-16 rounded px-1.5 py-0.5 text-xs text-right font-mono focus:outline-none"
                       style={{ background: 'var(--bg-surface)', border: '0.5px solid var(--border)', color: 'var(--text-primary)' }}
                       placeholder="0"
@@ -617,7 +1002,7 @@ function GapsTable({
                 {/* Plan button */}
                 <td className="px-3 py-1.5" style={{ borderBottom: '0.5px solid var(--border)' }}>
                   <button
-                    onClick={() => planTransfer(gapIdx, gap, source.warehouse)}
+                    onClick={() => planTransfer(gap, source.warehouse)}
                     disabled={!canPlan}
                     className="text-[10px] px-2 py-1 rounded transition"
                     style={{

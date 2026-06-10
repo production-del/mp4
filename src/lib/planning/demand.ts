@@ -121,10 +121,22 @@ export function clearPackagingDemand(): void {
  * Convert Unleashed kitchen assemblies into component-level demand events at
  * Lundberg. Shared by the purchasing projection and the transfer gap detector —
  * previously each page had its own copy of this derivation.
+ *
+ * By default ALL assemblies are processed — the purchasing projection wants
+ * every line's draw-down (it buys packaging materials too). Pass
+ * `includeAssembly` to restrict to e.g. intermediate (kitchen) assemblies:
+ * the transfer detector does this so packaging-FG BOM lines (labels, jars,
+ * strips, …) don't leak into a phantom Lundberg requirement — those are
+ * handled by `extractPackagingDemands`, which routes them to the run's own
+ * warehouse.
  */
-export function demandsFromKitchenAssemblies(assemblies: Assembly[]): Demand[] {
+export function demandsFromKitchenAssemblies(
+  assemblies: Assembly[],
+  includeAssembly?: (assembly: Assembly) => boolean,
+): Demand[] {
   const out: Demand[] = [];
   for (const assembly of assemblies) {
+    if (includeAssembly && !includeAssembly(assembly)) continue;
     // Assemblies carry the scheduled date via lastModifiedOn (mirrors the
     // earlier `deriveConsumption*` helpers). Convert to local ISO so the
     // downstream shape is uniform.

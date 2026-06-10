@@ -69,7 +69,7 @@
       "plannerStation": "elephant"
     },
     "MFOATSRB5": {
-      "profitPerItem": null,
+      "profitPerItem": 17.99,
       "stationLetter": "B",
       "stationLabel": "Bulk",
       "plannerStation": "hand-packing"
@@ -87,7 +87,7 @@
       "plannerStation": "hand-packing"
     },
     "MFLINSEB6.5": {
-      "profitPerItem": null,
+      "profitPerItem": 46.23,
       "stationLetter": "B",
       "stationLabel": "Bulk",
       "plannerStation": "hand-packing"
@@ -183,7 +183,7 @@
       "plannerStation": "dust"
     },
     "MFJASMIME": {
-      "profitPerItem": null,
+      "profitPerItem": 3.48,
       "stationLetter": "H",
       "stationLabel": "Hand",
       "plannerStation": "hand-packing"
@@ -219,7 +219,7 @@
       "plannerStation": "elephant"
     },
     "MFCINNQXL": {
-      "profitPerItem": null,
+      "profitPerItem": 100.19,
       "stationLetter": "B",
       "stationLabel": "Bulk",
       "plannerStation": "hand-packing"
@@ -417,7 +417,7 @@
       "plannerStation": "hand-packing"
     },
     "MFBKCARAB9": {
-      "profitPerItem": null,
+      "profitPerItem": 58.16,
       "stationLetter": "E",
       "stationLabel": "Elephant",
       "plannerStation": "elephant"
@@ -597,19 +597,19 @@
       "plannerStation": "hand-packing"
     },
     "MFMAPLEXL": {
-      "profitPerItem": null,
+      "profitPerItem": 35.2,
       "stationLetter": "H",
       "stationLabel": "Hand",
       "plannerStation": "hand-packing"
     },
     "SDREDLOB3": {
-      "profitPerItem": null,
+      "profitPerItem": 99.57,
       "stationLetter": "B",
       "stationLabel": "Bulk",
       "plannerStation": "hand-packing"
     },
     "MFTUMMTB.8": {
-      "profitPerItem": null,
+      "profitPerItem": 51.94,
       "stationLetter": "B",
       "stationLabel": "Bulk",
       "plannerStation": "hand-packing"
@@ -639,7 +639,7 @@
       "plannerStation": "hand-packing"
     },
     "MFBUCKWB12": {
-      "profitPerItem": null,
+      "profitPerItem": -26,
       "stationLetter": "B",
       "stationLabel": "Bulk",
       "plannerStation": "hand-packing"
@@ -843,7 +843,7 @@
       "plannerStation": "hand-packing"
     },
     "MFCARDASM": {
-      "profitPerItem": null,
+      "profitPerItem": 11.96,
       "stationLetter": "H",
       "stationLabel": "Hand",
       "plannerStation": "hand-packing"
@@ -867,7 +867,7 @@
       "plannerStation": "hand-packing"
     },
     "MFGOCHUME": {
-      "profitPerItem": null,
+      "profitPerItem": 6.65,
       "stationLetter": "H",
       "stationLabel": "Hand",
       "plannerStation": "hand-packing"
@@ -915,7 +915,7 @@
       "plannerStation": "hand-packing"
     },
     "MFTERIMB10": {
-      "profitPerItem": null,
+      "profitPerItem": 141.71,
       "stationLetter": "B",
       "stationLabel": "Bulk",
       "plannerStation": "hand-packing"
@@ -963,7 +963,7 @@
       "plannerStation": "elephant"
     },
     "MFCASHEB6": {
-      "profitPerItem": null,
+      "profitPerItem": 61.34,
       "stationLetter": "B",
       "stationLabel": "Bulk",
       "plannerStation": "hand-packing"
@@ -1071,7 +1071,7 @@
       "plannerStation": "hand-packing"
     },
     "BULK-ABBNR-BOX": {
-      "profitPerItem": null,
+      "profitPerItem": 60.26,
       "stationLetter": "B",
       "stationLabel": "Bulk",
       "plannerStation": "hand-packing"
@@ -1107,7 +1107,7 @@
       "plannerStation": "bottlo"
     },
     "MFTAMARLG": {
-      "profitPerItem": null,
+      "profitPerItem": 8.05,
       "stationLetter": "E",
       "stationLabel": "Elephant",
       "plannerStation": "elephant"
@@ -1137,7 +1137,7 @@
       "plannerStation": "elephant"
     },
     "MFMIXENB5.5": {
-      "profitPerItem": null,
+      "profitPerItem": 70.86,
       "stationLetter": "B",
       "stationLabel": "Bulk",
       "plannerStation": "hand-packing"
@@ -1203,7 +1203,7 @@
       "plannerStation": "dust"
     },
     "SDGREENLG": {
-      "profitPerItem": null,
+      "profitPerItem": 77.24,
       "stationLetter": "H",
       "stationLabel": "Hand",
       "plannerStation": "hand-packing"
@@ -1227,7 +1227,7 @@
       "plannerStation": "bottlo"
     },
     "MFCUMSWSM": {
-      "profitPerItem": null,
+      "profitPerItem": 2.79,
       "stationLetter": "H",
       "stationLabel": "Hand",
       "plannerStation": "hand-packing"
@@ -1239,7 +1239,7 @@
       "plannerStation": "hand-packing"
     },
     "MFCARCLB9": {
-      "profitPerItem": null,
+      "profitPerItem": 145.22,
       "stationLetter": "B",
       "stationLabel": "Bulk",
       "plannerStation": "hand-packing"
@@ -1272,6 +1272,18 @@
       "profitPerItem": null,
       "stationLetter": "B",
       "stationLabel": "Bulk",
+      "plannerStation": "hand-packing"
+    },
+    "MFTERIMB5": {
+      "profitPerItem": 88.12,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
+      "plannerStation": "hand-packing"
+    },
+    "SDYELLOB3": {
+      "profitPerItem": 131.22,
+      "stationLetter": "H",
+      "stationLabel": "Hand",
       "plannerStation": "hand-packing"
     }
   }

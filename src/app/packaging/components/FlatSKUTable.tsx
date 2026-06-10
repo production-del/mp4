@@ -455,7 +455,18 @@ export function FlatSKUTable({
   onOpenModal,
 }: FlatSKUTableProps) {
   // ── Layout state (order + widths) ──
-  const [layout, setLayout] = useState<ColumnLayout>(loadLayout);
+  // Phase 4l.14 — initialise with the DEFAULT layout so the server-rendered
+  // HTML and the client's first render agree; reading localStorage in the
+  // useState initializer caused a hydration mismatch (column order / widths
+  // differed between server default and client-persisted). The persisted
+  // layout is restored in the effect below, after mount.
+  const [layout, setLayout] = useState<ColumnLayout>(() => ({
+    order: [...DEFAULT_ORDER],
+    widths: { ...DEFAULT_WIDTHS },
+  }));
+  useEffect(() => {
+    setLayout(loadLayout());
+  }, []);
   const { order: columnOrder, widths: columnWidths } = layout;
 
   const updateLayout = useCallback((next: ColumnLayout) => {

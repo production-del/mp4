@@ -56,6 +56,27 @@ export {
   type Holiday,
 } from './business-calendar';
 
+// ─── Priority scoring (the unified contention ranking key) ───
+
+export {
+  scoreAssembly,
+  criticalRatioUrgency,
+  stockoutRisk,
+  DEFAULT_WEIGHTS,
+  DEFAULT_ABILITY_FLOORS,
+  RECOMMENDED_ABILITY_FLOORS,
+} from './priority-score';
+
+export type {
+  ScoreWeights,
+  AbilityFloors,
+  ScoreAssemblyInput,
+  ScoreBreakdown,
+  ScoreFactor,
+  DominantFactor,
+  AbilityBinding,
+} from './priority-score';
+
 // ─── Engine I/O types ────────────────────────────────────────
 
 export type {

@@ -297,6 +297,14 @@ function stepPush(args: PushArgs): { working: MutationsMap; changed: boolean } {
     if (!maxFinish) continue;
     const consumerActivity = mutated.find((a) => a.stableId === stableId);
     if (!consumerActivity) continue;
+    // Unleashed assemblies are committed production — we can't move them on
+    // the calendar without decoupling from Unleashed itself. Skip the push.
+    // The conflict still exists; the user can resolve it by rescheduling
+    // the assembly in Unleashed, or by accepting the shortage.
+    if (isUnleashedAssembly(stableId)) {
+      unplaceable.add(stableId);
+      continue;
+    }
     const baseTarget = isoAddDays(maxFinish, 1);
     const currentDate = consumerActivity.date;
     const target = findCapacityFitForward({
@@ -374,6 +382,15 @@ function stepPull(args: PullArgs): { working: MutationsMap; changed: boolean } {
       unplaceable.add(blockerStableId);
       continue;
     }
+    // Unleashed assemblies are committed in the system of record. Don't
+    // pull them earlier on the calendar — the assembly's actual date in
+    // Unleashed doesn't move when we move the chip, so this would just
+    // create a misleading view. Auto-strategy falls through to push-consumer
+    // for the conflicts this blocker is involved in.
+    if (isUnleashedAssembly(blockerStableId)) {
+      unplaceable.add(blockerStableId);
+      continue;
+    }
     const currentFinish = blocker.finishDate ?? blocker.date;
     const span = isoDayDelta(blocker.date, currentFinish); // ≥ 0
     const baseTargetStart = isoAddDays(targetFinish, -span);
@@ -422,6 +439,27 @@ function stepPull(args: PullArgs): { working: MutationsMap; changed: boolean } {
 }
 
 // ─── Internals ───────────────────────────────────────────────
+
+/**
+ * True for chips sourced from a live Unleashed assembly — stableId convention
+ * is `unleashed-assembly|<assemblyNumber>`. These represent COMMITTED
+ * production in the operational system of record (Unleashed). The planner
+ * must treat them as immovable constraints: rescheduling them on the
+ * calendar would decouple the calendar's projection from reality, since
+ * the assembly's actual date in Unleashed doesn't change.
+ *
+ * Resolve-conflicts must therefore:
+ *   • not reschedule them as a CONSUMER under push (mark unplaceable instead)
+ *   • not reschedule them as a BLOCKER under pull (mark unplaceable instead)
+ *
+ * Other resolvers (e.g. manual chip drag) can still move them — the user is
+ * making an explicit choice there. This guard is specifically for the bulk
+ * auto-resolver, where an unintended sweep produced ~80 stale reschedules
+ * during the Phase-4l.13 incident.
+ */
+function isUnleashedAssembly(stableId: string): boolean {
+  return stableId.startsWith('unleashed-assembly|');
+}
 
 function deriveDismissedSet(
   activities: ReadonlyArray<CalendarActivity>,

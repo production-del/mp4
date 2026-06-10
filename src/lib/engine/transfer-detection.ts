@@ -15,6 +15,7 @@
 import type { TransferGap } from '@/lib/planning/transfer-types';
 import type { WarehouseSOH } from '@/lib/planning/warehouse-soh';
 import { WAREHOUSES } from '@/lib/planning/warehouse-assignments';
+import { toLocalISODate } from '@/lib/planning/working-day';
 import type { Assembly } from '@/lib/unleashed/types';
 import type { KitchenBatch } from '@/lib/planning/engine-io';
 import { INTERMEDIATE_REGISTRY } from '@/app/kitchen/data/intermediate-registry';
@@ -244,7 +245,12 @@ export function detectTransferGaps(options: DetectGapsOptions): TransferGap[] {
   const aggregated = new Map<string, DemandEntry & { totalNeeded: number }>();
 
   for (const demand of allDemands) {
-    const dateKey = demand.scheduledDate.toISOString().slice(0, 10);
+    // Local-ISO (not UTC) — kitchen demands flow through `fromLocalISODate`
+    // (local midnight) while packaging demands carry Unleashed `AssembleBy`
+    // (UTC midnight). Using `.toISOString()` aggregates them under DIFFERENT
+    // keys for the same intended local day in AEST. `toLocalISODate` matches
+    // the project-wide convention from `working-day.ts`.
+    const dateKey = toLocalISODate(demand.scheduledDate);
     const key = `${demand.productCode}|${demand.destinationWarehouse}|${dateKey}`;
 
     const existing = aggregated.get(key);
@@ -285,8 +291,17 @@ export function detectTransferGaps(options: DetectGapsOptions): TransferGap[] {
 
     // Only create a gap if there IS stock elsewhere to transfer from
     if (sourceOptions.length > 0) {
-      // Sort sources by available qty descending (best source first)
-      sourceOptions.sort((a, b) => b.available - a.available);
+      // Source preference: intermediates (and any stock) sitting OUTSIDE
+      // Lundberg should be drawn down first for packaging runs — Lundberg is
+      // the home store where most intermediates/bulk live, so we keep it as a
+      // source but treat it as the fallback rather than the default. Within
+      // each tier, prefer the warehouse holding the most stock.
+      sourceOptions.sort((a, b) => {
+        const aLund = a.warehouse === WAREHOUSES.LUNDBERG ? 1 : 0;
+        const bLund = b.warehouse === WAREHOUSES.LUNDBERG ? 1 : 0;
+        if (aLund !== bLund) return aLund - bLund; // non-Lundberg first
+        return b.available - a.available;
+      });
 
       gaps.push({
         productCode: demand.productCode,

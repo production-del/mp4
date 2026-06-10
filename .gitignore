@@ -45,3 +45,6 @@ yarn-error.log*
 # vercel cli local link
 .vercel
 .env*.local
+
+# Resource-allocation skill generated artifacts
+data/.allocation-*.json

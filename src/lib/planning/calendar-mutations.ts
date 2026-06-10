@@ -432,7 +432,28 @@ export function applyMutationToActivity(
     return activity;
   }
   const newQty = mutation.editedQuantity ?? activity.quantity;
-  const newDate = mutation.rescheduledTo ?? activity.date;
+  // BOOKMARK (stockout-causing reschedule guard) — the packaging optimiser
+  // schedules runs to avoid FG stockouts, but a reschedule here can silently
+  // push a run weeks/months later and strand the FG out of stock (observed:
+  // MFBKCHOCBG native 2026-06-05 → stale reschedule 2026-07-23, ~7 weeks OOS;
+  // MFBKCHOCB9 native 06-08 → 07-15). The fix (deferred — user chose "clear
+  // now, bookmark"): when a reschedule delays a packaging run past the FG's
+  // SOH-floor breach, either FLAG the chip (stockout-risk badge + drawer
+  // warning, preferred — keeps user intent visible) or CLAMP the delay back
+  // to the optimiser's native date. Most observed cases are stale pre-#4
+  // auto-resolve artifacts; "Clear all reschedules" is the current remedy.
+  // Phase 4l.14 — committed Unleashed assemblies are anchors of truth and
+  // can't be moved on the planner (only `Parked` drafts can). Ignore any
+  // `rescheduledTo` on them — this also neutralises STALE reschedules left
+  // over from older auto-resolve sweeps, keeping the chip on its true
+  // Unleashed AssembleBy date (matching the server, which likewise ignores
+  // them). Qty / station edits still apply.
+  const blockReschedule =
+    !!activity.assemblyNumber && activity.assemblyStatus !== 'Parked';
+  const newDate =
+    !blockReschedule && mutation.rescheduledTo !== undefined
+      ? mutation.rescheduledTo
+      : activity.date;
   const durationScale = activity.quantity > 0 ? newQty / activity.quantity : 1;
   const delta = newDate !== activity.date ? isoDayDelta(activity.date, newDate) : 0;
   // Phase 4l.8: station override only applies to packaging chips that

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "jest"
+    "test": "jest",
+    "allocate": "tsx scripts/allocate-resources.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -29,6 +30,7 @@
     "postcss": "^8.5.0",
     "tailwindcss": "^4.0.0",
     "ts-jest": "^29.0.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.7.0"
   }
 }

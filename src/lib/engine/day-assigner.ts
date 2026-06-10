@@ -181,6 +181,19 @@ function productionMinutes(batch: ScheduledBatchWithMeta): number {
   return (batch.quantity / rate) * 60;
 }
 
+/** Monday of the week after `weekStart` (a Monday ISO date). */
+function nextWeekStart(weekStart: string): string {
+  const d = fromLocalISODate(weekStart);
+  d.setDate(d.getDate() + 7);
+  return toLocalISODate(d);
+}
+
+// Phase 4l.14 — how many empty weeks past the last scheduled week the
+// day-assigner will extend into when draining carried-over (deferred)
+// batches. Bounds the cascade so a genuinely un-placeable batch is dropped
+// rather than looping. 12 weeks ≈ a full extra quarter of slack.
+const MAX_CARRY_EXTENSION_WEEKS = 12;
+
 // ─── Public API ──────────────────────────────────────────────
 
 export function assignBatchesToDays(
@@ -204,90 +217,89 @@ export function assignBatchesToDays(
     // Walk batches and changeovers in lockstep — the orchestrator guarantees
     // they're parallel arrays of equal length, sorted chronologically with
     // within-week family-clustering already applied.
-    let i = 0;
     const N = timeline.batches.length;
-    // Group iteration by week so we can reset the day cursor at week boundaries.
-    while (i < N) {
-      const weekStart = timeline.batches[i].weekStart;
-      const days = workingDaysOf(weekStart);
 
-      // ─── Collect this week's batches (indexes into timeline) ──
-      const weekIdxs: number[] = [];
-      let j = i;
-      while (j < N && timeline.batches[j].weekStart === weekStart) {
-        weekIdxs.push(j);
-        j += 1;
-      }
+    // Phase 4l.14 — batches that don't fit their week (profit-trim or
+    // day-packing overflow) are CARRIED FORWARD to the next week with spare
+    // capacity instead of being dropped. The old behaviour silently dropped
+    // over-capacity batches, which permanently lost the demand and caused
+    // stockouts (e.g. MFCYNPEPSM's opening 510 run was trimmed off an
+    // over-capacity 06-01 hand-packing week and never replaced). Deferral
+    // keeps the run on the calendar — just later, as capacity allows.
+    type Carry = { batch: ScheduledBatchWithMeta; originWeek: string };
 
-      // Helper: total minutes (production + changeover) for a batch at idx.
-      const minutesAt = (idx: number): number => {
-        const prodMin = productionMinutes(timeline.batches[idx]);
-        const changeMin = timeline.changeovers[idx].costMinutes;
-        return prodMin + changeMin;
+    // Pack one week: candidate set = carried-over batches (already displaced,
+    // so no changeover cost and exempt from re-trimming) + this week's own
+    // batches. Returns the batches that STILL didn't fit, to carry onward.
+    const packWeek = (
+      weekStart: string,
+      days: WorkingDay[],
+      carried: Carry[],
+      weekIdxs: number[],
+    ): Carry[] => {
+      type Cand = {
+        batch: ScheduledBatchWithMeta;
+        changeMin: number;
+        originWeek: string;
+        carriedIn: boolean;
       };
+      const cands: Cand[] = [];
+      // Carried batches first — older, already-displaced demand gets priority.
+      for (const c of carried) {
+        cands.push({ batch: c.batch, changeMin: 0, originWeek: c.originWeek, carriedIn: true });
+      }
+      for (const idx of weekIdxs) {
+        cands.push({
+          batch: timeline.batches[idx],
+          changeMin: timeline.changeovers[idx].costMinutes,
+          originWeek: weekStart,
+          carriedIn: false,
+        });
+      }
+      const minutesOf = (c: Cand) => productionMinutes(c.batch) + c.changeMin;
+
+      const weekCapacityTotal = days.reduce((s, d) => s + capacityFor(stationCap, d), 0);
+      let weekDemandTotal = cands.reduce((s, c) => s + minutesOf(c), 0);
+      const overflow: Carry[] = [];
+      const dropped = new Set<Cand>();
 
       // ─── Profit-aware pre-trim (Phase 4l.9) ───────────────────
-      // If the week as a whole over-runs the sum of daily capacities, drop
-      // batches in ascending order of profit-per-minute until we fit. This
-      // pushes the optimiser to spend constrained packaging minutes on the
-      // most-valuable demand (joint profit × quantity signal). Survivors
-      // keep their orchestrator order so within-week family-clustering is
-      // preserved among them.
-      const weekCapacityTotal = days.reduce(
-        (s, d) => s + capacityFor(stationCap, d),
-        0,
-      );
-      let weekDemandTotal = weekIdxs.reduce((s, idx) => s + minutesAt(idx), 0);
-      const droppedIdxs = new Set<number>();
-      if (weekDemandTotal > weekCapacityTotal && weekIdxs.length > 0) {
-        // Rank every batch by profit-per-minute ascending. Missing profit
-        // data ranks at 0 → these get dropped first, which is the right
-        // signal: the team needs to fill them in.
-        const ranked = weekIdxs
-          .map((idx) => {
-            const b = timeline.batches[idx];
-            const profitPer = b.productMeta.profitPerItem;
+      // If the week over-runs total daily capacity, defer the lowest
+      // profit-per-minute batches (missing profit ranks 0 → deferred first,
+      // signalling the team to fill it in). Carried-in batches are EXEMPT —
+      // they were displaced once already; re-trimming them risks perpetual
+      // deferral. Deferred batches carry to the next week (not dropped).
+      if (weekDemandTotal > weekCapacityTotal) {
+        const ranked = cands
+          .map((c, order) => ({ c, order }))
+          .filter((e) => !e.c.carriedIn)
+          .map(({ c, order }) => {
+            const profitPer = c.batch.productMeta.profitPerItem;
             const profit =
-              typeof profitPer === 'number' && Number.isFinite(profitPer)
-                ? profitPer
-                : 0;
-            const batchProfit = profit * b.quantity;
-            const mins = minutesAt(idx);
-            const profitPerMin = mins > 0 ? batchProfit / mins : 0;
-            return { idx, mins, batchProfit, profitPerMin, hasProfit: profitPer !== null && profitPer !== undefined };
+              typeof profitPer === 'number' && Number.isFinite(profitPer) ? profitPer : 0;
+            const mins = minutesOf(c);
+            return {
+              c,
+              order,
+              mins,
+              profitPerMin: mins > 0 ? (profit * c.batch.quantity) / mins : 0,
+              hasProfit: profitPer !== null && profitPer !== undefined,
+            };
           })
           .sort((a, b) => {
-            if (a.profitPerMin !== b.profitPerMin) {
-              return a.profitPerMin - b.profitPerMin;
-            }
-            // Tiebreak: prefer to drop SKUs with no profit data (signals to
-            // the team to fill them in) over priced SKUs at the same rate.
-            if (a.hasProfit !== b.hasProfit) {
-              return a.hasProfit ? 1 : -1;
-            }
-            // Final tiebreak: drop later-week-position batches first so
-            // earlier ones (often family-cluster heads) stay.
-            return b.idx - a.idx;
+            if (a.profitPerMin !== b.profitPerMin) return a.profitPerMin - b.profitPerMin;
+            // Tiebreak: defer SKUs with no profit data first (signals the team
+            // to fill it in) over priced SKUs at the same rate.
+            if (a.hasProfit !== b.hasProfit) return a.hasProfit ? 1 : -1;
+            // Final tiebreak: defer later-position batches first so earlier
+            // ones (often family-cluster heads) stay put.
+            return b.order - a.order;
           });
         for (const entry of ranked) {
           if (weekDemandTotal <= weekCapacityTotal) break;
-          droppedIdxs.add(entry.idx);
+          dropped.add(entry.c);
           weekDemandTotal -= entry.mins;
-          const dropBatch = timeline.batches[entry.idx];
-          warnings.push({
-            kind: 'week_overflow',
-            station,
-            weekStart,
-            productCode: dropBatch.productMeta.productCode,
-            productName: dropBatch.productMeta.productName,
-            quantity: dropBatch.quantity,
-            durationMinutes: entry.mins,
-            reason: 'profit_trim',
-            batchProfit: entry.hasProfit ? entry.batchProfit : null,
-            message: `Week ${weekStart} on ${station}: dropped ${dropBatch.productMeta.productCode} (${entry.mins.toFixed(0)} min, ${
-              entry.hasProfit ? `$${entry.batchProfit.toFixed(0)} batch profit` : 'no profit data'
-            }) — week over capacity by ${(weekDemandTotal + entry.mins - weekCapacityTotal).toFixed(0)} min before this drop.`,
-          });
+          overflow.push({ batch: entry.c.batch, originWeek: entry.c.originWeek });
         }
       }
 
@@ -297,35 +309,20 @@ export function assignBatchesToDays(
       let dayCapacity = capacityFor(stationCap, currentDay);
       let dayUsed = 0;
 
-      for (const idx of weekIdxs) {
-        if (droppedIdxs.has(idx)) continue;
-        const batch = timeline.batches[idx];
+      for (const c of cands) {
+        if (dropped.has(c)) continue;
+        const batch = c.batch;
         const prodMin = productionMinutes(batch);
-        const changeMin = timeline.changeovers[idx].costMinutes;
+        const changeMin = c.changeMin;
         const totalMin = prodMin + changeMin;
 
         if (dayUsed > 0 && dayUsed + totalMin > dayCapacity) {
           // Doesn't fit on the current day. Advance.
           dayIdx += 1;
           if (dayIdx >= days.length) {
-            // Out of days for this week — overflow that the profit trim
-            // didn't catch (per-day packing failed despite week total
-            // fitting). Surface as a day-packing overflow.
-            const profitPer = batch.productMeta.profitPerItem;
-            const hasProfit =
-              typeof profitPer === 'number' && Number.isFinite(profitPer);
-            warnings.push({
-              kind: 'week_overflow',
-              station,
-              weekStart,
-              productCode: batch.productMeta.productCode,
-              productName: batch.productMeta.productName,
-              quantity: batch.quantity,
-              durationMinutes: totalMin,
-              reason: 'day_packing',
-              batchProfit: hasProfit ? (profitPer as number) * batch.quantity : null,
-              message: `Week ${weekStart} on ${station}: ran out of working days; batch ${batch.productMeta.productCode} (${totalMin.toFixed(0)} min) not assigned.`,
-            });
+            // Out of days this week — carry to the next week instead of
+            // dropping (per-day packing overflow that the trim didn't catch).
+            overflow.push({ batch, originWeek: c.originWeek });
             continue;
           }
           currentDay = days[dayIdx];
@@ -333,7 +330,8 @@ export function assignBatchesToDays(
           dayUsed = 0;
         }
 
-        // Oversize check: even a fresh day can't hold this batch.
+        // Oversize check: even a fresh day can't hold this batch. Assign
+        // anyway with overrun (carrying it would never help — no day fits).
         if (totalMin > dayCapacity) {
           warnings.push({
             kind: 'oversize_batch',
@@ -349,6 +347,9 @@ export function assignBatchesToDays(
 
         const assigned: AssignedBatch = {
           ...batch,
+          // Restamp the week: a carried batch now belongs to the week it
+          // actually lands in, so downstream views read consistently.
+          weekStart,
           scheduledDate: currentDay,
           durationMinutes: prodMin,
           changeoverMinutes: changeMin,
@@ -368,7 +369,56 @@ export function assignBatchesToDays(
         dayUsed += totalMin;
       }
 
+      return overflow;
+    };
+
+    // Walk weeks present in the timeline, threading carried-over overflow
+    // from each week into the next.
+    let carry: Carry[] = [];
+    let i = 0;
+    while (i < N) {
+      const weekStart = timeline.batches[i].weekStart;
+      const weekIdxs: number[] = [];
+      let j = i;
+      while (j < N && timeline.batches[j].weekStart === weekStart) {
+        weekIdxs.push(j);
+        j += 1;
+      }
+      carry = packWeek(weekStart, workingDaysOf(weekStart), carry, weekIdxs);
       i = j;
+    }
+
+    // ─── Drain remaining carry into bounded future weeks ─────────
+    // Cascaded overflow can spill past the last week that had batches; extend
+    // into empty weeks (up to MAX_CARRY_EXTENSION_WEEKS) to place it.
+    if (carry.length > 0 && N > 0) {
+      let probe = timeline.batches[N - 1].weekStart;
+      let guard = 0;
+      while (carry.length > 0 && guard < MAX_CARRY_EXTENSION_WEEKS) {
+        probe = nextWeekStart(probe);
+        guard += 1;
+        carry = packWeek(probe, workingDaysOf(probe), carry, []);
+      }
+    }
+
+    // Anything STILL carried = genuinely no capacity anywhere in the
+    // horizon (+ extension). Now it's a real drop — surface it.
+    for (const c of carry) {
+      const profitPer = c.batch.productMeta.profitPerItem;
+      const hasProfit = typeof profitPer === 'number' && Number.isFinite(profitPer);
+      const mins = productionMinutes(c.batch);
+      warnings.push({
+        kind: 'week_overflow',
+        station,
+        weekStart: c.originWeek,
+        productCode: c.batch.productMeta.productCode,
+        productName: c.batch.productMeta.productName,
+        quantity: c.batch.quantity,
+        durationMinutes: mins,
+        reason: 'profit_trim',
+        batchProfit: hasProfit ? (profitPer as number) * c.batch.quantity : null,
+        message: `${c.batch.productMeta.productCode} (${mins.toFixed(0)} min, originated week ${c.originWeek}): no ${station} capacity within the horizon to place this batch even after carry-forward; dropped.`,
+      });
     }
   }
 

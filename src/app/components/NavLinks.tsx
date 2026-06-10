@@ -9,6 +9,7 @@ const links = [
   { href: '/purchasing', label: 'Component' },
   { href: '/purchase-orders', label: 'Purchases' },
   { href: '/logistics', label: 'Logistics' },
+  { href: '/transfers', label: 'Transfers' },
   { href: '/priorities', label: 'Priorities' },
   { href: '/review', label: 'Drafts' },
   { href: '/assemblies', label: 'Assemblies' },

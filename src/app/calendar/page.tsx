@@ -289,6 +289,31 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     const target = m?.rescheduledTo ?? defaultDate;
     return target < todayLocal ? todayLocal : target;
   };
+  /**
+   * Phase 4l.14 — Unleashed-assembly reschedule.
+   *
+   * Committed Unleashed assemblies are anchors of truth and must NOT move
+   * on the calendar (moving the chip doesn't move the assembly in
+   * Unleashed). The sole exception is `Parked` — a draft the operator
+   * hasn't committed yet — which the user is allowed to drag / date-edit.
+   *
+   * Unlike `resolveDate`, this only applies a date when BOTH (a) the
+   * assembly is movable (Parked) AND (b) an explicit `rescheduledTo`
+   * mutation exists. That guard matters: a plain `resolveDate` would
+   * today-floor any past-dated assembly forward even with no user action,
+   * silently shifting overdue Parked commitments. Here, an untouched
+   * assembly always keeps its original `AssembleBy` date.
+   */
+  const resolveAssemblyDate = (
+    stableId: string,
+    defaultDate: string,
+    movable: boolean,
+  ): string => {
+    if (!movable) return defaultDate;
+    const m = serverMutations.get(stableId);
+    if (!m?.rescheduledTo) return defaultDate;
+    return resolveDate(stableId, defaultDate);
+  };
   // Phase 4o: prefers Google Sheets when GOOGLE_SHEETS_ID is set,
   // falls back to data/demand.csv. Network fetch on every render is
   // ~150 KB/<200ms — fine for a daily-replan cadence.
@@ -431,10 +456,27 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
   let unleashedCommittedTotal = 0;
   for (const a of assembliesCache?.lines ?? []) {
     if (capacity.intermediates.has(a.productCode)) continue;
+    // `Unapproved` assemblies are NOT a firm commitment — the operator
+    // hasn't approved them, so they must not reduce the forecast (doing
+    // so would make the planner under-produce, assuming demand is covered
+    // by production that may never happen). They're also excluded from the
+    // upstream cascade (see PACKAGING_TRIGGERS_UPSTREAM below), so the net
+    // effect is: an Unapproved assembly is inert for demand planning —
+    // the full forecast is planned and the assembly neither nets out nor
+    // drives intermediates. It still renders on the calendar as a chip.
+    if ((a.status ?? '') === 'Unapproved') continue;
     // Dismissed Unleashed-packaging chips don't drive any state; skip.
     const stableId = `unleashed-assembly|${a.assemblyNumber}`;
     if (dismissedStableIds.has(stableId)) continue;
-    const monday = mondayIsoOf(a.scheduledDate);
+    // Phase 4l.14 — a moved Parked assembly nets against the week it was
+    // moved TO, so forecast netting aligns with where the committed
+    // production now sits.
+    const effectiveDate = resolveAssemblyDate(
+      stableId,
+      a.scheduledDate,
+      (a.status ?? '') === 'Parked',
+    );
+    const monday = mondayIsoOf(effectiveDate);
     let m = unleashedCommittedByCodeWeek.get(a.productCode);
     if (!m) {
       m = new Map();
@@ -522,10 +564,27 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     weeklyDemandByProduct.set(code, weeklyDemand);
     const totalDemand = weeklyDemand.reduce((s, w) => s + w.quantity, 0);
 
+    // Phase 4l.14 — the profit-data `plannerStation` is the operator's
+    // authoritative DEFAULT packaging station (a real equipment assignment),
+    // so it leads the candidate list. The BOM-family / intermediate stations
+    // follow as ALTERNATES — kept in `evaluations` so the Pass-2 load
+    // balancer can still move the SKU off the default when it's over
+    // capacity (capacity + run-size refinement happens there, after the
+    // default is set). Previously the throughput router picked the cheapest
+    // family station and ignored `plannerStation`, mis-routing 64 SKUs
+    // (e.g. MFTAMARLG → hand-packing when the data says elephant).
+    const profitStation = productProfit?.byCode[code]?.plannerStation ?? null;
     const intermediate = capacity.intermediates.get(baseMeta.family ?? '');
     const candidates: string[] = [];
-    if (intermediate?.packingStation) candidates.push(intermediate.packingStation);
-    if (intermediate?.alternateStation && intermediate.alternateStation !== intermediate.packingStation) {
+    if (profitStation) candidates.push(profitStation);
+    if (intermediate?.packingStation && !candidates.includes(intermediate.packingStation)) {
+      candidates.push(intermediate.packingStation);
+    }
+    if (
+      intermediate?.alternateStation &&
+      intermediate.alternateStation !== intermediate.packingStation &&
+      !candidates.includes(intermediate.alternateStation)
+    ) {
       candidates.push(intermediate.alternateStation);
     }
     if (candidates.length === 0) candidates.push(baseMeta.station);
@@ -538,10 +597,18 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
       stationDefaults: capacity.stations,
       changeoverMatrix: capacity.changeoverMatrix,
     });
-    initialRationales.set(code, decision.rationale);
+    // Default to the profit station when present; the throughput router only
+    // decides among family alternates when there's no operator directive.
+    const chosenStation = (profitStation ?? decision.station) as typeof decision.station;
+    initialRationales.set(
+      code,
+      profitStation
+        ? `Default ${profitStation} (profit-data station); balancer may reroute under load. ${decision.rationale}`
+        : decision.rationale,
+    );
     initialRoutings.push({
       productCode: code,
-      currentStation: decision.station,
+      currentStation: chosenStation,
       evaluations: decision.evaluations,
     });
   }
@@ -568,6 +635,7 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
       : initial;
     routingByProduct.set(r.productCode, { station: r.currentStation, rationale });
   }
+
 
   // Per-product overrides — read from data/product-overrides.json on every
   // render. Operators set these via the drawer's Product overrides section
@@ -863,6 +931,21 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
       if (isIntermediate) {
         // ─── Kitchen layer ──────────────────────────────────────
         const chipKitchenMinutes = kitchenTeamMinutesFor(intermediateMeta, a.quantity);
+        const kitchenOrderKey = `${a.productCode}|${weekStart}`;
+        const kitchenOrderInWeek = kitchenOrderCounter.get(kitchenOrderKey) ?? 0;
+        kitchenOrderCounter.set(kitchenOrderKey, kitchenOrderInWeek + 1);
+        const kitchenStableId = stableIdOf(a.productCode, weekStart, kitchenOrderInWeek);
+        kitchenStableIdByAssembly.set(a.assemblyNumber, kitchenStableId);
+        // Phase 4l.14 — Parked kitchen assemblies are draft and movable;
+        // honour an explicit user reschedule. Other statuses (committed)
+        // keep their Unleashed AssembleBy date. Computed before the
+        // dehydrator window so soak/dehydrate occupancy tracks the moved
+        // date too.
+        const kitchenChipDate = resolveAssemblyDate(
+          kitchenStableId,
+          a.scheduledDate,
+          a.status === 'Parked',
+        );
         let dehydratorTrays: number | null = null;
         let dehydratorOccupiesFrom: string | null = null;
         let dehydratorOccupiesTo: string | null = null;
@@ -878,7 +961,7 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
             (s) => s === 'soak' || s.toLowerCase().includes('soak'),
           );
           const soakOffsetDays = hasSoak ? 1 : 0;
-          const fromDate = new Date(a.scheduledDate + 'T00:00:00');
+          const fromDate = new Date(kitchenChipDate + 'T00:00:00');
           fromDate.setDate(fromDate.getDate() + soakOffsetDays);
           const toDate = new Date(fromDate);
           toDate.setDate(toDate.getDate() + dehydDays - 1);
@@ -887,16 +970,11 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
           dehydratorOccupiesFrom = isoOf(fromDate);
           dehydratorOccupiesTo = isoOf(toDate);
         }
-        const kitchenOrderKey = `${a.productCode}|${weekStart}`;
-        const kitchenOrderInWeek = kitchenOrderCounter.get(kitchenOrderKey) ?? 0;
-        kitchenOrderCounter.set(kitchenOrderKey, kitchenOrderInWeek + 1);
-        const kitchenStableId = stableIdOf(a.productCode, weekStart, kitchenOrderInWeek);
-        kitchenStableIdByAssembly.set(a.assemblyNumber, kitchenStableId);
         kitchenActivities.push({
           id: `kitchen-${a.assemblyNumber}`,
           stableId: kitchenStableId,
           kind: 'kitchen',
-          date: a.scheduledDate,
+          date: kitchenChipDate,
           weekStart,
           orderInWeek: kitchenOrderInWeek,
           station: null,
@@ -930,12 +1008,21 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
       // committed and won't be split into batches, so a simple ID is
       // fine. Prefix avoids collision with planner-emitted IDs.
       const stableId = `unleashed-assembly|${a.assemblyNumber}`;
+      // Phase 4l.14 — Parked packaging assemblies are draft and movable;
+      // honour an explicit user reschedule so the chip AND the upstream
+      // cascade (deriveIntermediateDemand reads this `date`) shift
+      // together. Committed statuses keep their Unleashed AssembleBy date.
+      const pkgChipDate = resolveAssemblyDate(
+        stableId,
+        a.scheduledDate,
+        a.status === 'Parked',
+      );
       unleashedPackagingActivities.push({
         id: `unleashed-pkg-${a.assemblyNumber}`,
         stableId,
         kind: 'packaging',
-        date: a.scheduledDate,
-        weekStart: a.scheduledDate, // placeholder — not used for these
+        date: pkgChipDate,
+        weekStart: pkgChipDate, // placeholder — not used for these
         orderInWeek: 0,
         station,
         productCode: a.productCode,
@@ -1002,12 +1089,18 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
   // upstream" — the planner needs to project the cascade. Statuses
   // NOT in the set (Planned, Open) are assumed to have already
   // committed their components in Unleashed → no fresh cascade.
+  //
+  // `Unapproved` is deliberately NOT in this set: it isn't a firm
+  // commitment, so it neither nets out of the forecast (see the
+  // forecast-subtraction loop above) nor cascades upstream. The planner
+  // plans the full forecast and treats the Unapproved assembly as inert
+  // (still rendered on the calendar, but driving nothing). Approving it
+  // in Unleashed flips its status and brings it into the cascade.
   const PACKAGING_TRIGGERS_UPSTREAM = new Set<string>([
     'Parked',
     'To Do',
     'Todo',
     'Priority',
-    'Unapproved',
     'Inventory Mgr',
     'InventoryMgr',
     'Inventory Manager',
@@ -1037,7 +1130,7 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     }
     if (triggered.length > 0) {
       console.log(
-        `[planner] ${triggered.length} Unleashed packaging assembly(ies) triggering upstream cascade (Parked / To Do / Priority / Unapproved / Inventory Mgr); ${skipped.length} skipped (Planned / Open / other — components assumed committed).`,
+        `[planner] ${triggered.length} Unleashed packaging assembly(ies) triggering upstream cascade (Parked / To Do / Priority / Inventory Mgr); ${skipped.length} skipped (Planned / Open / Unapproved / other — not netted, no cascade).`,
       );
     }
   }
@@ -1079,12 +1172,21 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
       if (sid && dismissedStableIds.has(sid)) return false;
       return true;
     })
-    .map((a) => ({
-      intermediateCode: a.productCode,
-      date: a.scheduledDate,
-      quantity: a.quantity,
-      source: a.assemblyNumber,
-    }));
+    .map((a) => {
+      // Phase 4l.14 — a moved Parked assembly's output becomes available
+      // on its new date, so the supply credit must track the reschedule
+      // (else the kitchen-gap engine credits supply on the old day).
+      const sid = kitchenStableIdByAssembly.get(a.assemblyNumber);
+      const date = sid
+        ? resolveAssemblyDate(sid, a.scheduledDate, a.status === 'Parked')
+        : a.scheduledDate;
+      return {
+        intermediateCode: a.productCode,
+        date,
+        quantity: a.quantity,
+        source: a.assemblyNumber,
+      };
+    });
 
   // ─── Consumes map (Phase 4l.2 + 4m.3) ─────────────────────
   // For each productCode with BOM entries, list its depth-1 dependencies —
@@ -1341,6 +1443,11 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
       parkedLundbergIndexes.push(i);
     }
   }
+  // Assemblies absorbed by the splice — their `assemblyNumber` becomes
+  // the source of an active planner-tracked kitchen-required chip.
+  // Used downstream to strip stale "redundant with Unleashed" flags from
+  // cascade-emitted chips that pointed at these same assemblies.
+  const splicedAssemblyNumbers = new Set<string>();
   if (parkedLundbergIndexes.length > 0) {
     // Move (splice from kitchenActivities, push to kitchenRequiredActivities)
     // — iterate in reverse so splice indexes stay valid.
@@ -1351,6 +1458,7 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
       kitchenActivities.splice(idx, 1);
     }
     for (const chip of moved) {
+      if (chip.assemblyNumber) splicedAssemblyNumbers.add(chip.assemblyNumber);
       kitchenRequiredActivities.push({
         ...chip,
         // Mark as walkable: synthesise a kitchenRunInfo so the walker
@@ -1365,6 +1473,30 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     console.log(
       `[planner] Moved ${moved.length} Parked Lundberg assembly(ies) into the kitchen-team walker (will be repositioned to fit capacity).`,
     );
+  }
+
+  // Phase 4l.13 — strip stale "redundant with Unleashed" pointers right
+  // after the splice. The kitchen-gap engine flagged these BEFORE the
+  // splice ran, so they reference assemblies that have since been
+  // absorbed into the planner's own kitchen-required chips. Leaving the
+  // flag in place misleads the operator into thinking the planner is
+  // double-producing when in fact the Unleashed assembly IS the planner's
+  // run now. Applied across the WHOLE list (not just spliced chips)
+  // because cascade-emitted chips for the same intermediate carry the
+  // same dangling pointer.
+  if (splicedAssemblyNumbers.size > 0) {
+    for (let i = 0; i < kitchenRequiredActivities.length; i++) {
+      const a = kitchenRequiredActivities[i];
+      if (!a.redundantWithUnleashed || a.redundantWithUnleashed.length === 0) continue;
+      const filtered = a.redundantWithUnleashed.filter(
+        (r) => !splicedAssemblyNumbers.has(r.assembly),
+      );
+      if (filtered.length === a.redundantWithUnleashed.length) continue;
+      kitchenRequiredActivities[i] = {
+        ...a,
+        redundantWithUnleashed: filtered.length > 0 ? filtered : undefined,
+      };
+    }
   }
 
   // ─── Kitchen-team today-floor walk (Phase 4l.10) ──────────
@@ -1913,6 +2045,14 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
   }
   const packagingActivitiesClamped = clampedActivities;
 
+  // Phase 4l.14 — plan-wide over-production audit. Intermediate chips that
+  // survive on the calendar with NO downstream consumer. After the
+  // reachability drop, genuine cascade over-production is removed, so any
+  // survivor-without-a-consumer is a committed Unleashed assembly the
+  // current plan doesn't draw (or, if a `cascade` one ever appears, a real
+  // leak in the drop logic). Surfaced as a [planner audit] line below.
+  const noConsumerKept: { code: string; date: string; qty: number; cascade: boolean }[] = [];
+
   // ─── Phase 4l.12 — Post-FIFO batch SPLIT-AND-REDATE (Option 2+) ──
   // The pass walks every kitchen-required chip, looks up its real FIFO
   // allocations, and:
@@ -2011,20 +2151,104 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
       d.setDate(d.getDate() + mondayOffset);
       return toLocalISODate(d);
     }
-    type Bucket = { earliestConsumerDate: string; outputQty: number };
+    // Phase 4l.13 — per-FG floor-breach date. For each finished good with
+    // a monthly demand rate, compute the date its current SOH would drop
+    // below the SOH floor (10 days of forward cover) given naive linear
+    // depletion at the monthly rate ÷ 30. This is conservative — it
+    // assumes NO further packaging supply — so it pulls shards earlier
+    // than strictly necessary in some cases. Conservative is the right
+    // direction here: we'd rather have inventory we don't need than
+    // schedule kitchen runs after FG stockout.
+    const SOH_FLOOR_DAYS_FOR_REDATE = 10;
+    const fgFloorBreachByCode = new Map<string, string>();
+    if (sohCache) {
+      for (const [code, monthlyRate] of Object.entries(monthlyRates)) {
+        if (!(monthlyRate > 0)) continue;
+        const dailyRate = monthlyRate / 30;
+        const initialSoh = eligibleSohOf(sohCache, code);
+        const daysOfCover = initialSoh / dailyRate;
+        const daysToBreach = daysOfCover - SOH_FLOOR_DAYS_FOR_REDATE;
+        const breachDate = fromLocalISODate(todayLocal);
+        if (daysToBreach > 0) {
+          breachDate.setDate(breachDate.getDate() + Math.floor(daysToBreach));
+        }
+        fgFloorBreachByCode.set(code, toLocalISODate(breachDate));
+      }
+    }
+
+    type Bucket = {
+      earliestConsumerDate: string;
+      outputQty: number;
+      // Phase 4l.13 — the earliest date at which any FG consumer in this
+      // bucket would breach the SOH floor (= demand outpaces current SOH
+      // by more than 10 days of cover). `null` if no FG-mapped consumer in
+      // the bucket has a known demand rate; in that case JIT remains the
+      // only deadline and the redate doesn't pull the shard forward.
+      earliestFloorBreachDate: string | null;
+    };
     // supplierStableId → consumerWeekMonday → bucket (qty + earliest)
     const bucketsBySupplier = new Map<string, Map<string, Bucket>>();
     const allById = new Map<string, CalendarActivity>();
     for (const a of packagingActivitiesClamped) allById.set(a.stableId, a);
     for (const a of kitchenActivities) allById.set(a.stableId, a);
     for (const a of kitchenRequiredActivities) allById.set(a.stableId, a);
+
+    // Phase 4l.14 — transitive reachability to real demand. A kitchen-required
+    // chip is legitimately needed only if its output reaches a PACKAGING
+    // consumer (or a committed Unleashed kitchen assembly), possibly THROUGH
+    // other intermediates. The earlier drop was single-level ("has ≥1
+    // consumer"), so a sub-intermediate feeding an intermediate that itself
+    // has no packaging consumer survived — e.g. ICCC → ICC@07-20, where
+    // ICC@07-20 has no packaging consumer and gets dropped, stranding the
+    // ICCC. Fixpoint: a chip reaches demand if any consumer is packaging /
+    // committed-kitchen / a chip that already reaches demand. Allocations to
+    // an unreachable kitchen-required consumer are skipped below, so the
+    // sub-intermediate drops together with the intermediate it fed.
+    const reachesDemand = new Set<string>();
+    {
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const alloc of fifoResult.allocations) {
+          if (alloc.phantom) continue;
+          if (reachesDemand.has(alloc.supplierStableId)) continue;
+          const supplier = allById.get(alloc.supplierStableId);
+          if (!supplier || supplier.kind !== 'kitchen-required') continue;
+          const consumer = allById.get(alloc.consumerStableId);
+          if (!consumer) continue;
+          if (
+            consumer.kind === 'packaging' ||
+            consumer.kind === 'kitchen' ||
+            reachesDemand.has(alloc.consumerStableId)
+          ) {
+            reachesDemand.add(alloc.supplierStableId);
+            changed = true;
+          }
+        }
+      }
+    }
+
     for (const alloc of fifoResult.allocations) {
       if (alloc.phantom) continue;
       const supplier = allById.get(alloc.supplierStableId);
       if (!supplier || supplier.kind !== 'kitchen-required') continue;
       const consumer = allById.get(alloc.consumerStableId);
       if (!consumer) continue;
+      // Phase 4l.14 — drop-cascade: ignore supply allocated to an
+      // intermediate consumer that never reaches packaging (it will be
+      // dropped, so this supply isn't really needed). Packaging and
+      // committed-kitchen consumers are always honoured.
+      if (consumer.kind === 'kitchen-required' && !reachesDemand.has(consumer.stableId)) {
+        continue;
+      }
       const wk = mondayOf(consumer.date);
+      // FG floor-breach contributor — only packaging-chip consumers have a
+      // meaningful FG-stockout semantics; intermediates aren't sold so the
+      // floor concept doesn't apply.
+      const consumerFloorBreach =
+        consumer.kind === 'packaging'
+          ? fgFloorBreachByCode.get(consumer.productCode) ?? null
+          : null;
       let weekMap = bucketsBySupplier.get(alloc.supplierStableId);
       if (!weekMap) {
         weekMap = new Map();
@@ -2035,11 +2259,19 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
         weekMap.set(wk, {
           earliestConsumerDate: consumer.date,
           outputQty: alloc.quantity,
+          earliestFloorBreachDate: consumerFloorBreach,
         });
       } else {
         existing.outputQty += alloc.quantity;
         if (consumer.date < existing.earliestConsumerDate) {
           existing.earliestConsumerDate = consumer.date;
+        }
+        if (
+          consumerFloorBreach &&
+          (!existing.earliestFloorBreachDate ||
+            consumerFloorBreach < existing.earliestFloorBreachDate)
+        ) {
+          existing.earliestFloorBreachDate = consumerFloorBreach;
         }
       }
     }
@@ -2073,6 +2305,12 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     let cumulativeShiftDays = 0;
     let droppedNoConsumerCount = 0;
     const droppedSummaries: string[] = [];
+    // Phase 4l.13 — chips preserved past the FIFO no-consumers branch
+    // because they carry an Unleashed `assemblyNumber` (committed in
+    // the system of record). Counted separately so the operator can see
+    // these aren't "redundant" in the same way as cascade over-production.
+    let preservedUnleashedCount = 0;
+    const preservedUnleashedSummaries: string[] = [];
 
     for (const chip of kitchenRequiredActivities) {
       const weekMap = bucketsBySupplier.get(chip.stableId);
@@ -2089,6 +2327,39 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
       // assemblies were folded in via the FIFO; we're catching the
       // over-production here.
       if (!weekMap || weekMap.size === 0) {
+        // Phase 4l.13 — splice-drop fix. Cascade-emitted chips with no
+        // FIFO consumers ARE legitimately redundant (real over-production)
+        // and get dropped as before. BUT chips that carry an
+        // `assemblyNumber` came from a Parked Unleashed assembly via the
+        // splice — the operator has COMMITTED that production in Unleashed.
+        // Dropping it silently loses real supply from the planner's view
+        // and forces the cascade to schedule near-identical "replacement"
+        // kitchen runs. Keep these on the calendar at their walker date
+        // (don't subtract loads), emit them into the split output as a
+        // single shard, and log so the operator can see what stayed.
+        if (chip.assemblyNumber) {
+          splitChips.push({
+            ...chip,
+            // Drop the (now-empty) redundancy pointer — it was upstream
+            // referring to assemblies absorbed by the splice itself.
+            redundantWithUnleashed: undefined,
+          });
+          if (preservedUnleashedSummaries.length < 8) {
+            preservedUnleashedSummaries.push(
+              `${chip.assemblyNumber} ${chip.productCode}@${chip.date} q${chip.quantity}`,
+            );
+          }
+          preservedUnleashedCount += 1;
+          // Plan-wide over-production audit: committed in Unleashed but the
+          // current plan draws nothing from it.
+          noConsumerKept.push({
+            code: chip.productCode,
+            date: chip.date,
+            qty: Math.round(chip.quantity),
+            cascade: false,
+          });
+          continue;
+        }
         const chipMinDrop = chip.kitchenMinutes ?? 0;
         if (chipMinDrop > 0) {
           kitchenLoadByDay.set(
@@ -2170,8 +2441,23 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
       }
       for (let s = 0; s < buckets.length; s++) {
         const b = buckets[s];
-        // Compute target start date for this shard.
-        let newFinish = shiftIsoByDays(b.earliestConsumerDate, -bufferDays);
+        // Compute target finish date for this shard.
+        //
+        // Phase 4l.13 — competing deadlines:
+        //   (1) JIT: finish just before the earliest consumer's date
+        //       (current behaviour — minimises shelf life waste).
+        //   (2) SOH-floor protection: finish before any FG consumer
+        //       would drop below the SOH floor.
+        // The EARLIER of the two wins. (1) alone produced runs landing
+        // after FG stockout when the orchestrator scheduled packaging
+        // late. Adding (2) bounds how late the JIT push can go.
+        const jitDeadline = b.earliestConsumerDate;
+        const floorDeadline = b.earliestFloorBreachDate;
+        const effectiveDeadline =
+          floorDeadline && floorDeadline < jitDeadline
+            ? floorDeadline
+            : jitDeadline;
+        let newFinish = shiftIsoByDays(effectiveDeadline, -bufferDays);
         if (!isWorkday(newFinish)) newFinish = previousWorkday(newFinish);
         let newStart = shiftIsoByDays(newFinish, -(productionDays - 1));
         if (!isWorkday(newStart)) newStart = previousWorkday(newStart);
@@ -2252,6 +2538,21 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
         const finishDateShifted = newFinish;
         const requiredByDateShifted = b.earliestConsumerDate;
 
+        // Phase 4l.13 — if this chip originated from a Parked Unleashed
+        // assembly (carried via `chip.assemblyNumber`), strip THAT same
+        // assembly from `redundantWithUnleashed` before propagating. The
+        // gap engine flagged it as "could have plugged the gap if pulled
+        // earlier" — but the splice + walker have done exactly that:
+        // they've absorbed the assembly into the planner's run and now
+        // these shards ARE the source. Leaving the alert in place
+        // wrongly accuses the planner of double-producing.
+        const carriedAssembly = chip.assemblyNumber;
+        const filteredRedundant = carriedAssembly
+          ? chip.redundantWithUnleashed?.filter(
+              (r) => r.assembly !== carriedAssembly,
+            )
+          : chip.redundantWithUnleashed;
+
         splitChips.push({
           ...chip,
           id: `kitchen-required-${chip.productCode}-${newStart}-${shardStableId}`,
@@ -2265,6 +2566,10 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
           dehydratorTrays,
           dehydratorOccupiesFrom,
           dehydratorOccupiesTo,
+          redundantWithUnleashed:
+            filteredRedundant && filteredRedundant.length > 0
+              ? filteredRedundant
+              : undefined,
         });
 
         if (newStart !== chip.date) {
@@ -2422,20 +2727,32 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
       if (anyMovedThisIter === 0) break; // stable
     }
 
-    if (shardedFromCount > 0 || movedCount > 0 || droppedNoConsumerCount > 0 || secondPassMoved > 0) {
+    if (
+      shardedFromCount > 0 ||
+      movedCount > 0 ||
+      droppedNoConsumerCount > 0 ||
+      preservedUnleashedCount > 0 ||
+      secondPassMoved > 0
+    ) {
       const dropTail =
         droppedNoConsumerCount > 0
           ? ` Dropped ${droppedNoConsumerCount} chip(s) with no FIFO-allocated consumer (covered by SOH + assemblies + earlier batches): ${droppedSummaries.join(', ')}${droppedNoConsumerCount > droppedSummaries.length ? `, …+${droppedNoConsumerCount - droppedSummaries.length} more` : ''}.`
+          : '';
+      const preservedTail =
+        preservedUnleashedCount > 0
+          ? ` Preserved ${preservedUnleashedCount} Unleashed-sourced chip(s) past the no-consumer drop (committed in Unleashed → kept on the calendar even though FIFO allocated no consumers): ${preservedUnleashedSummaries.join(', ')}${preservedUnleashedCount > preservedUnleashedSummaries.length ? `, …+${preservedUnleashedCount - preservedUnleashedSummaries.length} more` : ''}.`
           : '';
       const secondTail =
         secondPassMoved > 0
           ? ` Iterative post-split FIFO redate: ${secondPassMoved} chip-move(s) over ${iteration} iteration(s) (cumulative ${secondPassShiftDays} chip-days shifted further toward consumers).`
           : '';
       console.log(
-        `[planner] FIFO split-and-redate: ${shardedFromCount} chip(s) split into ${splitCount} shard(s); ${movedCount} shard(s) moved later (cumulative ${cumulativeShiftDays} chip-days shifted toward consumers).${secondTail}${dropTail}`,
+        `[planner] FIFO split-and-redate: ${shardedFromCount} chip(s) split into ${splitCount} shard(s); ${movedCount} shard(s) moved later (cumulative ${cumulativeShiftDays} chip-days shifted toward consumers).${secondTail}${dropTail}${preservedTail}`,
       );
     }
   }
+
+
 
   // ─── Supply cap pass (Phase 4l.10) ───────────────────────────
   // Reconcile user-edited kitchen runs against packaging demand. The DP
@@ -3066,6 +3383,7 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
   for (const r of purchaseRequirements) {
     purchaseRequirementByCode.set(r.rawMaterialCode, r);
   }
+
   const shortageCodes = new Set(rawMaterialShortages.map((s) => s.rawMaterialCode));
   // Find which depth-1 BOM children of each packaging chip are packaging
   // materials and currently in shortage.
@@ -3240,6 +3558,28 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
         `  ${orphanKitchenCount} live kitchen assembly(ies) tagged ORPHAN (no current packaging consumer).`,
       );
     }
+    // (f2) Phase 4l.14 — plan-wide over-production audit. Intermediate chips
+    // kept on the calendar with NO downstream consumer. After the
+    // reachability drop, these should all be committed Unleashed assemblies
+    // the current plan doesn't draw (review if still needed). A `cascade`
+    // entry would be a real over-production LEAK past the drop — flagged loud.
+    if (noConsumerKept.length > 0) {
+      const cascadeLeaks = noConsumerKept.filter((c) => c.cascade);
+      const byCode = new Map<string, number>();
+      for (const c of noConsumerKept) byCode.set(c.code, (byCode.get(c.code) ?? 0) + c.qty);
+      const tally = [...byCode.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([code, qty]) => `${code}×${qty}`)
+        .join(', ');
+      auditLines.push(
+        `  ${noConsumerKept.length} intermediate chip(s) on the calendar with NO downstream consumer` +
+          (cascadeLeaks.length > 0
+            ? ` (⚠ ${cascadeLeaks.length} CASCADE — over-production leak past the reachability drop)`
+            : ' (all committed in Unleashed — review whether still needed)') +
+          `: ${tally}${byCode.size > 8 ? ` …+${byCode.size - 8} more` : ''}`,
+      );
+    }
     // (g) Packaging SKUs missing profit data — they sort by a median-
     // profit heuristic and render as neutral grey-green on the calendar.
     const missingProfitSkus: string[] = [];
@@ -3337,6 +3677,81 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
           )
           .join(', ')}`,
       );
+    }
+
+    // Phase 4l.13 — (i) Profit-per-scarce-intermediate advisory (C-lite).
+    // This is informational only — the planner still ranks by absolute
+    // `profitPerItem`. The advisory flags cases where ranking by
+    // profit-per-kg-of-shared-intermediate would reorder the FG mix,
+    // which is the right metric when an intermediate is the actual
+    // bottleneck. Surfacing it builds operator awareness BEFORE we
+    // change the optimiser's ranking metric.
+    if (productProfit) {
+      // Scarce intermediates = ones the planner scheduled a kitchen run for.
+      // If the cascade emitted a run, the intermediate was supply-tight in
+      // some week → its allocation across consumer FGs matters.
+      const scarceIntermediates = new Set<string>();
+      for (const k of kitchenRequiredActivities) {
+        scarceIntermediates.add(k.productCode);
+      }
+      // Sum planned packaging volume per FG across the horizon.
+      const plannedQtyByFg = new Map<string, number>();
+      for (const a of allActivities) {
+        if (a.kind !== 'packaging') continue;
+        plannedQtyByFg.set(
+          a.productCode,
+          (plannedQtyByFg.get(a.productCode) ?? 0) + a.quantity,
+        );
+      }
+      const advisoryBlocks: string[] = [];
+      for (const intermediate of scarceIntermediates) {
+        const consumers: Array<{
+          code: string;
+          profitPerItem: number;
+          intermediatePerUnit: number;
+          profitPerKgIntermediate: number;
+          monthlyDemand: number;
+          plannedQty: number;
+        }> = [];
+        for (const [fgCode, ingredients] of Object.entries(consumesQtyMap)) {
+          const intermediatePerUnit = ingredients[intermediate];
+          if (!intermediatePerUnit || intermediatePerUnit <= 0) continue;
+          const profit = productProfit.byCode[fgCode]?.profitPerItem;
+          if (profit == null || !(profit > 0)) continue;
+          consumers.push({
+            code: fgCode,
+            profitPerItem: profit,
+            intermediatePerUnit,
+            profitPerKgIntermediate: profit / intermediatePerUnit,
+            monthlyDemand: monthlyRates[fgCode] ?? 0,
+            plannedQty: plannedQtyByFg.get(fgCode) ?? 0,
+          });
+        }
+        if (consumers.length < 2) continue; // nothing to compare
+        const rankByProfit = [...consumers].sort(
+          (a, b) => b.profitPerItem - a.profitPerItem,
+        );
+        const rankByPerKg = [...consumers].sort(
+          (a, b) => b.profitPerKgIntermediate - a.profitPerKgIntermediate,
+        );
+        // Skip when the orderings match — no operational difference.
+        if (rankByProfit[0].code === rankByPerKg[0].code) continue;
+        const runCount = kitchenRequiredActivities.filter(
+          (k) => k.productCode === intermediate,
+        ).length;
+        const lines = rankByPerKg
+          .slice(0, 6)
+          .map(
+            (c, idx) =>
+              `    ${idx + 1}. ${c.code}: $${c.profitPerKgIntermediate.toFixed(2)}/kg ${intermediate} ($${c.profitPerItem.toFixed(2)}/unit ÷ ${c.intermediatePerUnit}kg) — planned ${Math.round(c.plannedQty)} units vs ${Math.round(c.monthlyDemand)}/mo demand`,
+          );
+        advisoryBlocks.push(
+          `  [product-mix advisory] ${intermediate} is scarce (${runCount} kitchen run${runCount === 1 ? '' : 's'} scheduled). By profit-per-kg-${intermediate} the consumer FGs would rank:\n${lines.join('\n')}\n    Current planner ranks by absolute profit/unit; top would be ${rankByProfit[0].code} ($${rankByProfit[0].profitPerItem.toFixed(2)}/unit).`,
+        );
+      }
+      if (advisoryBlocks.length > 0) {
+        auditLines.push(...advisoryBlocks);
+      }
     }
 
     if (auditLines.length > 0) {
@@ -3459,6 +3874,21 @@ async function buildPayload(horizonWeeks: number, planFromDate: string | null) {
     // planner actually subtracted from cascaded demand when deciding
     // whether to schedule a run.
     intermediateSohByCode: lundbergSohByCode,
+    // Allowlisted FGs the planner didn't schedule at all — any cause
+    // (no BOM, no demand row, no family-sheet entry, etc.). Computed as
+    // (allowlist) − (codes with a packaging chip in the plan). Surfaced
+    // by the FG drawer's "Unplanned" filter so the operator can see
+    // exactly which SKUs the planner skipped, regardless of reason.
+    // `allowlistMissingBom` is the narrower diagnostic subset (allowlist
+    // ∩ demand>0 ∩ no BOM) and is logged separately for the team.
+    unplannedFinishedGoods: (() => {
+      if (!allowlist) return [] as string[];
+      const plannedCodes = new Set<string>();
+      for (const a of allActivities) {
+        if (a.kind === 'packaging') plannedCodes.add(a.productCode);
+      }
+      return [...allowlist].filter((code) => !plannedCodes.has(code));
+    })(),
     initialInventoryByProduct,
     salesOrdersByProduct,
     committedByProduct,

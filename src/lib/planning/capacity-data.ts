@@ -305,10 +305,28 @@ export function kitchenTeamMinutesFor(
     return Math.max(1, Math.round(perUnit * quantity));
   }
 
-  // Non-dehydrator: fixed-cost legacy model.
-  if (hasCook) return COOK_MINUTES;
+  // Phase 4l.14 — cook & default recipes now scale LINEARLY with quantity
+  // (kitchen-team confirmed: a half batch takes half as long). The legacy
+  // flat-per-run cost made the FIFO split-and-redate inflate kitchen-team
+  // load — a 270-unit chip split into a 252 + 18 shard was charged 240+240
+  // instead of ~240 total — which over-saturated the kitchen budget while
+  // the dehydrator sat idle. Calibrated so a FULL preferred batch costs the
+  // legacy per-batch figure; sub-batch shards cost proportionally less.
+  // Reference batch = preferredBatchSize when known, else a nominal 250.
+  // NOTE: the per-unit cook rate is derived from the legacy flat figure, not
+  // a measured rate like the dehydrator constants — recalibrate if the
+  // kitchen team gives a confirmed min/unit.
+  const refBatch =
+    intermediate.preferredBatchSize && intermediate.preferredBatchSize > 0
+      ? intermediate.preferredBatchSize
+      : 250;
+  if (hasCook) {
+    return Math.max(1, Math.round((COOK_MINUTES / refBatch) * quantity));
+  }
+  // Soak-only (no dehyd): loading tubs/IBCs is a setup cost roughly
+  // independent of batch size, so keep it flat.
   if (hasSoak) return SOAK_SETUP_MINUTES;
-  return KITCHEN_DEFAULT_MINUTES;
+  return Math.max(1, Math.round((KITCHEN_DEFAULT_MINUTES / refBatch) * quantity));
 }
 
 /**

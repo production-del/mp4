@@ -190,6 +190,11 @@ interface CalendarAppProps {
    *  three intermediate-eligible warehouses). Surfaced in the drawer
    *  for `kitchen` / `kitchen-required` chips. */
   intermediateSohByCode: Record<string, number>;
+  /** Allowlisted FGs the planner could NOT schedule because no BOM was
+   *  found in the family-sheet workbook. Surfaced in the FG drawer via
+   *  the "Show unplanned" filter so the operator can see which SKUs are
+   *  waiting on recipe data. */
+  unplannedFinishedGoods: string[];
   /** Per-product list of active sales-order lines. Empty when no commitments. */
   salesOrdersByProduct: Record<
     string,
@@ -795,6 +800,7 @@ export function CalendarApp(props: CalendarAppProps) {
     intermediateEligibleWarehouses,
     initialInventoryByProduct,
     intermediateSohByCode,
+    unplannedFinishedGoods,
     salesOrdersByProduct,
     committedByProduct,
     salesOrdersFetchedAt,
@@ -944,11 +950,42 @@ export function CalendarApp(props: CalendarAppProps) {
   // renders with a fresh `mutatedActivities` array.
   const selectedStableId = selected?.stableId ?? null;
 
+  // Phase 4l.14 — Finished-goods drilldown. A FG code (not a single chip)
+  // selected from the "Finished goods in planner" panel opens a
+  // product-level drawer interrogating planned production + limiting
+  // factors across the horizon. Mutually exclusive with the chip drawer:
+  // selecting a FG clears the chip selection and vice-versa.
+  const [selectedFG, setSelectedFG] = useState<string | null>(null);
+  const selectChip = useCallback((a: CalendarActivity | null) => {
+    setSelectedFG(null);
+    setSelected(a);
+  }, []);
+  const selectFG = useCallback((code: string) => {
+    setSelected(null);
+    setSelectedFG(code);
+  }, []);
+
   // Real today (client clock) — used by drag-guards and stale-reschedule
   // prune. We keep this independent of `planFromDate` so that when the user
   // is planning from a future anchor, chips can still be dragged backwards
   // through the calendar at least as far as today (Phase 4l.8).
-  const realToday = useMemo(() => toLocalISODate(new Date()), []);
+  //
+  // Phase 4l.14 — must NOT compute `new Date()` during render: that runs at
+  // SSR (server clock) AND at hydration (client clock), and the two disagree
+  // whenever the server (e.g. Vercel UTC) and client (AEST) straddle a
+  // calendar boundary → hydration mismatch. Anchor the first render to the
+  // server-provided `todayLocal` (deterministic on both sides), then correct
+  // to the true client clock after mount, where a state change is safe.
+  // Drag-guards / backward-extension only matter post-mount, so the one-frame
+  // anchor value is harmless.
+  const [realToday, setRealToday] = useState<string>(todayLocal);
+  useEffect(() => {
+    const t = toLocalISODate(new Date());
+    if (t !== realToday) setRealToday(t);
+    // Intentionally keyed on `todayLocal` only — re-sync if the server anchor
+    // changes (e.g. plan-from edit). `realToday` is read, not a trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayLocal]);
   const clientToday = realToday;
 
   // ─── Manual activities (Phase 4l.8) ────────────────────────
@@ -1003,6 +1040,10 @@ export function CalendarApp(props: CalendarAppProps) {
   // (a reschedule whose chip ended up outside the current month view
   // is the canonical motivating case).
   const [mutationsOpen, setMutationsOpen] = useState(false);
+  // Header "Tools" dropdown — collects the resolve-conflicts strategies
+  // and the clear-* operations under one affordance so the header doesn't
+  // sprout a fresh button every time we add a maintenance action.
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [showStaleDetails, setShowStaleDetails] = useState(false);
   const [productLookupQuery, setProductLookupQuery] = useState('');
 
@@ -1217,6 +1258,32 @@ export function CalendarApp(props: CalendarAppProps) {
   }
   function clearStaleMutations() {
     setMutations((curr) => persist(clearStale(curr, validStableIds)));
+    setUnplaceableIds([]);
+  }
+  /**
+   * Strip every `rescheduledTo` field from the mutations map. Keeps
+   * dismissals, qty edits, lead-time edits, and station overrides so the
+   * operator's other deliberate choices survive. Drops the entry entirely
+   * when reschedule was its only override.
+   *
+   * Use case (post-Phase-4l.13 incident): undo a bulk-resolve sweep that
+   * moved hundreds of chips without losing dismissals you've also made.
+   */
+  function clearAllReschedules() {
+    setMutations((curr) => {
+      const out: MutationsMap = {};
+      const now = new Date().toISOString();
+      for (const [id, mut] of Object.entries(curr)) {
+        const { rescheduledTo: _r, ...rest } = mut;
+        // Did this entry have other overrides? `rest` always includes
+        // stableId + updatedAt; check for any other key.
+        const hasOther = Object.keys(rest).some(
+          (k) => k !== 'stableId' && k !== 'updatedAt',
+        );
+        if (hasOther) out[id] = { ...rest, updatedAt: now };
+      }
+      return persist(out);
+    });
     setUnplaceableIds([]);
   }
   function clearAllMutations() {
@@ -1509,6 +1576,18 @@ export function CalendarApp(props: CalendarAppProps) {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [mutationsOpen]);
 
+  // Close the Tools dropdown on outside click (same pattern as mutations).
+  const toolsDropdownRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!toolsOpen) return;
+    function onDocClick(e: MouseEvent) {
+      const el = toolsDropdownRef.current;
+      if (el && !el.contains(e.target as Node)) setToolsOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [toolsOpen]);
+
   // Schedule conflicts: re-detect on every mutation change so dragging a
   // chip immediately surfaces (or clears) downstream dependency breaks.
   // Phase 4l.3: SOH-aware. The detector walks a per-ingredient SOH+supply
@@ -1711,20 +1790,66 @@ export function CalendarApp(props: CalendarAppProps) {
   // study the kitchen+packaging flow in isolation). Doesn't fire on
   // every render — only when the focus id changes from null to non-null.
   const prevFocusedRef = useRef<string | null>(null);
+  // Phase 4l.14 — snapshot of the layer view taken when focus mode is
+  // entered, so exiting "View connected" restores the operator's prior view
+  // (e.g. PO hidden, bottlo-only) instead of leaving every layer revealed.
+  const preFocusViewRef = useRef<{
+    showPackaging: boolean;
+    showKitchen: boolean;
+    showKitchenScheduled: boolean;
+    showKitchenRequired: boolean;
+    showPO: boolean;
+    showPoPlaced: boolean;
+    showPoReceiving: boolean;
+    showPoUrgent: boolean;
+    visibleStations: Set<Station>;
+  } | null>(null);
   useEffect(() => {
-    const becameFocused =
-      prevFocusedRef.current === null && focusedRelationsId !== null;
+    const wasFocused = prevFocusedRef.current !== null;
+    const isFocused = focusedRelationsId !== null;
     prevFocusedRef.current = focusedRelationsId;
-    if (!becameFocused) return;
-    setShowPackaging(true);
-    setShowKitchen(true);
-    setShowKitchenScheduled(true);
-    setShowKitchenRequired(true);
-    setShowPO(true);
-    setShowPoPlaced(true);
-    setShowPoReceiving(true);
-    setShowPoUrgent(true);
-    setVisibleStations(new Set(STATIONS));
+    if (!wasFocused && isFocused) {
+      // Entering focus: capture the current view, then reveal all layers so
+      // the whole connected set is visible.
+      preFocusViewRef.current = {
+        showPackaging,
+        showKitchen,
+        showKitchenScheduled,
+        showKitchenRequired,
+        showPO,
+        showPoPlaced,
+        showPoReceiving,
+        showPoUrgent,
+        visibleStations: new Set(visibleStations),
+      };
+      setShowPackaging(true);
+      setShowKitchen(true);
+      setShowKitchenScheduled(true);
+      setShowKitchenRequired(true);
+      setShowPO(true);
+      setShowPoPlaced(true);
+      setShowPoReceiving(true);
+      setShowPoUrgent(true);
+      setVisibleStations(new Set(STATIONS));
+    } else if (wasFocused && !isFocused) {
+      // Exiting focus: restore the pre-focus view verbatim.
+      const snap = preFocusViewRef.current;
+      if (snap) {
+        setShowPackaging(snap.showPackaging);
+        setShowKitchen(snap.showKitchen);
+        setShowKitchenScheduled(snap.showKitchenScheduled);
+        setShowKitchenRequired(snap.showKitchenRequired);
+        setShowPO(snap.showPO);
+        setShowPoPlaced(snap.showPoPlaced);
+        setShowPoReceiving(snap.showPoReceiving);
+        setShowPoUrgent(snap.showPoUrgent);
+        setVisibleStations(snap.visibleStations);
+        preFocusViewRef.current = null;
+      }
+    }
+    // Snapshot is read via closure at the focus transition (intentionally not
+    // a dep — re-running on every toggle change would clobber the snapshot).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedRelationsId]);
 
   // Fast lookup for chips that the most-recent Resolve-all left unplaced.
@@ -2139,6 +2264,228 @@ export function CalendarApp(props: CalendarAppProps) {
     horizon,
   ]);
 
+  // ─── Finished-goods summary (Phase 4l.13) ──────────────────
+  // One row per FG product code the planner has assessed (i.e. produced
+  // packaging chips for, active OR dismissed). Surfaces current SOH,
+  // forward-cover days, a horizon-spanning sparkline and any predicted
+  // stockouts so the operator can see at a glance which FGs are at risk.
+  const finishedGoodsSummary = useMemo(() => {
+    const byCode = new Map<
+      string,
+      {
+        code: string;
+        name: string;
+        currentSoh: number;
+        peak: number;
+        ratios: number[];
+        floorRatios: number[] | null;
+        stockoutIndices: number[];
+        firstStockoutDate: string | null;
+        dailyRate: number;
+        availableDays: number | null;
+        activeChips: number;
+        dismissedChips: number;
+        // Net change across the horizon (end-of-horizon − start) so we can
+        // tell at a glance whether the planner's runs cover demand or
+        // not. Negative = depleting; positive = building.
+        netChange: number;
+        // The packaging chips the planner has produced for this FG.
+        // Surfaced via the Status-column tooltip so the operator can see
+        // exactly which runs make up the active/dismissed totals — and
+        // whether each chip is an Unleashed assembly (carries assemblyNumber)
+        // or planner-emitted (no assemblyNumber).
+        activities: {
+          stableId: string;
+          date: string;
+          quantity: number;
+          dismissed: boolean;
+          station: string | null;
+          assemblyNumber: string | null;
+        }[];
+        /** True when the FG is allowlisted but has no BOM → planner can't
+         *  schedule it. Surfaced as the "Unplanned" filter / badge. */
+        isUnplanned: boolean;
+      }
+    >();
+    const horizonStart = fromISO(horizon.startWeek);
+    const horizonDays = horizon.weeks * 7;
+
+    // Collect codes from every packaging chip — active and dismissed —
+    // because "assessed by the planner" includes the ones the operator
+    // has chosen to skip. Tally each + retain per-chip detail.
+    const chipStats = new Map<string, {
+      active: number;
+      dismissed: number;
+      name: string;
+      activities: {
+        stableId: string;
+        date: string;
+        quantity: number;
+        dismissed: boolean;
+        station: string | null;
+        assemblyNumber: string | null;
+      }[];
+    }>();
+    for (const a of mutatedActivities) {
+      if (a.kind !== 'packaging') continue;
+      let stat = chipStats.get(a.productCode);
+      if (!stat) {
+        stat = { active: 0, dismissed: 0, name: a.productName || a.productCode, activities: [] };
+        chipStats.set(a.productCode, stat);
+      }
+      const dismissed = isDismissed(mutations, a.stableId);
+      if (dismissed) stat.dismissed += 1;
+      else stat.active += 1;
+      stat.activities.push({
+        stableId: a.stableId,
+        date: a.date,
+        quantity: a.quantity,
+        dismissed,
+        station: a.station ?? null,
+        // Unleashed-sourced chips carry assemblyNumber set by the routing
+        // pass in page.tsx. Planner-emitted chips leave it undefined.
+        assemblyNumber: a.assemblyNumber ?? null,
+      });
+    }
+
+    for (const [code, stat] of chipStats.entries()) {
+      const timeline = inventoryTimelineByProduct.get(code);
+      const currentSoh = initialInventoryByProduct[code] ?? 0;
+      const peak = timeline?.peak ?? Math.max(currentSoh, 0);
+
+      // Build a normalised ratio series for the sparkline.
+      const ratios: number[] = [];
+      const floorRatios: number[] = [];
+      const stockoutIndices: number[] = [];
+      let firstStockoutDate: string | null = null;
+      let anyFloor = false;
+      let endOfHorizonSoh = currentSoh;
+
+      ratios.push(peak > 0 ? Math.max(0, Math.min(1, currentSoh / peak)) : 0);
+      const day0Iso = toISO(horizonStart);
+      const day0Floor = timeline?.floorByDate.get(day0Iso) ?? 0;
+      if (day0Floor > 0) anyFloor = true;
+      floorRatios.push(peak > 0 ? Math.max(0, Math.min(1, day0Floor / peak)) : 0);
+
+      const cursor = new Date(horizonStart);
+      for (let i = 0; i < horizonDays; i++) {
+        const iso = toISO(cursor);
+        const inv = timeline?.byDate.get(iso) ?? currentSoh;
+        const sh = timeline?.shortageByDate.get(iso) ?? 0;
+        const fl = timeline?.floorByDate.get(iso) ?? 0;
+        if (fl > 0) anyFloor = true;
+        ratios.push(peak > 0 ? Math.max(0, Math.min(1, inv / peak)) : 0);
+        floorRatios.push(peak > 0 ? Math.max(0, Math.min(1, fl / peak)) : 0);
+        // Stockout day: unmet demand recorded → inventory hit zero with
+        // demand still pulling. Index is i+1 because ratios[0] is the
+        // baseline before day 0.
+        if (sh > 0) {
+          stockoutIndices.push(i + 1);
+          if (firstStockoutDate == null) firstStockoutDate = iso;
+        }
+        endOfHorizonSoh = inv;
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      // Daily rate from day-0 floor (matches the chip-availability calc).
+      const dailyRate = day0Floor / SOH_FLOOR_DAYS;
+      const availableDays = dailyRate > 0 ? currentSoh / dailyRate : null;
+
+      byCode.set(code, {
+        code,
+        name: stat.name,
+        currentSoh,
+        peak,
+        ratios,
+        floorRatios: anyFloor ? floorRatios : null,
+        stockoutIndices,
+        firstStockoutDate,
+        dailyRate,
+        availableDays,
+        activeChips: stat.active,
+        dismissedChips: stat.dismissed,
+        netChange: endOfHorizonSoh - currentSoh,
+        // Sort by date so the tooltip reads chronologically.
+        activities: stat.activities.sort((x, y) => x.date.localeCompare(y.date)),
+        isUnplanned: false,
+      });
+    }
+
+    // Append unplanned FGs — allowlisted SKUs the planner couldn't schedule
+    // because no BOM exists. Stub rows with zeroed projection data so they
+    // sort/render without breaking the sparkline maths.
+    for (const code of unplannedFinishedGoods) {
+      if (byCode.has(code)) continue; // shouldn't happen — defensive
+      const currentSoh = initialInventoryByProduct[code] ?? 0;
+      byCode.set(code, {
+        code,
+        name: code, // No BOM → no name lookup. Code is identifying enough.
+        currentSoh,
+        peak: Math.max(currentSoh, 0),
+        ratios: [],
+        floorRatios: null,
+        stockoutIndices: [],
+        firstStockoutDate: null,
+        dailyRate: 0,
+        availableDays: null,
+        activeChips: 0,
+        dismissedChips: 0,
+        netChange: 0,
+        activities: [],
+        isUnplanned: true,
+      });
+    }
+
+    // Sort: stockouts first (earliest stockout date wins), then by
+    // available-days ascending (lowest cover first), then alpha.
+    return Array.from(byCode.values()).sort((a, b) => {
+      if ((a.stockoutIndices.length > 0) !== (b.stockoutIndices.length > 0)) {
+        return a.stockoutIndices.length > 0 ? -1 : 1;
+      }
+      if (a.firstStockoutDate && b.firstStockoutDate) {
+        const c = a.firstStockoutDate.localeCompare(b.firstStockoutDate);
+        if (c !== 0) return c;
+      }
+      const aDays = a.availableDays ?? Number.POSITIVE_INFINITY;
+      const bDays = b.availableDays ?? Number.POSITIVE_INFINITY;
+      if (aDays !== bDays) return aDays - bDays;
+      return a.code.localeCompare(b.code);
+    });
+  }, [
+    mutatedActivities,
+    mutations,
+    inventoryTimelineByProduct,
+    initialInventoryByProduct,
+    unplannedFinishedGoods,
+    horizon,
+  ]);
+
+  // Phase 4l.14 — stableIds with at least one active schedule conflict, for
+  // the FG drawer's limiting-factors flags.
+  const conflictedStableIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const [id, list] of conflictsByConsumer) if (list.length > 0) s.add(id);
+    return s;
+  }, [conflictsByConsumer]);
+
+  // Phase 4l.14 — per-intermediate scheduled supply (kitchen + kitchen-
+  // required runs), for the FG drawer's limiting-factors view. Tells the
+  // operator how much of each consumed intermediate the planner is making
+  // and when the first run lands.
+  const intermediateSupplyByCode = useMemo(() => {
+    const m = new Map<string, { runs: number; totalQty: number; firstDate: string | null }>();
+    for (const a of mutatedActivities) {
+      if (a.kind !== 'kitchen' && a.kind !== 'kitchen-required') continue;
+      if (isDismissed(mutations, a.stableId)) continue;
+      const e = m.get(a.productCode) ?? { runs: 0, totalQty: 0, firstDate: null };
+      e.runs += 1;
+      e.totalQty += a.quantity;
+      if (!e.firstDate || a.date < e.firstDate) e.firstDate = a.date;
+      m.set(a.productCode, e);
+    }
+    return m;
+  }, [mutatedActivities, mutations]);
+
   // ─── Cluster computation (Phase 4l.6) ──────────────────────
   // Two or more visible chips sharing (date, productCode, kind) collapse
   // into one ClusterChip on the calendar. We compute the membership map
@@ -2376,6 +2723,11 @@ export function CalendarApp(props: CalendarAppProps) {
         }
         stationMap.set(station, { peakUtilisation: peakUtil, totalMinutes: totalMin });
       }
+      // Commit this week's per-station map into `out`. Without this the
+      // packaging row of the heatmap renders as all-idle even when chips
+      // are saturating the stations (kitchen row was unaffected because
+      // it has its own per-week map).
+      out.set(ws, stationMap);
       // Kitchen-team row: peak day utilisation across the working week.
       let kPeak = 0;
       let kTotal = 0;
@@ -3522,6 +3874,128 @@ export function CalendarApp(props: CalendarAppProps) {
                 )}
               </div>
             )}
+            {/* Tools dropdown — consolidates resolve-conflicts strategies
+                and clear-* maintenance actions under one affordance. */}
+            <div ref={toolsDropdownRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setToolsOpen((o) => !o)}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: 13,
+                  background: toolsOpen ? 'var(--bg-page)' : 'var(--bg-surface)',
+                  color: 'var(--text-primary)',
+                  border: '0.5px solid var(--border)',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 500,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+                title="Plan tools: resolve conflicts (auto/pull/push), clear reschedules, clear stale"
+              >
+                Tools {toolsOpen ? '▴' : '▾'}
+              </button>
+              {toolsOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    right: 0,
+                    minWidth: 260,
+                    background: 'var(--bg-surface)',
+                    border: '0.5px solid var(--border)',
+                    borderRadius: 4,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                    zIndex: 50,
+                    padding: 4,
+                    fontSize: 13,
+                  }}
+                >
+                  {/* Resolve conflicts group */}
+                  <div
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      color: 'var(--text-muted)',
+                      padding: '6px 10px 2px',
+                    }}
+                  >
+                    Resolve conflicts
+                    {conflicts.length > 0 && (
+                      <span style={{ marginLeft: 6, color: '#dc2626' }}>
+                        ⚠ {conflicts.length}
+                      </span>
+                    )}
+                  </div>
+                  <ToolsMenuItem
+                    label="Auto (pull then push)"
+                    sublabel="Pull blockers earlier; push leftovers later"
+                    disabled={conflicts.length === 0}
+                    onClick={() => {
+                      resolveAllConflicts('auto');
+                      setToolsOpen(false);
+                    }}
+                  />
+                  <ToolsMenuItem
+                    label="← Pull only"
+                    sublabel="Move blocking ingredient runs earlier"
+                    disabled={conflicts.length === 0}
+                    onClick={() => {
+                      resolveAllConflicts('pull');
+                      setToolsOpen(false);
+                    }}
+                  />
+                  <ToolsMenuItem
+                    label="Push only →"
+                    sublabel="Move conflicted activities later"
+                    disabled={conflicts.length === 0}
+                    onClick={() => {
+                      resolveAllConflicts('push');
+                      setToolsOpen(false);
+                    }}
+                  />
+                  <div
+                    style={{
+                      height: 1,
+                      background: 'var(--border)',
+                      margin: '4px 0',
+                    }}
+                  />
+                  {/* Maintenance group */}
+                  <div
+                    style={{
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      color: 'var(--text-muted)',
+                      padding: '6px 10px 2px',
+                    }}
+                  >
+                    Maintenance
+                  </div>
+                  <ToolsMenuItem
+                    label="Clear all reschedules"
+                    sublabel="Undo every chip move (keeps dismissals + edits)"
+                    onClick={() => {
+                      clearAllReschedules();
+                      setToolsOpen(false);
+                    }}
+                  />
+                  <ToolsMenuItem
+                    label="Clear stale entries"
+                    sublabel="Remove mutations targeting chips no longer in the plan"
+                    onClick={() => {
+                      clearStaleMutations();
+                      setToolsOpen(false);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
             <button
               type="button"
               onClick={replan}
@@ -3623,68 +4097,10 @@ export function CalendarApp(props: CalendarAppProps) {
             <span style={{ flex: 1 }}>
               ⚠ {conflicts.length} schedule conflict{conflicts.length === 1 ? '' : 's'} —
               {' '}an activity needs an ingredient that won't be ready in time.
-              Drag the affected chips earlier, or move the upstream chip to finish sooner.
-              Click a chip with a red border for details.
+              Use the <strong>Tools</strong> menu in the header to resolve them
+              (auto / pull / push), or drag the affected chips manually. Click a
+              chip with a red border for details.
             </span>
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={() => resolveAllConflicts('auto')}
-                title="Try to PULL each blocking kitchen run earlier; for any conflict that can't be pulled (floored at the planning-horizon start, or kitchen capacity full), PUSH the consumer later instead. The natural 'just fix it' option."
-                style={{
-                  padding: '5px 12px',
-                  fontSize: 11,
-                  background: '#dc2626',
-                  color: '#fff',
-                  border: '0.5px solid #b91c1c',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Resolve all (auto)
-              </button>
-              <button
-                type="button"
-                onClick={() => resolveAllConflicts('pull')}
-                title="PULL every blocking ingredient run earlier so it finishes in time. Floored at the planning-horizon start and respects kitchen-team capacity (8 hrs/day); if floored, the chip is reported as unplaceable."
-                style={{
-                  padding: '4px 8px',
-                  fontSize: 10,
-                  background: '#fee2e2',
-                  color: '#991b1b',
-                  border: '0.5px solid #fecaca',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  fontWeight: 500,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                ← Pull only
-              </button>
-              <button
-                type="button"
-                onClick={() => resolveAllConflicts('push')}
-                title="PUSH every conflicted activity later to its earliest feasible date. Respects per-station and kitchen-team capacity."
-                style={{
-                  padding: '4px 8px',
-                  fontSize: 10,
-                  background: '#fee2e2',
-                  color: '#991b1b',
-                  border: '0.5px solid #fecaca',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  fontWeight: 500,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Push only →
-              </button>
-            </div>
           </div>
         )}
 
@@ -3914,7 +4330,7 @@ export function CalendarApp(props: CalendarAppProps) {
             kitchenLoadByDate={kitchenLoadByDate}
             dehydratorLoadByDate={dehydratorLoadByDate}
             chipAvailabilityByStableId={chipAvailabilityByStableId}
-            onSelect={setSelected}
+            onSelect={selectChip}
             selectedId={selected?.id ?? null}
             selectedStableId={selected?.stableId ?? null}
             mutations={mutations}
@@ -3971,13 +4387,52 @@ export function CalendarApp(props: CalendarAppProps) {
           <StockoutPanel infeasibleProducts={infeasibleProducts} />
         </div>
 
-        {/* ─── Raw-material risks (Phase 4m.1) ────────────── */}
+        {/* ─── Raw-material risks (Phase 4m.1) — collapsible drawer ─ */}
         {(rawMaterialShortages.length > 0 || purchaseRequirements.length > 0) && (
           <div style={{ marginTop: 16 }}>
-            <RawMaterialRiskPanel
-              shortages={rawMaterialShortages}
-              requirements={purchaseRequirements}
-            />
+            <CollapsibleSection
+              title="Raw material risks"
+              count={`${purchaseRequirements.length} PO${purchaseRequirements.length === 1 ? '' : 's'} needed`}
+              badge={
+                purchaseRequirements.filter((r) => r.overdue).length > 0 ? (
+                  <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 500 }}>
+                    ⚠ {purchaseRequirements.filter((r) => r.overdue).length} overdue
+                  </span>
+                ) : undefined
+              }
+              storageKey="byron-calendar-raw-risks-open"
+              defaultOpen={purchaseRequirements.some((r) => r.overdue)}
+            >
+              <RawMaterialRiskPanel
+                shortages={rawMaterialShortages}
+                requirements={purchaseRequirements}
+              />
+            </CollapsibleSection>
+          </div>
+        )}
+
+        {/* ─── Finished goods (Phase 4l.13) — collapsible drawer ─── */}
+        {finishedGoodsSummary.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <CollapsibleSection
+              title="Finished goods in planner"
+              count={`${finishedGoodsSummary.length} SKU${finishedGoodsSummary.length === 1 ? '' : 's'}`}
+              badge={
+                finishedGoodsSummary.filter((r) => r.stockoutIndices.length > 0).length > 0 ? (
+                  <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 500 }}>
+                    ⚠ {finishedGoodsSummary.filter((r) => r.stockoutIndices.length > 0).length} at risk
+                  </span>
+                ) : undefined
+              }
+              storageKey="byron-calendar-fg-summary-open"
+              defaultOpen={false}
+            >
+              <FinishedGoodsPanel
+                rows={finishedGoodsSummary}
+                selectedCode={selectedFG}
+                onSelectFG={selectFG}
+              />
+            </CollapsibleSection>
           </div>
         )}
       </main>
@@ -4135,6 +4590,29 @@ export function CalendarApp(props: CalendarAppProps) {
           }}
         />
       )}
+
+      {/* ─── Finished-good product drawer (Phase 4l.14) ─── */}
+      {!selected && selectedFG && (() => {
+        const row = finishedGoodsSummary.find((r) => r.code === selectedFG);
+        if (!row) return null;
+        return (
+          <FinishedGoodDrawer
+            row={row}
+            consumesMap={consumesMap}
+            consumesQtyMap={consumesQtyMap}
+            intermediateSohByCode={conflictInitialSohByCode}
+            intermediateSupplyByCode={intermediateSupplyByCode}
+            rawMaterialShortages={rawMaterialShortages}
+            supplyStarvedSet={supplyStarvedStableIds}
+            conflictedStableIds={conflictedStableIds}
+            onSelectChip={(stableId) => {
+              const a = mutatedActivities.find((x) => x.stableId === stableId);
+              if (a) selectChip(a);
+            }}
+            onClose={() => setSelectedFG(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -4982,6 +5460,13 @@ function ActivityChip({
   // Unleashed, can't be edited in the planner. We render a "U" badge on
   // the chip and a different drawer below.
   const isUnleashedPo = activity.poInfo?.source === 'unleashed_po';
+  // Phase 4l.14 — committed Unleashed assemblies are anchors of truth:
+  // moving the chip wouldn't move the actual assembly in Unleashed, so
+  // they're locked. The sole exception is `Parked` (a draft the operator
+  // hasn't committed) which the user IS allowed to drag / date-edit.
+  const isCommittedAssembly =
+    !!activity.assemblyNumber && activity.assemblyStatus !== 'Parked';
+  const isMovable = !isPo && !isCommittedAssembly;
   // Phase 4l.12 — manual user-added chips (dragged from the left-rail
   // lookup or infeasible list). They're easy to lose in a busy day with
   // 20+ chips, especially with q=1 / no profit data. Distinguish them
@@ -5027,9 +5512,9 @@ function ActivityChip({
       // Dragging the chip writes its stableId to the dataTransfer; day cells
       // read that to apply a reschedule mutation. PO chips opt out — their
       // dates are derived, not authoritative.
-      draggable={!isPo}
+      draggable={isMovable}
       onDragStart={(e) => {
-        if (isPo) {
+        if (!isMovable) {
           e.preventDefault();
           return;
         }
@@ -5059,7 +5544,7 @@ function ActivityChip({
         // coloured border + the lift do the work.
         borderLeft: isManual ? '4px solid #1f2937' : `3px solid ${colors.border}`,
         outline: 'none',
-        cursor: isPo ? 'pointer' : isDragging ? 'grabbing' : 'grab',
+        cursor: !isMovable ? 'pointer' : isDragging ? 'grabbing' : 'grab',
         fontFamily: 'inherit',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
@@ -5253,7 +5738,7 @@ function ActivityChip({
         )}
         {activity.kind === 'kitchen-required' && activity.redundantWithUnleashed && activity.redundantWithUnleashed.length > 0 && (
           <span
-            title={`Unleashed already has ${activity.redundantWithUnleashed.length} assembly(ies) for this intermediate landing LATER in the horizon — if rescheduled earlier they'd satisfy this gap. ${activity.redundantWithUnleashed.slice(0, 3).map((u) => `${u.assembly} (${u.quantity}kg, ${u.date})`).join(', ')}${activity.redundantWithUnleashed.length > 3 ? ` …+${activity.redundantWithUnleashed.length - 3} more` : ''}`}
+            title={`Unleashed has ${activity.redundantWithUnleashed.length} parked assembly(ies) for this intermediate that arrived too late to plug the original shortage — pulling one forward in Unleashed could let you drop this run. ${activity.redundantWithUnleashed.slice(0, 3).map((u) => `${u.assembly} (${u.quantity}kg, ${u.date})`).join(', ')}${activity.redundantWithUnleashed.length > 3 ? ` …+${activity.redundantWithUnleashed.length - 3} more` : ''}`}
             style={{
               marginLeft: 4,
               padding: '0 4px',
@@ -5808,6 +6293,11 @@ function ActivityDrawer({
 
   // ─── PO chip lead-time editor state (Phase 4m.4) ──────────
   const isPo = activity.kind === 'po-placed' || activity.kind === 'po-receiving';
+  // Phase 4l.14 — committed Unleashed assemblies can't be rescheduled in
+  // the planner (anchors of truth — edit them in Unleashed). `Parked` is
+  // the movable exception. Mirrors the chip's drag gate.
+  const isCommittedAssembly =
+    !!activity.assemblyNumber && activity.assemblyStatus !== 'Parked';
   const effectiveLeadTime =
     activity.poInfo
       ? editedLeadTimeDays ?? activity.poInfo.leadTimeDays
@@ -6036,10 +6526,11 @@ function ActivityDrawer({
           <div style={{ fontWeight: 700, color: '#a16207', marginBottom: 4 }}>
             POSSIBLY REDUNDANT WITH UNLEASHED
           </div>
-          Unleashed already has the following assembly(ies) for{' '}
+          Unleashed has the following parked assembly(ies) for{' '}
           <code style={{ fontFamily: 'monospace' }}>{activity.productCode}</code>
-          {' '}landing AFTER this run's required-by date
-          (<strong>{activity.requiredByDate ? fmtDate(activity.requiredByDate) : '—'}</strong>):
+          {' '}that arrived too late to plug the original shortage the
+          kitchen-gap engine identified. The planner had to schedule its
+          own run to cover demand earlier:
           <ul style={{ margin: '6px 0 6px 14px', padding: 0 }}>
             {activity.redundantWithUnleashed.map((u) => (
               <li key={u.assembly}>
@@ -6048,9 +6539,18 @@ function ActivityDrawer({
               </li>
             ))}
           </ul>
-          If you can pull one of these forward in Unleashed, this new
-          kitchen run becomes unnecessary. Otherwise both will produce
-          → carried inventory at horizon end.
+          Pulling one of these forward in Unleashed would let you drop
+          this kitchen run. Otherwise both will produce → carried
+          inventory at horizon end.{' '}
+          {activity.assemblyNumber && (
+            <span>
+              (This shard is itself sourced from{' '}
+              <code style={{ fontFamily: 'monospace' }}>
+                {activity.assemblyNumber}
+              </code>
+              ; the list above is OTHER assemblies on top of that.)
+            </span>
+          )}
         </div>
       )}
 
@@ -6287,7 +6787,25 @@ function ActivityDrawer({
         </div>
       </div>
 
-      {/* Reschedule (any date) */}
+      {/* Reschedule (any date) — committed Unleashed assemblies are locked
+          (anchors of truth); only Parked drafts can be moved here. */}
+      {isCommittedAssembly ? (
+        <div
+          style={{
+            marginBottom: 14,
+            fontSize: 11,
+            lineHeight: 1.45,
+            color: 'var(--text-muted)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 3,
+            padding: '8px 10px',
+          }}
+        >
+          Committed in Unleashed ({activity.assemblyStatus}) — reschedule it in
+          Unleashed, not here. Only <strong>Parked</strong> assemblies can be
+          moved on the planner.
+        </div>
+      ) : (
       <div style={{ marginBottom: 14 }}>
         <div
           style={{
@@ -6362,6 +6880,7 @@ function ActivityDrawer({
           </button>
         )}
       </div>
+      )}
 
       {/* Edit quantity */}
       <div style={{ marginBottom: 14 }}>
@@ -6564,6 +7083,10 @@ function ActivityDrawer({
         ) => a.activity.date.localeCompare(b.activity.date);
         suppliers.sort(sortByDate);
         consumers.sort(sortByDate);
+        // Phase 4l.14 — the inputs that don't arrive in time = the reason
+        // this run is supply-starved (⛔). Surface them explicitly so the
+        // operator doesn't have to hunt which input is the blocker.
+        const phantomSuppliers = suppliers.filter((r) => r.phantom);
         const renderRel = (r: {
           activity: CalendarActivity;
           direction: 'supplier' | 'consumer';
@@ -6632,6 +7155,45 @@ function ActivityDrawer({
               {suppliers.length === 1 ? '' : 's'} · {consumers.length} consumer
               {consumers.length === 1 ? '' : 's'}
             </div>
+            {/* Phase 4l.14 — supply-starved blocker callout: names the
+                inputs that won't arrive before this run's date, so the ⛔
+                state is self-explanatory (no log-diving to find the blocker). */}
+            {phantomSuppliers.length > 0 && (
+              <div
+                style={{
+                  marginBottom: 8,
+                  padding: '6px 8px',
+                  borderRadius: 3,
+                  background: 'rgba(220, 38, 38, 0.08)',
+                  border: '0.5px solid #dc2626',
+                  fontSize: 11,
+                  lineHeight: 1.45,
+                  color: '#991b1b',
+                }}
+              >
+                <strong>⛔ Supply-starved</strong> — this run can&apos;t proceed on{' '}
+                {fmtDate(activity.date)}; {phantomSuppliers.length} input
+                {phantomSuppliers.length === 1 ? '' : 's'} won&apos;t arrive in time:
+                <div style={{ marginTop: 3 }}>
+                  {phantomSuppliers.map((s) => {
+                    const po = s.activity.poInfo;
+                    const detail = po
+                      ? po.overdue
+                        ? `PO overdue — place by ${po.placeByDate ? fmtDate(po.placeByDate) : '?'}`
+                        : `arrives ${fmtDate(po.arriveByDate ?? s.activity.date)}`
+                      : `no supply finishing by ${fmtDate(activity.date)}`;
+                    return (
+                      <div key={s.activity.stableId}>
+                        • <strong>{s.activity.productCode}</strong> ({detail})
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ marginTop: 3, opacity: 0.85 }}>
+                  Expedite/pull these forward, or move this run later, to unblock it.
+                </div>
+              </div>
+            )}
             {suppliers.length > 0 && (
               <div style={{ marginBottom: 6 }}>
                 <div
@@ -7439,6 +8001,57 @@ function ProductOverrideSection({
   );
 }
 
+// ─── Header Tools dropdown menu item ─────────────────────────
+// Single visual style for items in the calendar header's "Tools" menu.
+// Two-line layout (label + sublabel) lets each action carry a one-glance
+// hint without forcing the operator to read titles. Disabled state greys
+// the row out but still renders the sublabel so the hint stays visible.
+function ToolsMenuItem({
+  label,
+  sublabel,
+  disabled = false,
+  onClick,
+}: {
+  label: string;
+  sublabel?: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        padding: '6px 10px',
+        background: 'transparent',
+        border: 'none',
+        borderRadius: 3,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.45 : 1,
+        fontFamily: 'inherit',
+        color: 'inherit',
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) e.currentTarget.style.background = 'var(--bg-page)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
+      {sublabel && (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+          {sublabel}
+        </div>
+      )}
+    </button>
+  );
+}
+
 // ─── Bottom-strip panels (Phase 4e) ──────────────────────────
 
 function CapacityHeatmap({
@@ -7666,43 +8279,12 @@ function RawMaterialRiskPanel({
     if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
     return a.placeByDate.localeCompare(b.placeByDate);
   });
-  const overdueCount = ordered.filter((r) => r.overdue).length;
 
+  // The outer card + header chrome is supplied by CollapsibleSection; this
+  // panel renders just the description + table body so it slots cleanly
+  // into the drawer's content area.
   return (
-    <section
-      style={{
-        background: 'var(--bg-surface)',
-        border: '0.5px solid var(--border)',
-        borderRadius: 6,
-        padding: 14,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          marginBottom: 10,
-        }}
-      >
-        <h3
-          style={{
-            fontSize: 12,
-            fontWeight: 500,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            color: 'var(--text-muted)',
-            margin: 0,
-          }}
-        >
-          Raw material risks &middot; {ordered.length} PO{ordered.length === 1 ? '' : 's'} needed
-        </h3>
-        {overdueCount > 0 && (
-          <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 500 }}>
-            ⚠ {overdueCount} overdue
-          </span>
-        )}
-      </div>
+    <>
       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8 }}>
         Default lead time 14 days. Place-by dates assume the kitchen needs the
         material 1 day before its first shortage. Per-vendor lead times can be
@@ -7770,7 +8352,7 @@ function RawMaterialRiskPanel({
           })}
         </tbody>
       </table>
-    </section>
+    </>
   );
 }
 
@@ -7779,6 +8361,801 @@ const cellStyle: React.CSSProperties = {
   verticalAlign: 'top',
   fontWeight: 'normal',
 };
+
+// ─── Collapsible section wrapper (Phase 4l.13) ──────────────────
+// Shared shell for the bottom-strip drawers. Persists open/closed state
+// to localStorage keyed by `storageKey` so the operator's choice survives
+// reloads. The header is a button; clicking anywhere on it toggles.
+function CollapsibleSection({
+  title,
+  count,
+  badge,
+  storageKey,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  /** Optional count rendered next to the title (e.g. "12 SKUs"). */
+  count?: string;
+  /** Optional right-side badge (e.g. "⚠ 3 overdue"). */
+  badge?: React.ReactNode;
+  storageKey: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  // Initialise with `defaultOpen` so the server-rendered HTML and the
+  // client's FIRST render agree — reading localStorage in the useState
+  // initializer caused a hydration mismatch (server has no localStorage,
+  // so it used the default while the client used the persisted value).
+  // The persisted open/closed state is restored in the effect below,
+  // after mount, where a state change is safe.
+  const [open, setOpen] = useState<boolean>(defaultOpen);
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(storageKey);
+      if (v != null) setOpen(v === '1');
+    } catch {
+      /* ignore */
+    }
+  }, [storageKey]);
+  const toggle = () => {
+    setOpen((p) => {
+      const next = !p;
+      try { localStorage.setItem(storageKey, next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
+  return (
+    <section
+      style={{
+        background: 'var(--bg-surface)',
+        border: '0.5px solid var(--border)',
+        borderRadius: 6,
+      }}
+    >
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          padding: '10px 14px',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          textAlign: 'left',
+          color: 'inherit',
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span aria-hidden style={{
+            display: 'inline-block', width: 10, fontSize: 11,
+            color: 'var(--text-muted)',
+            transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+            transition: 'transform 0.15s',
+          }}>
+            ▸
+          </span>
+          <h3 style={{
+            fontSize: 12, fontWeight: 500,
+            textTransform: 'uppercase', letterSpacing: '0.05em',
+            color: 'var(--text-muted)', margin: 0,
+          }}>
+            {title}
+          </h3>
+          {count && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              · {count}
+            </span>
+          )}
+        </span>
+        {badge}
+      </button>
+      {open && (
+        <div style={{ padding: '0 14px 14px 14px' }}>
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─── Finished-goods panel (Phase 4l.13) ──────────────────────
+// All FGs the planner has assessed (active or dismissed packaging chips),
+// with current SOH, available days, a mini sparkline tracking projected
+// inventory across the horizon, and red dots marking predicted stockouts.
+
+// Size taxonomy on FG product codes (Byron convention):
+//   • Trailing digit → BLK (bulk pack)
+//   • Ends "XL"     → XLG (extra large)
+//   • Ends "LG"     → LG  (large)
+//   • Ends "ME"     → MED (medium)
+//   • Ends "SM"     → SML (small)
+//   • anything else → Other
+// Used only by the size dropdown filter — no per-row column.
+type FGSize = 'BLK' | 'XLG' | 'LG' | 'MED' | 'SML' | 'Other';
+function detectFGSize(code: string): FGSize {
+  const upper = code.toUpperCase();
+  if (/\d$/.test(upper)) return 'BLK';
+  if (upper.endsWith('XL')) return 'XLG';
+  if (upper.endsWith('LG')) return 'LG';
+  if (upper.endsWith('ME')) return 'MED';
+  if (upper.endsWith('SM')) return 'SML';
+  return 'Other';
+}
+
+type FGSortKey = 'code' | 'soh' | 'days' | 'status' | 'risk';
+
+type FGSummaryRow = {
+  code: string;
+  name: string;
+  currentSoh: number;
+  peak: number;
+  ratios: number[];
+  floorRatios: number[] | null;
+  stockoutIndices: number[];
+  firstStockoutDate: string | null;
+  dailyRate: number;
+  availableDays: number | null;
+  activeChips: number;
+  dismissedChips: number;
+  netChange: number;
+  activities: {
+    stableId: string;
+    date: string;
+    quantity: number;
+    dismissed: boolean;
+    station: string | null;
+    assemblyNumber: string | null;
+  }[];
+  isUnplanned: boolean;
+};
+
+function FinishedGoodsPanel({
+  rows,
+  selectedCode,
+  onSelectFG,
+}: {
+  rows: ReadonlyArray<FGSummaryRow>;
+  selectedCode: string | null;
+  onSelectFG: (code: string) => void;
+}) {
+  // Default sort matches the parent's pre-sort: risk-first, descending
+  // severity. Clicking a header overrides with that key.
+  const [sortKey, setSortKey] = useState<FGSortKey>('risk');
+  const [sortAsc, setSortAsc] = useState<boolean>(false);
+  const [sizeFilter, setSizeFilter] = useState<FGSize | 'all'>('all');
+  // Three-way: 'planned' (default) hides unplanned, 'all' shows both,
+  // 'unplanned' shows only the SKUs the planner couldn't schedule.
+  const [planFilter, setPlanFilter] = useState<'planned' | 'unplanned' | 'all'>('planned');
+
+  // Pre-compute size on each row once.
+  const rowsWithSize = useMemo(
+    () => rows.map((r) => ({ ...r, size: detectFGSize(r.code) })),
+    [rows],
+  );
+
+  const unplannedCount = rows.filter((r) => r.isUnplanned).length;
+
+  // Size dropdown options + per-size counts.
+  const sizeCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: rowsWithSize.length };
+    for (const r of rowsWithSize) counts[r.size] = (counts[r.size] ?? 0) + 1;
+    return counts;
+  }, [rowsWithSize]);
+
+  const filtered = useMemo(() => {
+    let out = rowsWithSize;
+    if (planFilter === 'planned') out = out.filter((r) => !r.isUnplanned);
+    else if (planFilter === 'unplanned') out = out.filter((r) => r.isUnplanned);
+    if (sizeFilter !== 'all') out = out.filter((r) => r.size === sizeFilter);
+    return out;
+  }, [rowsWithSize, sizeFilter, planFilter]);
+
+  const sorted = useMemo(() => {
+    const list = [...filtered];
+    const dir = sortAsc ? 1 : -1;
+    list.sort((a, b) => {
+      let c = 0;
+      if (sortKey === 'code') {
+        c = a.code.localeCompare(b.code);
+      } else if (sortKey === 'soh') {
+        c = a.currentSoh - b.currentSoh;
+      } else if (sortKey === 'days') {
+        // Nulls (no demand) sort to the end regardless of direction.
+        const aD = a.availableDays ?? Number.POSITIVE_INFINITY;
+        const bD = b.availableDays ?? Number.POSITIVE_INFINITY;
+        c = aD - bD;
+      } else if (sortKey === 'status') {
+        // Active count desc as the natural "more activity" signal; then
+        // by dismissed count.
+        c = a.activeChips - b.activeChips;
+        if (c === 0) c = a.dismissedChips - b.dismissedChips;
+      } else if (sortKey === 'risk') {
+        // Composite risk score: stockouts dominate, then days-of-cover.
+        const aRisk = a.stockoutIndices.length;
+        const bRisk = b.stockoutIndices.length;
+        if (aRisk !== bRisk) c = aRisk - bRisk;
+        else {
+          const aD = a.availableDays ?? Number.POSITIVE_INFINITY;
+          const bD = b.availableDays ?? Number.POSITIVE_INFINITY;
+          // Lower days = higher risk → invert so "more risk" sorts higher
+          // when descending.
+          c = bD - aD;
+        }
+      }
+      return c * dir;
+    });
+    return list;
+  }, [filtered, sortKey, sortAsc]);
+
+  const toggleSort = (k: FGSortKey) => {
+    if (sortKey === k) setSortAsc((p) => !p);
+    else {
+      setSortKey(k);
+      // First click defaults to the "most interesting" direction per column.
+      setSortAsc(k === 'code');
+    }
+  };
+
+  const SortIcon = ({ k }: { k: FGSortKey }) => (
+    <span style={{ marginLeft: 4, opacity: sortKey === k ? 0.8 : 0.3, fontSize: 9 }}>
+      {sortKey === k ? (sortAsc ? '▲' : '▼') : '⇅'}
+    </span>
+  );
+
+  const headerBtn = (
+    label: string,
+    k: FGSortKey,
+    align: 'left' | 'right' | 'center' = 'left',
+  ) => (
+    <th style={{ ...cellStyle, textAlign: align }}>
+      <button
+        type="button"
+        onClick={() => toggleSort(k)}
+        style={{
+          background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+          font: 'inherit', color: 'inherit',
+          display: 'inline-flex', alignItems: 'center',
+          textTransform: 'uppercase', letterSpacing: '0.03em',
+        }}
+      >
+        {label}<SortIcon k={k} />
+      </button>
+    </th>
+  );
+
+  const stockoutCount = filtered.filter((r) => r.stockoutIndices.length > 0).length;
+  // Sizes present in the data (so we don't show empty dropdown options).
+  // Ordered largest → smallest, with Bulk and Other last.
+  const sizesInUse = (['XLG', 'LG', 'MED', 'SML', 'BLK', 'Other'] as const)
+    .filter((s) => (sizeCounts[s] ?? 0) > 0);
+
+  return (
+    <>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 12, marginBottom: 8, flexWrap: 'wrap',
+      }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+          Inventory projection across the planning horizon. Red dots = predicted
+          stockout days. Amber dashed line = SOH-floor target ({SOH_FLOOR_DAYS} days of cover).
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {/* Plan-status filter — planned / unplanned / both */}
+          <div style={{ display: 'inline-flex', gap: 0, border: '0.5px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+            {(['planned', 'unplanned', 'all'] as const).map((opt) => {
+              const active = planFilter === opt;
+              const label = opt === 'planned' ? 'Planned'
+                : opt === 'unplanned' ? `Unplanned${unplannedCount > 0 ? ` (${unplannedCount})` : ''}`
+                : 'All';
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setPlanFilter(opt)}
+                  style={{
+                    fontSize: 11,
+                    padding: '3px 8px',
+                    background: active ? 'var(--accent-light)' : 'var(--bg-page)',
+                    color: active ? 'var(--accent)' : 'var(--text-muted)',
+                    border: 'none',
+                    borderLeft: opt === 'unplanned' || opt === 'all' ? '0.5px solid var(--border)' : 'none',
+                    cursor: 'pointer',
+                    fontWeight: active ? 600 : 400,
+                  }}
+                  disabled={opt === 'unplanned' && unplannedCount === 0}
+                  title={
+                    opt === 'unplanned'
+                      ? 'Allowlisted FGs the planner could not schedule (no BOM in the family-sheet workbook).'
+                      : opt === 'planned'
+                        ? 'FGs the planner has assessed (active or dismissed runs).'
+                        : 'Both planned and unplanned.'
+                  }
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+            Size:
+          <select
+            value={sizeFilter}
+            onChange={(e) => setSizeFilter(e.target.value as FGSize | 'all')}
+            style={{
+              fontSize: 11,
+              padding: '3px 6px',
+              background: 'var(--bg-page)',
+              color: 'var(--text-primary)',
+              border: '0.5px solid var(--border)',
+              borderRadius: 4,
+              cursor: 'pointer',
+            }}
+          >
+            <option value="all">All ({sizeCounts.all ?? 0})</option>
+            {sizesInUse.map((s) => (
+              <option key={s} value={s}>
+                {s} ({sizeCounts[s]})
+              </option>
+            ))}
+          </select>
+        </label>
+        </div>
+      </div>
+      <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ color: 'var(--text-muted)', textAlign: 'left' }}>
+            {headerBtn('Product', 'code', 'left')}
+            {headerBtn('SOH', 'soh', 'right')}
+            {headerBtn('Days', 'days', 'right')}
+            {headerBtn('Status', 'status', 'center')}
+            <th style={{ ...cellStyle, minWidth: 200 }}>Projection</th>
+            {headerBtn('Risk', 'risk', 'right')}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r) => {
+            const VIEW_W = 200;
+            const VIEW_H = 28;
+            const geom = buildSparklineGeometry(r.ratios, null, VIEW_W, VIEW_H);
+            const floorPoints = buildFloorPoints(r.floorRatios, VIEW_W, VIEW_H);
+            // Place a red dot at every stockout index. y maps to the bottom
+            // since inventory has hit zero there.
+            const lastIdx = Math.max(0, r.ratios.length - 1);
+            const stockoutDots = r.stockoutIndices.map((i) => ({
+              x: lastIdx === 0 ? 0 : (i / lastIdx) * VIEW_W,
+              y: VIEW_H - 1,
+            }));
+            const isAllDismissed = r.activeChips === 0 && r.dismissedChips > 0;
+            const isAtRisk = r.stockoutIndices.length > 0;
+            const isSelected = r.code === selectedCode;
+            return (
+              <tr
+                key={r.code}
+                onClick={() => onSelectFG(r.code)}
+                style={{
+                  borderTop: '0.5px solid var(--border)',
+                  cursor: 'pointer',
+                  background: isSelected
+                    ? 'var(--accent-light)'
+                    : r.isUnplanned
+                    ? 'var(--bg-page)'
+                    : isAtRisk
+                      ? '#fef2f2'
+                      : 'transparent',
+                  boxShadow: isSelected ? 'inset 2px 0 0 var(--accent)' : undefined,
+                  opacity: r.isUnplanned ? 0.7 : 1,
+                }}
+                title={
+                  r.isUnplanned
+                    ? 'Allowlisted but the planner has no BOM for this SKU — add a recipe row to the BOMS sheet to enable planning. See data/family-sheet-todo.csv.'
+                    : isAtRisk
+                      ? `First stockout ${r.firstStockoutDate ? fmtDate(r.firstStockoutDate) : '—'} · ${r.stockoutIndices.length} day${r.stockoutIndices.length === 1 ? '' : 's'} short across the horizon.`
+                      : r.availableDays != null
+                        ? `${Math.round(r.availableDays)} days of forward cover at current daily demand (${r.dailyRate.toFixed(1)} units/day).`
+                        : 'No forecast demand on this product across the horizon.'
+                }
+              >
+                <td style={cellStyle}>
+                  <div style={{ fontWeight: 500 }}>{r.code}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>{r.name}</div>
+                </td>
+                <td style={{ ...cellStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {Math.round(r.currentSoh).toLocaleString()}
+                </td>
+                <td style={{
+                  ...cellStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
+                  color: r.availableDays != null && r.availableDays < SOH_FLOOR_DAYS ? '#dc2626' : 'inherit',
+                  fontWeight: r.availableDays != null && r.availableDays < SOH_FLOOR_DAYS ? 600 : 400,
+                }}>
+                  {r.availableDays == null ? '—' : Math.round(r.availableDays)}
+                </td>
+                <td
+                  style={{ ...cellStyle, textAlign: 'center', cursor: 'help' }}
+                  title={
+                    r.activities.length === 0
+                      ? 'No packaging runs for this FG.'
+                      : [
+                          `${r.activeChips} active${r.dismissedChips > 0 ? ` · ${r.dismissedChips} dismissed` : ''}`,
+                          '────────────────',
+                          ...r.activities.map((act) => {
+                            const mark = act.dismissed ? '✗' : '✓';
+                            const station = act.station ? ` (${act.station})` : '';
+                            const source = act.assemblyNumber ? ` ⇣${act.assemblyNumber}` : ' ⊕planner';
+                            const tag = act.dismissed ? ' [dismissed]' : '';
+                            return `${mark} ${fmtDate(act.date)} · ${Math.round(act.quantity).toLocaleString()}${station}${source}${tag}`;
+                          }),
+                        ].join('\n')
+                  }
+                >
+                  <span style={{
+                    display: 'inline-block', padding: '1px 6px', borderRadius: 4,
+                    fontSize: 10, fontWeight: 500,
+                    color: r.isUnplanned ? '#dc2626' : (isAllDismissed ? 'var(--text-muted)' : 'var(--success)'),
+                    background: r.isUnplanned ? '#fef2f2' : (isAllDismissed ? 'var(--bg-page)' : 'var(--success-light)'),
+                  }}>
+                    {r.isUnplanned ? 'Unplanned' : `${r.activeChips}A ${r.dismissedChips > 0 ? `· ${r.dismissedChips}D` : ''}`}
+                  </span>
+                </td>
+                <td style={cellStyle}>
+                  {r.isUnplanned ? (
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      No BOM — add a recipe row.
+                    </span>
+                  ) : (
+                  <svg
+                    viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                    style={{ width: '100%', height: VIEW_H, overflow: 'visible', display: 'block' }}
+                  >
+                    <path d={geom.fillPath} fill="var(--bg-page)" stroke="none" />
+                    <polyline
+                      points={geom.points}
+                      fill="none"
+                      stroke="var(--border)"
+                      strokeWidth={1}
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    {floorPoints && (
+                      <polyline
+                        points={floorPoints}
+                        fill="none"
+                        stroke="#d97706"
+                        strokeWidth={1}
+                        strokeDasharray="2 2"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    )}
+                    {stockoutDots.map((d, i) => (
+                      <circle key={i} cx={d.x} cy={d.y} r={2.5} fill="#dc2626" />
+                    ))}
+                  </svg>
+                  )}
+                </td>
+                <td style={{ ...cellStyle, textAlign: 'right', fontSize: 11 }}>
+                  {r.isUnplanned ? (
+                    <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>—</span>
+                  ) : isAtRisk ? (
+                    <span style={{ color: '#dc2626', fontWeight: 500 }}>
+                      ⚠ {r.stockoutIndices.length}d
+                    </span>
+                  ) : r.netChange < 0 ? (
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      ↓ {Math.round(Math.abs(r.netChange)).toLocaleString()}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--success)' }}>
+                      ↑ {Math.round(r.netChange).toLocaleString()}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {sorted.length === 0 && (
+        <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>
+          {rows.length === 0
+            ? 'No finished goods assessed by the planner yet.'
+            : `No ${sizeFilter} products in the current plan.`}
+        </div>
+      )}
+      {stockoutCount > 0 && (
+        <div style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)' }}>
+          {stockoutCount} of {filtered.length} FG{filtered.length === 1 ? '' : 's'}
+          {sizeFilter !== 'all' ? ` (${sizeFilter})` : ''} show predicted stockouts across the horizon.
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Finished-good product drawer (Phase 4l.14) ─────────────────
+// Product-level interrogation opened by clicking a row in the "Finished
+// goods in planner" panel. Surfaces the planner's planned production for
+// the SKU across the horizon plus the limiting factors that constrain it
+// (consumed intermediates' supply, raw-material shortages in its BOM
+// chain, stockout/SOH-floor risk, and supply-starved / conflicted runs).
+function FinishedGoodDrawer({
+  row,
+  consumesMap,
+  consumesQtyMap,
+  intermediateSohByCode,
+  intermediateSupplyByCode,
+  rawMaterialShortages,
+  supplyStarvedSet,
+  conflictedStableIds,
+  onSelectChip,
+  onClose,
+}: {
+  row: FGSummaryRow;
+  consumesMap: Record<string, string[]>;
+  consumesQtyMap: Record<string, Record<string, number>>;
+  intermediateSohByCode: Record<string, number>;
+  intermediateSupplyByCode: Map<string, { runs: number; totalQty: number; firstDate: string | null }>;
+  rawMaterialShortages: RawMaterialShortage[];
+  supplyStarvedSet: ReadonlySet<string>;
+  conflictedStableIds: ReadonlySet<string>;
+  onSelectChip: (stableId: string) => void;
+  onClose: () => void;
+}) {
+  const size = detectFGSize(row.code);
+  const directDeps = consumesMap[row.code] ?? [];
+  // A dependency that itself has a BOM (appears as a consumesMap key) is an
+  // intermediate the kitchen produces; one without is a raw material.
+  const intermediates = directDeps.filter((c) => consumesMap[c] != null);
+  const qtyMap = consumesQtyMap[row.code] ?? {};
+
+  // 2-level raw-material chain (FG's direct components + each consumed
+  // intermediate's components) → surface any shortages that touch it.
+  const chainCodes = new Set<string>(directDeps);
+  for (const inter of intermediates) {
+    for (const d of consumesMap[inter] ?? []) chainCodes.add(d);
+  }
+  const chainShortages = rawMaterialShortages
+    .filter((s) => chainCodes.has(s.rawMaterialCode))
+    .sort((a, b) => a.shortageDate.localeCompare(b.shortageDate));
+
+  const active = row.activities.filter((a) => !a.dismissed);
+  const dismissed = row.activities.filter((a) => a.dismissed);
+  const starved = active.filter((a) => supplyStarvedSet.has(a.stableId));
+  const conflicted = active.filter((a) => conflictedStableIds.has(a.stableId));
+  const totalActiveQty = active.reduce((s, a) => s + a.quantity, 0);
+  const isAtRisk = row.stockoutIndices.length > 0;
+
+  const VIEW_W = 280;
+  const VIEW_H = 48;
+  const geom = buildSparklineGeometry(row.ratios, null, VIEW_W, VIEW_H);
+  const floorPoints = buildFloorPoints(row.floorRatios, VIEW_W, VIEW_H);
+  const lastIdx = Math.max(0, row.ratios.length - 1);
+  const stockoutDots = row.stockoutIndices.map((i) => ({
+    x: lastIdx === 0 ? 0 : (i / lastIdx) * VIEW_W,
+    y: VIEW_H - 2,
+  }));
+
+  const sectionLabel: React.CSSProperties = {
+    fontSize: 11,
+    color: 'var(--text-muted)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    margin: '16px 0 6px',
+  };
+  const metric = (label: string, value: React.ReactNode, color?: string) => (
+    <div style={{ flex: '1 1 0', minWidth: 70 }}>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 600, color: color ?? 'inherit', fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </div>
+    </div>
+  );
+
+  return (
+    <aside
+      style={{
+        width: 320,
+        padding: 20,
+        borderLeft: '0.5px solid var(--border)',
+        background: 'var(--bg-surface)',
+        flexShrink: 0,
+        position: 'sticky',
+        top: 60,
+        maxHeight: 'calc(100vh - 60px)',
+        overflowY: 'auto',
+        alignSelf: 'flex-start',
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <code style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 600 }}>{row.code}</code>
+            <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'var(--bg-page)', color: 'var(--text-muted)', border: '0.5px solid var(--border)' }}>
+              {size}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{row.name}</div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1, color: 'var(--text-muted)', padding: 0 }}
+        >
+          ×
+        </button>
+      </div>
+
+      {row.isUnplanned ? (
+        <div style={{ marginTop: 16, padding: 10, fontSize: 12, lineHeight: 1.5, border: '0.5px solid var(--border)', borderRadius: 4, background: '#fef2f2', color: '#991b1b' }}>
+          <strong>Unplanned.</strong> This SKU is allowlisted but the planner
+          has no BOM for it, so it can&apos;t schedule production. Add a recipe
+          row to the BOMS sheet (see <code>data/family-sheet-todo.csv</code>) to
+          bring it into the plan.
+        </div>
+      ) : (
+        <>
+          {/* Metrics */}
+          <div style={{ display: 'flex', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
+            {metric('SOH', Math.round(row.currentSoh).toLocaleString())}
+            {metric(
+              'Days cover',
+              row.availableDays == null ? '—' : Math.round(row.availableDays),
+              row.availableDays != null && row.availableDays < SOH_FLOOR_DAYS ? '#dc2626' : undefined,
+            )}
+            {metric(
+              'Horizon Δ',
+              `${row.netChange < 0 ? '↓' : '↑'} ${Math.round(Math.abs(row.netChange)).toLocaleString()}`,
+              row.netChange < 0 ? '#dc2626' : 'var(--success)',
+            )}
+          </div>
+
+          {/* Inventory projection */}
+          <div style={sectionLabel}>Inventory projection</div>
+          <svg
+            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            style={{ width: '100%', height: VIEW_H, overflow: 'visible', display: 'block' }}
+          >
+            <path d={geom.fillPath} fill="var(--bg-page)" stroke="none" />
+            <polyline points={geom.points} fill="none" stroke="var(--border)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            {floorPoints && (
+              <polyline points={floorPoints} fill="none" stroke="#d97706" strokeWidth={1} strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
+            )}
+            {stockoutDots.map((d, i) => (
+              <circle key={i} cx={d.x} cy={d.y} r={3} fill="#dc2626" />
+            ))}
+          </svg>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+            {isAtRisk
+              ? `⚠ First stockout ${row.firstStockoutDate ? fmtDate(row.firstStockoutDate) : '—'} · ${row.stockoutIndices.length} day${row.stockoutIndices.length === 1 ? '' : 's'} short.`
+              : `Amber dashed = SOH-floor target (${SOH_FLOOR_DAYS}d cover).`}
+          </div>
+
+          {/* Planned production */}
+          <div style={sectionLabel}>
+            Planned production · {active.length} run{active.length === 1 ? '' : 's'} · {Math.round(totalActiveQty).toLocaleString()} units
+          </div>
+          {active.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              No active packaging runs for this SKU in the plan.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {active.map((a) => (
+                <button
+                  key={a.stableId}
+                  type="button"
+                  onClick={() => onSelectChip(a.stableId)}
+                  title="Open this run's detail"
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8,
+                    width: '100%', textAlign: 'left', padding: '4px 8px', borderRadius: 4,
+                    border: '0.5px solid var(--border)', background: 'var(--bg-page)', cursor: 'pointer',
+                    font: 'inherit', fontSize: 12,
+                  }}
+                >
+                  <span>{fmtDate(a.date)}</span>
+                  <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    {(supplyStarvedSet.has(a.stableId) || conflictedStableIds.has(a.stableId)) && (
+                      <span style={{ color: '#dc2626', fontSize: 11 }} title={supplyStarvedSet.has(a.stableId) ? 'Supply-starved' : 'Schedule conflict'}>⚠</span>
+                    )}
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{a.assemblyNumber ? a.assemblyNumber : a.station ?? ''}</span>
+                    <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{Math.round(a.quantity).toLocaleString()}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          {dismissed.length > 0 && (
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+              + {dismissed.length} dismissed run{dismissed.length === 1 ? '' : 's'} (excluded from supply).
+            </div>
+          )}
+
+          {/* Limiting factors */}
+          <div style={sectionLabel}>Limiting factors</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* Risk flags */}
+            {(isAtRisk || starved.length > 0 || conflicted.length > 0) && (
+              <div style={{ fontSize: 12, lineHeight: 1.5, padding: 8, borderRadius: 4, background: '#fef2f2', color: '#991b1b' }}>
+                {isAtRisk && <div>⚠ Projected stockout — demand outpaces planned supply.</div>}
+                {starved.length > 0 && <div>⚠ {starved.length} run{starved.length === 1 ? '' : 's'} supply-starved (consumed intermediate not available in time).</div>}
+                {conflicted.length > 0 && <div>⚠ {conflicted.length} run{conflicted.length === 1 ? '' : 's'} have a schedule conflict.</div>}
+              </div>
+            )}
+
+            {/* Consumed intermediates */}
+            {intermediates.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Consumed intermediates</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {intermediates.map((code) => {
+                    const sup = intermediateSupplyByCode.get(code);
+                    const soh = intermediateSohByCode[code] ?? 0;
+                    const perUnit = qtyMap[code];
+                    const limiting = soh <= 0 && (!sup || sup.totalQty <= 0);
+                    return (
+                      <div key={code} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 4, border: '0.5px solid var(--border)', background: limiting ? '#fef2f2' : 'var(--bg-page)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <code style={{ fontFamily: 'monospace', fontWeight: 600, color: limiting ? '#991b1b' : 'inherit' }}>{code}</code>
+                          {perUnit != null && <span style={{ color: 'var(--text-muted)' }}>{perUnit.toFixed(2)} kg/unit</span>}
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
+                          SOH {Math.round(soh).toLocaleString()} ·{' '}
+                          {sup && sup.runs > 0
+                            ? `${sup.runs} run${sup.runs === 1 ? '' : 's'} planned (${Math.round(sup.totalQty).toLocaleString()}, first ${sup.firstDate ? fmtDate(sup.firstDate) : '—'})`
+                            : 'no runs planned'}
+                          {limiting && ' — LIMITING'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Raw-material shortages in the BOM chain */}
+            {chainShortages.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Raw-material shortages in chain</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {chainShortages.slice(0, 8).map((s) => (
+                    <div key={s.rawMaterialCode} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 4, border: '0.5px solid var(--border)', background: '#fffbeb' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <code style={{ fontFamily: 'monospace', fontWeight: 600 }}>{s.rawMaterialCode}</code>
+                        <span style={{ color: '#b45309' }}>short {Math.round(s.shortageQuantity).toLocaleString()}</span>
+                      </div>
+                      <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>{s.rawMaterialName} · first short {fmtDate(s.shortageDate)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!isAtRisk && starved.length === 0 && conflicted.length === 0 &&
+              !intermediates.some((c) => (intermediateSohByCode[c] ?? 0) <= 0 && !(intermediateSupplyByCode.get(c)?.totalQty)) &&
+              chainShortages.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                No supply constraints detected for this SKU over the horizon.
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </aside>
+  );
+}
 
 function Field({
   label,

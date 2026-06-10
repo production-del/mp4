@@ -210,9 +210,10 @@ describe('assignBatchesToDays', () => {
       expect(r.warnings[0].kind).toBe('oversize_batch');
     });
 
-    test('week overflow: too many batches for 5 days emits week_overflow and drops the rest', () => {
+    test('week overflow: 6th batch is DEFERRED to the next week, not dropped (Phase 4l.14)', () => {
       // 6 batches each 480 min total. Capacity 480/day → 1 fits per day.
-      // Days 1-5 take 5 batches; the 6th overflows.
+      // Days 1-5 take 5 batches; the 6th (trailing, by tiebreak) carries
+      // forward to the next week rather than being dropped.
       const batches = ['A', 'B', 'C', 'D', 'E', 'F'].map((p) => ({
         productCode: p,
         weekStart: MONDAY,
@@ -224,11 +225,19 @@ describe('assignBatchesToDays', () => {
       perStation.set('bottlo', tl);
       const r = assignBatchesToDays({ perStation });
       const bottlo = r.perStation.get('bottlo')!;
-      // 5 days each with 1 batch
-      expect(bottlo.byDay.size).toBe(5);
-      const overflowWarnings = r.warnings.filter((w) => w.kind === 'week_overflow');
-      expect(overflowWarnings).toHaveLength(1);
-      expect((overflowWarnings[0] as { productCode: string }).productCode).toBe('F');
+      // Nothing dropped — the 6th batch was deferred, not lost.
+      expect(r.warnings.filter((w) => w.kind === 'week_overflow')).toHaveLength(0);
+      // All 6 still assigned; F lands in the next week (2026-05-11 Monday).
+      const dayOf = (code: string): string | null => {
+        for (const [day, dl] of bottlo.byDay) {
+          if (dl.batches.some((b) => b.productCode === code)) return day;
+        }
+        return null;
+      };
+      expect(dayOf('F')).toBe('2026-05-11');
+      const all = new Set<string>();
+      for (const dl of bottlo.byDay.values()) for (const b of dl.batches) all.add(b.productCode);
+      expect(all).toEqual(new Set(['A', 'B', 'C', 'D', 'E', 'F']));
     });
 
     test('profit-aware trim drops lowest-profit batch first when week overflows (Phase 4l.9)', () => {
@@ -247,17 +256,22 @@ describe('assignBatchesToDays', () => {
       const perStation = new Map<Station, StationTimeline>();
       perStation.set('bottlo', tl);
       const r = assignBatchesToDays({ perStation });
-      const overflowWarnings = r.warnings.filter((w) => w.kind === 'week_overflow');
-      expect(overflowWarnings).toHaveLength(1);
-      expect((overflowWarnings[0] as { productCode: string }).productCode).toBe('C');
-      expect((overflowWarnings[0] as { reason: string }).reason).toBe('profit_trim');
-      // The 5 priced survivors should all be assigned (no second drop).
+      // Phase 4l.14 — the lowest-profit batch (C) is DEFERRED to the next
+      // week rather than dropped, so there's no week_overflow warning.
+      expect(r.warnings.filter((w) => w.kind === 'week_overflow')).toHaveLength(0);
       const bottlo = r.perStation.get('bottlo')!;
-      const assignedCodes = new Set<string>();
-      for (const dl of bottlo.byDay.values()) {
-        for (const b of dl.batches) assignedCodes.add(b.productCode);
+      const dayOf = (code: string): string | null => {
+        for (const [day, dl] of bottlo.byDay) {
+          if (dl.batches.some((b) => b.productCode === code)) return day;
+        }
+        return null;
+      };
+      // C (lowest profit) lands in the next week; the 5 others stay in the
+      // MONDAY week (2026-05-04 … 2026-05-08).
+      expect(dayOf('C')).toBe('2026-05-11');
+      for (const code of ['A', 'B', 'D', 'E', 'F']) {
+        expect(dayOf(code)! >= '2026-05-04' && dayOf(code)! <= '2026-05-08').toBe(true);
       }
-      expect(assignedCodes).toEqual(new Set(['A', 'B', 'D', 'E', 'F']));
     });
 
     test('joint profit × quantity ranking: tiny-demand high-margin survives, low-margin filler drops first', () => {
@@ -279,11 +293,19 @@ describe('assignBatchesToDays', () => {
       const perStation = new Map<Station, StationTimeline>();
       perStation.set('bottlo', tl);
       const r = assignBatchesToDays({ perStation });
-      const overflowCodes = r.warnings
-        .filter((w) => w.kind === 'week_overflow')
-        .map((w) => (w as { productCode: string }).productCode);
-      // Filler4 (lowest $/min) drops; HiMargin (tiny but high-margin) and BigDemand (high total $) survive.
-      expect(overflowCodes).toEqual(['Filler4']);
+      // Phase 4l.14 — Filler4 (lowest $/min) is DEFERRED to the next week,
+      // not dropped; HiMargin and BigDemand keep their MONDAY-week slots.
+      expect(r.warnings.filter((w) => w.kind === 'week_overflow')).toHaveLength(0);
+      const bottlo = r.perStation.get('bottlo')!;
+      const dayOf = (code: string): string | null => {
+        for (const [day, dl] of bottlo.byDay) {
+          if (dl.batches.some((b) => b.productCode === code)) return day;
+        }
+        return null;
+      };
+      expect(dayOf('Filler4')).toBe('2026-05-11');
+      expect(dayOf('HiMargin')! <= '2026-05-08').toBe(true);
+      expect(dayOf('BigDemand')! <= '2026-05-08').toBe(true);
     });
 
     test('SKUs with no profit data drop first when overflowing (Phase 4l.9)', () => {
@@ -300,12 +322,52 @@ describe('assignBatchesToDays', () => {
       const perStation = new Map<Station, StationTimeline>();
       perStation.set('bottlo', tl);
       const r = assignBatchesToDays({ perStation });
-      const overflow = r.warnings.find((w) => w.kind === 'week_overflow') as
-        | { productCode: string; batchProfit: number | null; reason: string }
-        | undefined;
-      expect(overflow?.productCode).toBe('F');
-      expect(overflow?.batchProfit).toBeNull();
-      expect(overflow?.reason).toBe('profit_trim');
+      // Phase 4l.14 — the no-profit SKU (F) is deferred first, landing in the
+      // next week rather than being dropped. No week_overflow warning fires
+      // because it was placed.
+      expect(r.warnings.filter((w) => w.kind === 'week_overflow')).toHaveLength(0);
+      const bottlo = r.perStation.get('bottlo')!;
+      const dayOf = (code: string): string | null => {
+        for (const [day, dl] of bottlo.byDay) {
+          if (dl.batches.some((b) => b.productCode === code)) return day;
+        }
+        return null;
+      };
+      expect(dayOf('F')).toBe('2026-05-11');
+      for (const code of ['A', 'B', 'C', 'D', 'E']) {
+        expect(dayOf(code)! <= '2026-05-08').toBe(true);
+      }
+    });
+
+    test('cascading overflow defers across weeks until capacity absorbs it (Phase 4l.14)', () => {
+      // 7 batches × 480 min in ONE week; week capacity = 2400 (5 days). 5 fit
+      // the MONDAY week, the 2 trailing batches cascade into the next week.
+      const batches = ['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((p) => ({
+        productCode: p,
+        weekStart: MONDAY,
+        quantity: 1600, // 480 min
+        changeover: 0,
+      }));
+      const tl = syntheticTimeline('bottlo', batches);
+      const perStation = new Map<Station, StationTimeline>();
+      perStation.set('bottlo', tl);
+      const r = assignBatchesToDays({ perStation });
+      // Nothing dropped — both overflow batches were deferred.
+      expect(r.warnings.filter((w) => w.kind === 'week_overflow')).toHaveLength(0);
+      const bottlo = r.perStation.get('bottlo')!;
+      let w1 = 0;
+      let w2 = 0;
+      const all = new Set<string>();
+      for (const [day, dl] of bottlo.byDay) {
+        for (const b of dl.batches) {
+          all.add(b.productCode);
+          if (day <= '2026-05-08') w1 += 1;
+          else w2 += 1;
+        }
+      }
+      expect(all.size).toBe(7); // every batch placed
+      expect(w1).toBe(5); // MONDAY week saturated at 5
+      expect(w2).toBe(2); // remainder pushed to the next week
     });
   });
 

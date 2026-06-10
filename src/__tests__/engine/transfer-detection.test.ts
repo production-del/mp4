@@ -5,6 +5,7 @@ import {
 } from '@/lib/engine/transfer-detection';
 import { WarehouseSOH } from '@/lib/planning/warehouse-soh';
 import { WAREHOUSES } from '@/lib/planning/warehouse-assignments';
+import { toLocalISODate } from '@/lib/planning/working-day';
 import type { Assembly, AssemblyLine, StockOnHandItem } from '@/lib/unleashed/types';
 
 // ─── builders ────────────────────────────────────────────────
@@ -72,8 +73,10 @@ describe('extractPackagingDemands', () => {
     expect(out.map((d) => d.productCode).sort()).toEqual(['BOX1KG', 'IRM', 'LMFRMIXNB11']);
     for (const d of out) {
       expect(d.destinationWarehouse).toBe(WAREHOUSES.MF_PACKAGING);
-      // assembleBy wins for the scheduled date
-      expect(d.scheduledDate.toISOString().slice(0, 10)).toBe('2026-06-10');
+      // assembleBy wins for the scheduled date. Use the project-wide
+      // local-ISO convention (working-day.ts) — never `.toISOString()`,
+      // which shifts AEST dates back a day.
+      expect(toLocalISODate(d.scheduledDate)).toBe('2026-06-10');
     }
   });
 
@@ -152,6 +155,34 @@ describe('detectTransferGaps — packaging at run-specific warehouse', () => {
     expect(gaps[0].destinationWarehouse).toBe(WAREHOUSES.MF_OPERATIONS);
     expect(gaps[0].quantityNeeded).toBe(26);
     expect(gaps[0].sourceOptions[0].warehouse).toBe(WAREHOUSES.MF_PACKAGING);
+  });
+
+  test('prefers a non-Lundberg source but still lists Lundberg as a fallback', () => {
+    // IRM needed at MF Packaging. Stock sits both at MF Operations (a
+    // straggler) and at Lundberg (the home store). The straggler should be
+    // offered first, but Lundberg must remain a listed source.
+    const sohView = new WarehouseSOH([
+      soh({ productCode: 'IRM', warehouseName: WAREHOUSES.LUNDBERG, quantity: 500 }),
+      soh({ productCode: 'IRM', warehouseName: WAREHOUSES.MF_OPERATIONS, quantity: 30 }),
+    ]);
+    const packagingDemands: PackagingDemandItem[] = [
+      {
+        runId: 'r4',
+        runName: 'MFRMIXNB11 run',
+        productCode: 'IRM',
+        productName: 'RAW Mixed Nuts Intermediate',
+        quantityNeeded: 100,
+        scheduledDate: new Date('2026-06-10'),
+        destinationWarehouse: WAREHOUSES.MF_PACKAGING,
+      },
+    ];
+    const gaps = detectTransferGaps({ soh: sohView, kitchenDemands: [], packagingDemands });
+    expect(gaps).toHaveLength(1);
+    // Non-Lundberg straggler offered first even though it holds far less.
+    expect(gaps[0].sourceOptions[0].warehouse).toBe(WAREHOUSES.MF_OPERATIONS);
+    // Lundberg still present as a fallback source.
+    const warehouses = gaps[0].sourceOptions.map((s) => s.warehouse);
+    expect(warehouses).toContain(WAREHOUSES.LUNDBERG);
   });
 
   test('no gap when the input is already at the run warehouse', () => {
